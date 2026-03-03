@@ -7,8 +7,6 @@ assignees: cyrilgabriele
 
 ---
 
-# <Workstream>: <Action + object>
-
 ## Goal
 <What outcome should exist when this issue is done?>
 
