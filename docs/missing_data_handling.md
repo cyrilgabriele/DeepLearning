@@ -1,62 +1,68 @@
-# Prudential Life Insurance Assessment + KAN: Handling Systematic Missingness (Practical SOTA Playbook)
+# Summary: Handling Systematic Missingness for Prudential with KAN (Tabular)
 
-## Context: why missingness matters on Prudential
-The **Prudential Life Insurance Assessment** dataset (Kaggle) is widely treated as a tabular benchmark with **heavy, structured / systematic missingness** (e.g., whole “blocks” of features missing for many applicants, especially in medical-history style fields).  
-- Competition page: https://www.kaggle.com/c/prudential-life-insurance-assessment  
-- Example EDA noting widespread missingness patterns: https://www.kaggle.com/code/ithesisart/prudential-life-insurance-assessment-edaml  
+## Key idea
+For Prudential-style **systematic / structured missingness**, the strongest “SOTA-default” approach for **KANs** is to **treat missingness as signal**:
+- **Do not rely on imputation alone.**
+- Encode missingness explicitly and let the KAN learn how it affects risk.
 
-For models like **KANs** (Kolmogorov–Arnold Networks) where learnable *univariate* functions live on edges, the missing-data strategy should be **KAN-native**:
-> **Do not try to “erase” missingness via imputation alone. Encode missingness explicitly, and let the model learn how missingness correlates with risk.**
+Concretely, model each feature with:
+- a (possibly imputed) **value channel** $x_i$
+- a **missingness mask** $m_i \in \{0,1\}$ (1 observed, 0 missing)
 
----
-
-## SOTA-ish default for KAN: value + mask (and often a trainable missing token)
-### 1) Always add a missingness indicator (mask)
-For each original feature `i`, create:
-- `x_i` = numeric value after preprocessing/imputation (or categorical encoding)
-- `m_i ∈ {0,1}` = 1 if observed, 0 if missing
-
-This “Missing Indicator Method” is strongly supported in modern supervised learning practice: indicator + simple imputation is often competitive and captures *informative missingness* when it exists.
-- Paper: **The Missing Indicator Method: From Low to High Dimensions** (Van Ness et al.)  
-  https://arxiv.org/abs/2211.09259
-
-**KAN mapping (conceptually):**
-\[
-f(x,m)=\sum_i \phi_i(x_i) + \sum_i \psi_i(m_i) + \text{(compositions over layers)}
-\]
-Because KAN edges are univariate, feeding `(x_i, m_i)` as separate inputs fits naturally.
+This is very KAN-compatible because KAN edges learn **univariate** functions: you can give the network separate univariate inputs for value and mask.
 
 ---
 
-### 2) Use “zero/median + mask” as the baseline (it’s hard to beat)
-A strong, simple baseline for deep tabular is:
-- **numeric**: standardize (on observed values), then **impute 0**, and feed the mask  
-- **categorical**: treat missing as its own level (“MISSING”), optionally also feed the mask
+## Recommended “SOTA-default” recipe (KAN-focused)
 
-This is consistent with empirical evidence that **zero imputation** can be as effective as more complex deep impute-then-predict pipelines (when combined with sensible modeling).
-- Paper: **In Defense of Zero Imputation for Tabular Deep Learning**  
-  https://openreview.net/forum?id=H0gENXL7F2
+1. **Create missingness masks**
+   - For every feature $i$, build $m_i \in \{0,1\}$.
 
-**Practical note for KANs:** if your spline/edge functions are sensitive to out-of-domain spikes, zero-imputing *after standardization* keeps missing values in a stable, “central” region.
+2. **Numeric features**
+   - Compute scaling (e.g., z-score) using **observed** values only.
+   - **Baseline:** impute missing numeric values to 0 **after scaling**, and feed both $x_i$ and $m_i$.
+   - **Upgrade for systematic missingness:** learn a per-feature numeric “missing token” $a_i$:
+     $$
+     x_i^{*} = m_i \, x_i^{\mathrm{obs}} + (1-m_i)\, a_i
+     $$
+     and still feed $m_i$.
+
+3. **Categorical features**
+   - Add an explicit **“MISSING”** category (embedding/code).
+   - Optionally also feed a categorical missingness mask (often redundant if “MISSING” is explicit, but sometimes helpful).
+
+4. **KAN inputs**
+   - Concatenate the **value vector** and **mask vector** (and categorical embeddings as usual):
+     $$
+     \mathrm{input} = [x^{*}, m]
+     $$
+   - This lets the KAN learn separate univariate functions for “value effect” and “missingness effect”.
+
+5. **Missingness-aware training (strongly recommended)**
+   - Apply **feature masking augmentation** during training:
+     - randomly (or pattern-aware) drop a subset of *observed* features
+     - simulate Prudential-like missingness patterns
+   - This improves robustness and reduces over-reliance on any single feature block.
+
+6. **Optional: high-quality imputation (only if needed)**
+   - If you truly need a fully imputed table, pretrain a modern masked-autoencoder-style imputer.
+   - Still keep and feed masks $m$ to the KAN afterward (to preserve informative missingness).
 
 ---
 
-### 3) Upgrade for systematic missingness: learn a numeric “missing token” per feature
-When missingness is systematic (often closer to MAR/MNAR than MCAR), replace fixed imputation with a **trainable scalar** per feature:
+## What to avoid (common pitfall)
+- **Label-conditioned imputation** (imputing using the target label) is not deployable at test time and risks leakage.
+- Prefer label-free imputers and/or the $(\mathrm{value} + \mathrm{mask})$ modeling setup above.
 
-\[
-x_i^\* = m_i \cdot x_i^{obs} + (1-m_i)\cdot a_i
-\]
-- `a_i` is a learned parameter (“numeric missing token”)
-- still feed `m_i`
+---
 
-This lets the KAN represent “missing for feature i” as a meaningful latent value rather than assuming it equals the mean/median.
+## Minimal KAN-compatible formulation (conceptual)
+A KAN can naturally express:
+$$
+f(x,m)=\sum_{i=1}^{d} \phi_i\!\left(x_i^{*}\right) \;+\; \sum_{i=1}^{d} \psi_i(m_i) \;+\; \cdots
+$$
 
-**Minimal PyTorch sketch:**
-```python
-# x: [batch, d] with NaNs
-# m: [batch, d] mask (1 observed, 0 missing)
-# a: [d] trainable missing token
-x_filled = torch.nan_to_num(x, nan=0.0)             # temporary fill
-x_star = m * x_filled + (1 - m) * a                 # learned replacement
-# model_input = concat([x_star, m], dim=-1)
+Where:
+- $\phi_i$ learns the effect of the (filled) feature value
+- $\psi_i$ learns the effect of the feature being present/absent
+- $\cdots$ denotes higher-layer compositions (depending on your KAN depth)
