@@ -209,3 +209,4 @@ __marimo__/
 # custom 
 .DS_Store
 /data
+src/data/prudential-life-insurance-assessment/
