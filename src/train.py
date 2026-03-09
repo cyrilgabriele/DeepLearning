@@ -1,4 +1,6 @@
 import sys
+import json
+import time
 from pathlib import Path
 
 # Ensure project root is on sys.path so `src.*` imports work
@@ -19,6 +21,9 @@ from src.models.tabkan import TabKAN
 from src.models.mlp import MLPBaseline
 from src.models.xgb_baseline import XGBBaseline
 from src.metrics.qwk import optimize_thresholds
+
+# Directory for storing per-run results (for summary table)
+_RESULTS_DIR = Path(_PROJECT_ROOT) / "outputs" / "results"
 
 
 def build_model(cfg: DictConfig, num_features: int):
@@ -49,8 +54,52 @@ def build_model(cfg: DictConfig, num_features: int):
         )
 
 
+def _save_result(name: str, val_qwk: float, params: int, duration: float, epochs: int, cfg: DictConfig):
+    """Save a single run result to JSON for the summary table."""
+    _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    result = {
+        "model": name,
+        "val_qwk": round(val_qwk, 4),
+        "params": params,
+        "duration_s": round(duration, 1),
+        "epochs": epochs,
+        "config": OmegaConf.to_container(cfg.model, resolve=True),
+    }
+    path = _RESULTS_DIR / f"{name}.json"
+    path.write_text(json.dumps(result, indent=2))
+
+
+def print_summary_table():
+    """Print a comparison table from all saved results."""
+    if not _RESULTS_DIR.exists():
+        print("No results found. Run training first.")
+        return
+
+    results = []
+    for f in sorted(_RESULTS_DIR.glob("*.json")):
+        results.append(json.loads(f.read_text()))
+
+    if not results:
+        print("No results found.")
+        return
+
+    results.sort(key=lambda r: r["val_qwk"], reverse=True)
+
+    print("\n" + "=" * 65)
+    print(f"{'Model':<16} {'Val QWK':>10} {'Params':>10} {'Epochs':>8} {'Time':>10}")
+    print("-" * 65)
+    for r in results:
+        time_str = f"{r['duration_s']:.1f}s"
+        print(f"{r['model']:<16} {r['val_qwk']:>10.4f} {r['params']:>10,} {r['epochs']:>8} {time_str:>10}")
+    print("=" * 65)
+    best = results[0]
+    print(f"Best: {best['model']} (QWK = {best['val_qwk']:.4f})")
+    print()
+
+
 def train_xgb(cfg: DictConfig, dm: PrudentialDataModule):
     """Train and evaluate XGBoost baseline."""
+    t0 = time.time()
     model = XGBBaseline(
         n_estimators=cfg.model.n_estimators,
         max_depth=cfg.model.max_depth,
@@ -61,12 +110,17 @@ def train_xgb(cfg: DictConfig, dm: PrudentialDataModule):
 
     train_qwk = model.evaluate(dm.X_train, dm.y_train)
     val_qwk = model.evaluate(dm.X_val, dm.y_val)
+    duration = time.time() - t0
     print(f"XGBoost — Train QWK: {train_qwk:.4f}, Val QWK: {val_qwk:.4f}")
+
+    _save_result("xgb", val_qwk, params=0, duration=duration,
+                 epochs=cfg.model.n_estimators, cfg=cfg)
     return model
 
 
 def train_neural(cfg: DictConfig, dm: PrudentialDataModule):
     """Train a neural model (TabKAN or MLP) with Lightning."""
+    t0 = time.time()
     model = build_model(cfg, dm.num_features)
 
     loggers = []
@@ -115,8 +169,13 @@ def train_neural(cfg: DictConfig, dm: PrudentialDataModule):
     preds = np.concatenate(val_preds).flatten()
     targets = np.concatenate(val_targets).flatten()
     thresholds, final_qwk = optimize_thresholds(targets, preds)
+    duration = time.time() - t0
+    num_params = sum(p.numel() for p in model.parameters())
     print(f"{cfg.model.name} — Final Val QWK (optimized thresholds): {final_qwk:.4f}")
     print(f"Thresholds: {thresholds}")
+
+    _save_result(cfg.model.name, final_qwk, params=num_params,
+                 duration=duration, epochs=trainer.current_epoch + 1, cfg=cfg)
 
     return model, thresholds
 
@@ -144,6 +203,9 @@ def main(cfg: DictConfig):
         train_xgb(cfg, dm)
     else:
         train_neural(cfg, dm)
+
+    # Print summary table after each run (shows all results so far)
+    print_summary_table()
 
 
 if __name__ == "__main__":
