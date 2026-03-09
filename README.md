@@ -25,8 +25,8 @@ uv run python src/train.py model=bsplinekan
 uv run python src/train.py model=mlp
 uv run python src/train.py model=xgb
 
-# Compare all neural models (Hydra multirun)
-uv run python src/train.py model=chebykan,fourierkan,bsplinekan,mlp -m
+# Train all models and print comparison table
+uv run python src/train.py model=chebykan,fourierkan,bsplinekan,mlp,xgb train.max_epochs=5 -m
 
 # Override hyperparameters from CLI
 uv run python src/train.py model=chebykan model.degree=5 model.widths=[128,64] train.max_epochs=50
