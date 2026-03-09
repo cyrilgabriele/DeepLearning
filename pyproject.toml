@@ -18,6 +18,9 @@ dependencies = [
     "tensorboard>=2.19.0",
 ]
 
+[tool.setuptools.packages.find]
+where = ["."]
+
 [dependency-groups]
 dev = [
     "ipykernel>=7.2.0",
