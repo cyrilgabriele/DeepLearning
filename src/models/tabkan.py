@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import lightning as L
 import numpy as np
-from src.models.kan_layers import ChebyKANLayer, FourierKANLayer
+from src.models.kan_layers import ChebyKANLayer, FourierKANLayer, BSplineKANLayer
 from src.metrics.qwk import quadratic_weighted_kappa
 
 
@@ -12,9 +12,10 @@ class TabKAN(L.LightningModule):
     Args:
         in_features: Number of input features.
         widths: List of hidden layer widths (determines depth).
-        kan_type: "chebykan" or "fourierkan".
+        kan_type: "chebykan", "fourierkan", or "bsplinekan".
         degree: Chebyshev polynomial degree (only for chebykan).
-        grid_size: Fourier grid size (only for fourierkan).
+        grid_size: Grid size (for fourierkan and bsplinekan).
+        spline_order: B-spline order (only for bsplinekan).
         lr: Learning rate.
         weight_decay: L2 regularization.
     """
@@ -26,17 +27,25 @@ class TabKAN(L.LightningModule):
         kan_type: str = "chebykan",
         degree: int = 3,
         grid_size: int = 4,
+        spline_order: int = 3,
         lr: float = 1e-3,
         weight_decay: float = 1e-5,
     ):
         super().__init__()
         self.save_hyperparameters()
 
-        if kan_type not in ("chebykan", "fourierkan"):
-            raise ValueError(f"Unknown kan_type: {kan_type}. Use 'chebykan' or 'fourierkan'.")
+        if kan_type not in ("chebykan", "fourierkan", "bsplinekan"):
+            raise ValueError(f"Unknown kan_type: {kan_type}. Use 'chebykan', 'fourierkan', or 'bsplinekan'.")
 
-        layer_cls = ChebyKANLayer if kan_type == "chebykan" else FourierKANLayer
-        layer_kwargs = {"degree": degree} if kan_type == "chebykan" else {"grid_size": grid_size}
+        if kan_type == "chebykan":
+            layer_cls = ChebyKANLayer
+            layer_kwargs = {"degree": degree}
+        elif kan_type == "fourierkan":
+            layer_cls = FourierKANLayer
+            layer_kwargs = {"grid_size": grid_size}
+        else:
+            layer_cls = BSplineKANLayer
+            layer_kwargs = {"grid_size": grid_size, "spline_order": spline_order}
 
         layers = []
         dims = [in_features] + widths

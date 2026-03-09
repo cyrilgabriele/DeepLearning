@@ -1,6 +1,6 @@
 import torch
 import pytest
-from src.models.kan_layers import ChebyKANLayer, FourierKANLayer
+from src.models.kan_layers import ChebyKANLayer, FourierKANLayer, BSplineKANLayer
 
 
 class TestChebyKANLayer:
@@ -56,6 +56,35 @@ class TestFourierKANLayer:
 
     def test_handles_large_input(self):
         layer = FourierKANLayer(in_features=3, out_features=2, grid_size=4)
+        x = torch.tensor([[100.0, -100.0, 50.0]])
+        out = layer(x)
+        assert torch.isfinite(out).all()
+
+
+class TestBSplineKANLayer:
+    def test_output_shape(self):
+        layer = BSplineKANLayer(in_features=10, out_features=5, grid_size=5, spline_order=3)
+        x = torch.randn(32, 10)
+        out = layer(x)
+        assert out.shape == (32, 5)
+
+    def test_small_grid(self):
+        layer = BSplineKANLayer(in_features=4, out_features=3, grid_size=3, spline_order=2)
+        x = torch.randn(8, 4)
+        out = layer(x)
+        assert out.shape == (8, 3)
+
+    def test_gradient_flows(self):
+        layer = BSplineKANLayer(in_features=6, out_features=2, grid_size=5, spline_order=3)
+        x = torch.randn(4, 6, requires_grad=True)
+        out = layer(x)
+        loss = out.sum()
+        loss.backward()
+        assert x.grad is not None
+        assert all(p.grad is not None for p in layer.parameters() if p.requires_grad)
+
+    def test_handles_large_input(self):
+        layer = BSplineKANLayer(in_features=3, out_features=2, grid_size=5, spline_order=3)
         x = torch.tensor([[100.0, -100.0, 50.0]])
         out = layer(x)
         assert torch.isfinite(out).all()

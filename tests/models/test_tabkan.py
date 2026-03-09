@@ -51,6 +51,14 @@ class TestTabKAN:
         loss = model.validation_step(batch, 0)
         assert loss.ndim == 0
 
+    def test_bsplinekan_forward(self):
+        model = TabKAN(
+            in_features=20, widths=[32, 16], kan_type="bsplinekan", grid_size=5, spline_order=3
+        )
+        x = torch.randn(8, 20)
+        out = model(x)
+        assert out.shape == (8, 1)
+
     def test_invalid_kan_type_raises(self):
         with pytest.raises(ValueError, match="Unknown kan_type"):
             TabKAN(in_features=10, widths=[16], kan_type="invalidkan")
