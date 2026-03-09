@@ -1,9 +1,17 @@
+import sys
+from pathlib import Path
+
+# Ensure project root is on sys.path so `src.*` imports work
+# regardless of whether we run `python src/train.py` or `python main.py`
+_PROJECT_ROOT = str(Path(__file__).resolve().parent.parent)
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+
 import hydra
 from omegaconf import DictConfig, OmegaConf
 import lightning as L
 from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 from lightning.pytorch.loggers import TensorBoardLogger, CSVLogger
-from pathlib import Path
 import numpy as np
 
 from src.data.dataset import PrudentialDataModule
