@@ -1,0 +1,7 @@
+name: fourierkan
+kan_type: fourierkan
+widths: [64, 32]
+degree: null
+grid_size: 4
+lr: 1e-3
+weight_decay: 1e-5
