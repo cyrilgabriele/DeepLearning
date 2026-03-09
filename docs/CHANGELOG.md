@@ -17,6 +17,23 @@ Track what was changed, why it was changed, and any important notes.
 - Optional notes, issues, or future work
 ```
 
+### [2026-03-09] - Gian Seifert
+
+#### What
+- Refined feature categorization: moved low-cardinality "continuous" features (e.g., `Product_Info_3`, `Employment_Info_2`) to the `ordinal` group.
+- Switched ordinal scaling from `QuantileTransformer` to `MinMaxScaler` mapped to `[-1, 1]`.
+- Enabled automated missingness indicators (`missing_` flags) in `SOTAPreprocessor`.
+- Implemented explicit `[-1, 1]` clipping and stored scaling parameters for consistency across train/test splits.
+
+#### Why
+- `QuantileTransformer` on discrete/low-cardinality/ordinal data creates steep "staircase" gradients that destabilize B-spline activations in KANs. `MinMaxScaler` preserves the linear relationship and discrete steps, allowing KAN splines to learn smoother, more stable mappings.
+- Explicit clipping prevents out-of-bounds instability in B-spline evaluations, and missingness indicators ensure the model can explicitly learn from informative data gaps.
+
+#### Remarks
+
+
+---
+
 ### [2026-03-04] - Gian Seifert
 
 #### What
