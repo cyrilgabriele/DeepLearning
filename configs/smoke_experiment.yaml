@@ -1,0 +1,18 @@
+trainer:
+  experiment_name: smoke-kan
+  train_csv: data/prudential-life-insurance-assessment/train.csv
+  test_csv: data/prudential-life-insurance-assessment/test.csv
+  eval_size: 0.15
+preprocessing:
+  recipe: paper
+  missing_threshold: 0.5
+  stratify: true
+  use_stratified_kfold: true
+  kan_n_splits: 5
+model:
+  name: tabkan-base
+  flavor: chebykan
+  depth: 2
+  width: 128
+  degree: 3
+  params: {}

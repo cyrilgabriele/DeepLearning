@@ -8,9 +8,18 @@ dependencies = [
     "category-encoders>=2.9.0",
     "matplotlib>=3.10.8",
     "pandas>=3.0.1",
+    "scikit-learn>=1.5.0",
+    "pydantic>=2.7.0",
+    "pyyaml>=6.0.3",
+    "torch>=2.10.0",
+    "torchvision>=0.25.0",
 ]
 
 [dependency-groups]
 dev = [
     "ipykernel>=7.2.0",
+    "pytest>=9.0.2",
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

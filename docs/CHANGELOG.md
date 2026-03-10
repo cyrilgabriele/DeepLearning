@@ -17,12 +17,52 @@ Track what was changed, why it was changed, and any important notes.
 - Optional notes, issues, or future work
 ```
 
+### [2026-03-10] - Cyril Gabriele
+
+#### What
+- Split the previous `SOTAPreprocessor` into two explicit modules: `PrudentialPaperPreprocessor` and `PrudentialKANPreprocessor`.
+- Added `prudential_features.py` so both preprocessors share a single source of feature-taxonomy truth.
+- Updated preprocessing tests and documentation references to the new class names and [-1, 1] expectations.
+- Added `prudential_dataset.py` plus regression tests to ensure we split the Kaggle training file before fitting preprocessors (no leakage) and only carve an optional eval subset from that training data.
+- Enabled stratified k-fold target encoding inside `PrudentialKANPreprocessor` and covered it with synthetic regression tests.
+- Introduced a typed CLI (`main.py`) powered by Pydantic along with the new `Trainer` orchestration module, synthetic TabKAN placeholders, and regression tests for the trainer pipeline.
+- Removed CLI overrides so the only way to run experiments is via fully specified YAML configs, and added `configs/smoke_experiment.yaml` as a reproducible template.
+- Enforced a single global random seed (42) and automatic device detection (CUDA/MPS/CPU) so every run is deterministic aside from the available hardware.
+- Trainer now dumps a JSON run summary (config, random seed, device, metrics) into `artifacts/<experiment-name>/run-summary-<timestamp>.json` and surfaces the path via CLI output so every experiment leaves a reproducible breadcrumb.
+- `TrainingArtifacts` exposes the resolved config + seed and hands the CLI the summary path, ensuring downstream consumers/tests can assert against the exact setup that ran.
+- TabKAN registry builder now accepts arbitrary keyword arguments so runtime-detected knobs such as `device` and any upcoming model overrides pass cleanly from the config through the trainer into the placeholder estimator.
+- Fixed the trainer dataclass field ordering so we can inject the resolved device without tripping the frozen dataclass initializer.
+- Added Quadratic Weighted Kappa (QWK) to the trainer's evaluation metrics and run-summary payload to mirror the Prudential competition's official score.
+- Trainer now stores Torch checkpoints alongside JSON summaries, writing `checkpoints/<experiment-name>/model-<timestamp>.pt` whenever the estimator exposes a Torch module.
+- Trainer optionally loads Kaggle's `test.csv`, runs inference with the fitted preprocessor/model, and saves predictions to `artifacts/<experiment-name>/test-predictions-<timestamp>.csv`.
+- Fixed the dataset splitter to always fit the preprocessor on the training slice before transforming the optional evaluation split, removing a long-standing ordering bug.
+
+#### Why
+- Keep a faithful reproduction of the paper baseline separate from the experimental, KAN-optimized pipeline while preventing feature assignment drift.
+- Provide a publication-ready data-handling workflow where every preprocessing statistic is learned on the train subset only, respecting Kaggle's existing train/test split.
+- Mimic best-practice leakage safeguards cited in the literature by ensuring categorical encodings are computed out-of-fold with respect to stratified splits.
+- Ensure experiments are reproducible through a single entry point with strongly typed arguments shared between the CLI and trainer.
+- Make the configuration file the single source of truth so no experiment runs with accidental defaults.
+- Keep hardware-awareness limited to runtime device detection while everything else remains fixed.
+- Preserve experiment provenance by persisting the resolved configuration/seed/device with the reported metrics so historical runs can be replayed even after YAML edits.
+- Ensure the placeholder model remains smokable while preparing the pipeline to accept real TabKAN implementations that need the runtime device and future hyper-parameters.
+- Align local evaluation with the competition's metric (QWK) and avoid dataclass regressions when threading runtime-only fields like `device`.
+- Persist the final set of learned weights for reproducibility and downstream fine-tuning without rerunning the entire training job.
+- Provide ready-to-submit predictions so the held-out Kaggle test split is exercised every run even when evaluation splits are disabled.
+- Ensure evaluation splits actually reuse the trained preprocessing statistics instead of transforming before fit, which previously raised errors on small experiments.
+
+#### Remarks
+- The new naming makes it straightforward to pick the desired preprocessing recipe inside training scripts.
+
+
+---
+
 ### [2026-03-09] - Gian Seifert
 
 #### What
 - Refined feature categorization: moved low-cardinality "continuous" features (e.g., `Product_Info_3`, `Employment_Info_2`) to the `ordinal` group.
 - Switched ordinal scaling from `QuantileTransformer` to `MinMaxScaler` mapped to `[-1, 1]`.
-- Enabled automated missingness indicators (`missing_` flags) in `SOTAPreprocessor`.
+- Enabled automated missingness indicators (`missing_` flags) in `PrudentialKANPreprocessor` (formerly `SOTAPreprocessor`).
 - Implemented explicit `[-1, 1]` clipping and stored scaling parameters for consistency across train/test splits.
 
 #### Why
