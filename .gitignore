@@ -213,3 +213,4 @@ artifacts/*
 !artifacts/.gitkeep
 checkpoints/*
 !checkpoints/.gitkeep
+src/data/prudential-life-insurance-assessment/
