@@ -209,4 +209,8 @@ __marimo__/
 # custom 
 .DS_Store
 /data
+artifacts/*
+!artifacts/.gitkeep
+checkpoints/*
+!checkpoints/.gitkeep
 src/data/prudential-life-insurance-assessment/
