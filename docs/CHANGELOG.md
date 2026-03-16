@@ -20,21 +20,17 @@ Track what was changed, why it was changed, and any important notes.
 ### [2026-03-16] - Christof Steiner
 
 #### What
-- Merged origin/main preprocessing refactor into feature/tabkan-models
-- Fixed broken import: replaced deleted `SOTAPreprocessor` with `PrudentialKANPreprocessor` in dataset.py
-- Added `TabKANClassifier` wrapper + `build_tabkan_model()` factory so the Trainer pipeline from main.py works with real TabKAN (not sklearn placeholder)
-- Added structured logging system (`src/utils/logging.py`): per-run directories with train.log (human), metrics.jsonl (machine), epoch_metrics.csv, config.json, raw/processed data samples, feature stats, architecture breakdown, and output report
-- Added 18 integration tests (`tests/test_pipeline_integration.py`) covering preprocessing output validation, model forward pass with preprocessed data, threshold optimization, end-to-end pipeline for all 3 KAN types, and registry bridge
-- Added pipeline diagnostic trace (`src/diagnostics/pipeline_trace.py`) for synthetic-data verification
+- Merged origin/main preprocessing refactor into feature/tabkan-models and fixed broken imports (`SOTAPreprocessor` → `PrudentialKANPreprocessor`, added `build_tabkan_model` factory for the Trainer pipeline)
+- Added pipeline diagnostics: each training run saves to a timestamped `runs/` directory with human-readable logs (`train.log`) and machine-readable metrics (`metrics.jsonl`, `epoch_metrics.csv`) so we can verify results and compare runs
+- Added per-run data snapshots: `raw_sample.csv`, `processed_sample.csv`, `feature_stats.csv`, `config.json` — everything needed to reproduce and inspect a run
+- Added 18 integration tests and a diagnostic trace script to verify the full pipeline end-to-end
 
 #### Why
-- The merge broke both entry points: Hydra path (deleted SOTAPreprocessor) and Trainer path (missing build_tabkan_model). Both needed fixing for the codebase to function.
-- Structured logging needed for paper: every run must be reproducible and inspectable (preprocessing correctness, per-epoch loss/QWK progression, threshold optimization details).
-- Integration tests prove the full pipeline works: preprocessing [-1,1] output -> model accepts it -> finite output -> thresholds produce ordinal 1-8.
+- Need to track whether changes to hyperparameters, preprocessing, or architecture actually improve QWK — every run is now saved with its config and metrics so we can compare tactics
+- Need to verify preprocessing correctness for the paper: the logs prove all features are in [-1, 1], zero NaN, and each feature type is processed correctly
 
 #### Remarks
-- First real run on Prudential data: ChebyKAN QWK=0.5924 (5 epochs, default params). Published XGBoost benchmark is 0.607.
-- Deep analysis of preprocessing correctness added to Notion page (Section 11): QuantileTransformer mathematically verified (std=0.577), CatBoost encoding preserves category mapping, 47/63 binary features are <5% positive (data sparsity issue), class 3 is only 1.7% of data (imbalance).
+- First real run: ChebyKAN QWK=0.5924 (5 epochs, default params). Kaggle SOTA is ~0.679, published XGBoost baseline is 0.607. Room to improve with longer training and hyperparameter tuning.
 
 ---
 
