@@ -210,6 +210,7 @@ __marimo__/
 .DS_Store
 /data
 
+
 # Training artifacts
 checkpoints/
 logs/
@@ -217,6 +218,9 @@ outputs/
 multirun/
 lightning_logs/
 *.ckpt
+artifacts/*
+!artifacts/.gitkeep
 
 # Kaggle data
 *.zip
+src/data/prudential-life-insurance-assessment/

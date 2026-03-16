@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
-from src.data.sota_preprocessing import SOTAPreprocessor
+from src.data.prudential_kan_preprocessing import PrudentialKANPreprocessor
 
 def verify_kan_readiness(X_processed, feature_lists):
     """
@@ -18,7 +18,7 @@ def verify_kan_readiness(X_processed, feature_lists):
     assert missing_count == 0, "KANs cannot handle missing values natively."
     
     # 2. Global Range Check
-    # KAN splines are usually defined on a fixed grid (often [0, 1] or [-1, 1])
+    # KAN splines are defined on a fixed grid (we enforce [-1, 1])
     min_val = X_processed.min().min()
     max_val = X_processed.max().max()
     print(f"Global Range: [{min_val:.4f}, {max_val:.4f}]")
@@ -30,12 +30,12 @@ def verify_kan_readiness(X_processed, feature_lists):
     stats = X_processed.iloc[:, :10].describe().T[['min', '25%', '50%', '75%', 'max']]
     print(stats)
     
-    # Check if mean is close to 0.5 and std is close to 1/sqrt(12) approx 0.288 for uniform [0,1]
+    # Check if mean is close to 0 and std is close to sqrt(1/3) ≈ 0.577 for uniform [-1, 1]
     means = X_processed.mean()
     stds = X_processed.std()
-    
-    print(f"\nAverage Mean across features: {means.mean():.4f} (Ideal: 0.5)")
-    print(f"Average Std across features: {stds.mean():.4f} (Ideal: 0.288)")
+
+    print(f"\nAverage Mean across features: {means.mean():.4f} (Ideal: 0.0)")
+    print(f"Average Std across features: {stds.mean():.4f} (Ideal: 0.577)")
     
     # 4. Feature Type Check
     all_numeric = all(np.issubdtype(dtype, np.number) for dtype in X_processed.dtypes)
@@ -44,7 +44,7 @@ def verify_kan_readiness(X_processed, feature_lists):
     # 5. Sensitivity to Spline Grids
     # We check if any feature has extreme outliers that QuantileTransformer might have missed
     # (Though QT is very robust to this).
-    outliers_detected = (X_processed > 1.0).any().any() or (X_processed < 0.0).any().any()
+    outliers_detected = (X_processed > 1.0).any().any() or (X_processed < -1.0).any().any()
     print(f"Out-of-bounds features detected (>1 or <0): {outliers_detected}")
 
     # 6. High Cardinality Encoding Check
@@ -56,7 +56,7 @@ def verify_kan_readiness(X_processed, feature_lists):
     if missing_count == 0 and not outliers_detected and all_numeric:
         print("✅ Data is SOTA-ready for KAN architectures.")
         print("   - Uniform distribution optimizes spline grid coverage.")
-        print("   - [0, 1] range matches typical KAN initialization.")
+        print("   - [-1, 1] range matches typical KAN initialization.")
         print("   - Low dimensionality (no one-hot expansion) prevents KAN parameter explosion.")
     else:
         print("❌ Data fails one or more KAN readiness checks.")
@@ -73,7 +73,7 @@ if __name__ == "__main__":
         X = train.drop(columns=["Response"])
         
         print("Fitting preprocessor (this may take a minute)...")
-        preprocessor = SOTAPreprocessor(use_sota=True)
+        preprocessor = PrudentialKANPreprocessor()
         X_processed = preprocessor.fit_transform(X, y)
         
         verify_kan_readiness(X_processed, preprocessor.feature_lists)
