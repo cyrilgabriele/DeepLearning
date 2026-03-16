@@ -1,0 +1,7 @@
+defaults:
+  - model: chebykan
+  - train: default
+  - data: default
+  - _self_
+
+seed: 42

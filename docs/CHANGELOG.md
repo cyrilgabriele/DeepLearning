@@ -17,6 +17,23 @@ Track what was changed, why it was changed, and any important notes.
 - Optional notes, issues, or future work
 ```
 
+### [2026-03-16] - Christof Steiner
+
+#### What
+- Merged origin/main preprocessing refactor into feature/tabkan-models and fixed broken imports (`SOTAPreprocessor` → `PrudentialKANPreprocessor`, added `build_tabkan_model` factory for the Trainer pipeline)
+- Added pipeline diagnostics: each training run saves to a timestamped `runs/` directory with human-readable logs (`train.log`) and machine-readable metrics (`metrics.jsonl`, `epoch_metrics.csv`) so we can verify results and compare runs
+- Added per-run data snapshots: `raw_sample.csv`, `processed_sample.csv`, `feature_stats.csv`, `config.json` — everything needed to reproduce and inspect a run
+- Added 18 integration tests and a diagnostic trace script to verify the full pipeline end-to-end
+
+#### Why
+- Need to track whether changes to hyperparameters, preprocessing, or architecture actually improve QWK — every run is now saved with its config and metrics so we can compare tactics
+- Need to verify preprocessing correctness for the paper: the logs prove all features are in [-1, 1], zero NaN, and each feature type is processed correctly
+
+#### Remarks
+- First real run: ChebyKAN QWK=0.5924 (5 epochs, default params). Kaggle SOTA is ~0.679, published XGBoost baseline is 0.607. Room to improve with longer training and hyperparameter tuning.
+
+---
+
 ### [2026-03-10] - Cyril Gabriele
 
 #### What
@@ -54,6 +71,30 @@ Track what was changed, why it was changed, and any important notes.
 #### Remarks
 - The new naming makes it straightforward to pick the desired preprocessing recipe inside training scripts.
 
+---
+
+### [2026-03-09] - Christof Steiner
+
+#### What
+- Implemented complete TabKAN training framework
+- Added three KAN layer architectures: B-Spline KAN (Liu et al. 2024 original), ChebyKAN (Chebyshev polynomial basis), FourierKAN (Fourier series basis)
+- Added MLP baseline (same loss/metric/training setup for fair neural comparison) and XGBoost baseline (tree-based reference with same QWK evaluation)
+- Added QWK (Quadratic Weighted Kappa) metric with Nelder-Mead threshold optimizer that finds optimal rounding boundaries to maximize QWK
+- Added PrudentialDataModule (Lightning DataModule wrapping SOTAPreprocessor with stratified train/val splits)
+- Added Hydra configuration system: YAML configs for all 5 models, training parameters, and data settings — hyperparameters are changed via config or CLI override, not code
+- Added summary results table that prints after each training run
+- Added 37 unit tests covering all layers, models, metrics, and data loading
+
+#### Why
+- Need a reproducible, fair comparison framework to test the paper's hypothesis: do KAN architectures outperform traditional methods on tabular insurance risk prediction?
+- Regression + threshold optimization (not classification) because the target is ordinal (1-8) and this approach won the original Kaggle competition — MSE respects ordinal distance, threshold optimizer directly maximizes QWK
+- Three KAN basis types to test smooth (Chebyshev) vs flexible (Fourier) vs reference (B-Spline) basis expansions
+- Hydra configs ensure every experiment is fully reproducible and hyperparameter sweeps are one CLI flag
+- All models share identical preprocessing, data splits, loss function, and evaluation so performance differences isolate the architecture
+
+#### Remarks
+- Initial baseline results (5 epochs, no tuning, CPU): B-Spline KAN 0.6029, FourierKAN 0.6011, XGBoost 0.5997, ChebyKAN 0.5894, MLP 0.5752
+- Next steps: hyperparameter tuning (Stage 1: depth/width, Stage 2: basis complexity), longer training runs with early stopping, interpretability analysis
 
 ---
 

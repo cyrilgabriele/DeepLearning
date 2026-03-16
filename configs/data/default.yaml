@@ -1,0 +1,4 @@
+path: data/prudential-life-insurance-assessment/train.csv
+val_split: 0.2
+use_sota: true
+missing_threshold: 0.5

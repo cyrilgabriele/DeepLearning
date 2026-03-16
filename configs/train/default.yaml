@@ -1,0 +1,5 @@
+max_epochs: 100
+batch_size: 256
+early_stopping_patience: 10
+num_workers: 0
+accelerator: auto

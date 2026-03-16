@@ -20,7 +20,7 @@ def run(argv: Sequence[str] | None = None) -> None:
     device = detect_device()
     logger.info(f"device: {device}")
     config = load_experiment_config(args.config)
-    
+
 
     trainer = Trainer(config, random_seed=seed, device=device)
     artifacts = trainer.run()

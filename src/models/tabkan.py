@@ -1,155 +1,226 @@
-"""Placeholder TabKAN-style models with configurable architecture knobs.
-
-These wrappers stand in for the real TabKAN implementations while we wire up the
-training pipeline. They currently delegate to scikit-learn estimators so the
-trainer can run end-to-end without the heavy dependencies a full KAN would
-require. The builder already understands the TabKAN flavors from the
-`feature/tabkan-models` branch (ChebyKAN, FourierKAN, BSplineKAN) so we can pass
-depth/width/degree overrides from the CLI today and plug the actual
-implementations in later without changing the interface.
-"""
-
 from __future__ import annotations
 
-from dataclasses import dataclass
-from enum import Enum
 from typing import Tuple
 
+import torch
+import torch.nn as nn
+import lightning as L
 import numpy as np
 import pandas as pd
-from sklearn.neural_network import MLPClassifier
 
-from .base import PrudentialModel
-
-
-class TabKANFlavor(str, Enum):
-    """Supported TabKAN variants aligned with the feature/tabkan-models branch."""
-
-    CHEBYKAN = "chebykan"
-    FOURIERKAN = "fourierkan"
-    BSPLINEKAN = "bsplinekan"
+from src.models.kan_layers import ChebyKANLayer, FourierKANLayer, BSplineKANLayer
+from src.metrics.qwk import quadratic_weighted_kappa
+from src.models.base import PrudentialModel
 
 
-@dataclass(frozen=True)
-class TabKANConfig:
-    """Lightweight container describing the placeholder architecture."""
+class TabKAN(L.LightningModule):
+    """Tabular KAN model with configurable layer type, depth, and width.
 
-    hidden_layers: Tuple[int, ...]
-    flavor: TabKANFlavor = TabKANFlavor.CHEBYKAN
-    degree: int | None = 3
-    learning_rate_init: float = 1e-3
-    max_iter: int = 300
-
-
-class TabKANClassifier(PrudentialModel):
-    """Simple wrapper mimicking a TabKAN classifier via MLPClassifier."""
+    Args:
+        in_features: Number of input features.
+        widths: List of hidden layer widths (determines depth).
+        kan_type: "chebykan", "fourierkan", or "bsplinekan".
+        degree: Chebyshev polynomial degree (only for chebykan).
+        grid_size: Grid size (for fourierkan and bsplinekan).
+        spline_order: B-spline order (only for bsplinekan).
+        lr: Learning rate.
+        weight_decay: L2 regularization.
+    """
 
     def __init__(
         self,
-        config: TabKANConfig,
+        in_features: int,
+        widths: list[int],
+        kan_type: str = "chebykan",
+        degree: int = 3,
+        grid_size: int = 4,
+        spline_order: int = 3,
+        lr: float = 1e-3,
+        weight_decay: float = 1e-5,
+    ):
+        super().__init__()
+        self.save_hyperparameters()
+
+        if kan_type not in ("chebykan", "fourierkan", "bsplinekan"):
+            raise ValueError(f"Unknown kan_type: {kan_type}. Use 'chebykan', 'fourierkan', or 'bsplinekan'.")
+
+        if kan_type == "chebykan":
+            layer_cls = ChebyKANLayer
+            layer_kwargs = {"degree": degree}
+        elif kan_type == "fourierkan":
+            layer_cls = FourierKANLayer
+            layer_kwargs = {"grid_size": grid_size}
+        else:
+            layer_cls = BSplineKANLayer
+            layer_kwargs = {"grid_size": grid_size, "spline_order": spline_order}
+
+        layers = []
+        dims = [in_features] + widths
+        for i in range(len(dims) - 1):
+            layers.append(layer_cls(dims[i], dims[i + 1], **layer_kwargs))
+            layers.append(nn.LayerNorm(dims[i + 1]))
+
+        self.kan_layers = nn.Sequential(*layers)
+        self.head = nn.Linear(widths[-1], 1)
+        self.loss_fn = nn.MSELoss()
+
+        self._val_preds = []
+        self._val_targets = []
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        h = self.kan_layers(x)
+        return self.head(h)
+
+    def training_step(self, batch, batch_idx):
+        x, y = batch
+        y_hat = self(x)
+        loss = self.loss_fn(y_hat, y)
+        self.log("train/loss", loss, prog_bar=True)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        x, y = batch
+        y_hat = self(x)
+        loss = self.loss_fn(y_hat, y)
+        self.log("val/loss", loss, prog_bar=True)
+        self._val_preds.append(y_hat.detach().cpu().numpy())
+        self._val_targets.append(y.detach().cpu().numpy())
+        return loss
+
+    def on_validation_epoch_end(self):
+        if not self._val_preds:
+            return
+        preds = np.concatenate(self._val_preds).flatten()
+        targets = np.concatenate(self._val_targets).flatten()
+        preds_rounded = np.clip(np.round(preds), 1, 8).astype(int)
+        targets_int = np.clip(np.round(targets), 1, 8).astype(int)
+        kappa = quadratic_weighted_kappa(targets_int, preds_rounded)
+        self.log("val/qwk", kappa, prog_bar=True)
+        self._val_preds.clear()
+        self._val_targets.clear()
+
+    def configure_optimizers(self):
+        return torch.optim.Adam(
+            self.parameters(),
+            lr=self.hparams.lr,
+            weight_decay=self.hparams.weight_decay,
+        )
+
+
+class TabKANClassifier(PrudentialModel):
+    """Wraps TabKAN (Lightning) to expose the PrudentialModel fit/predict interface.
+
+    This allows the Trainer pipeline from main.py to use the real TabKAN
+    implementation instead of the sklearn placeholder.
+    """
+
+    PRESETS = {
+        "tabkan-tiny": {"widths": (32, 16), "lr": 5e-3, "max_epochs": 50},
+        "tabkan-small": {"widths": (64, 32), "lr": 3e-3, "max_epochs": 100},
+        "tabkan-base": {"widths": (128, 64), "lr": 1e-3, "max_epochs": 100},
+    }
+
+    def __init__(
+        self,
+        preset: str = "tabkan-base",
         *,
         random_state: int = 42,
+        flavor: str = "chebykan",
+        depth: int | None = None,
+        width: int | None = None,
+        degree: int = 3,
+        grid_size: int = 4,
+        spline_order: int = 3,
+        max_epochs: int | None = None,
         **extra_params,
     ) -> None:
         params = {
-            "hidden_layers": config.hidden_layers,
-            "flavor": config.flavor.value,
-            "degree": config.degree,
-            "learning_rate_init": config.learning_rate_init,
-            "max_iter": config.max_iter,
-            "random_state": random_state,
+            "preset": preset, "flavor": flavor, "depth": depth,
+            "width": width, "degree": degree, "random_state": random_state,
         }
         params.update(extra_params)
         super().__init__(**params)
 
-        self.flavor = config.flavor
-        self.degree = config.degree
-        self.estimator = MLPClassifier(
-            hidden_layer_sizes=config.hidden_layers,
-            learning_rate_init=config.learning_rate_init,
-            max_iter=config.max_iter,
-            random_state=random_state,
-            verbose=False,
-        )
+        base = self.PRESETS.get(preset, self.PRESETS["tabkan-base"])
+        self.kan_type = flavor
+        self.degree = degree
+        self.grid_size = grid_size
+        self.spline_order = spline_order
+        self.random_state = random_state
+        self.max_epochs = max_epochs or base["max_epochs"]
+        self.lr = base["lr"]
+
+        base_widths = list(base["widths"])
+        if depth is not None and width is not None:
+            self.widths = [width] * depth
+        elif depth is not None:
+            self.widths = [base_widths[0]] * depth
+        elif width is not None:
+            self.widths = [width] * len(base_widths)
+        else:
+            self.widths = base_widths
+
+        self.module: TabKAN | None = None
 
     def fit(self, X: pd.DataFrame, y: pd.Series) -> None:
-        self.estimator.fit(X, y)
+        L.seed_everything(self.random_state)
+
+        in_features = X.shape[1]
+        self.module = TabKAN(
+            in_features=in_features,
+            widths=self.widths,
+            kan_type=self.kan_type,
+            degree=self.degree,
+            grid_size=self.grid_size,
+            spline_order=self.spline_order,
+            lr=self.lr,
+        )
+
+        X_t = torch.tensor(X.values, dtype=torch.float32)
+        y_t = torch.tensor(y.values, dtype=torch.float32)
+        dataset = torch.utils.data.TensorDataset(X_t, y_t.unsqueeze(1))
+        loader = torch.utils.data.DataLoader(dataset, batch_size=256, shuffle=True)
+
+        trainer = L.Trainer(
+            max_epochs=self.max_epochs,
+            accelerator="auto",
+            enable_progress_bar=False,
+            enable_model_summary=False,
+            logger=False,
+            deterministic=True,
+        )
+        trainer.fit(self.module, train_dataloaders=loader)
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:
-        return self.estimator.predict(X)
+        if self.module is None:
+            raise RuntimeError("Call fit() before predict().")
+
+        self.module.eval()
+        X_t = torch.tensor(X.values, dtype=torch.float32)
+        with torch.no_grad():
+            preds = self.module(X_t).cpu().numpy().flatten()
+        return np.clip(np.round(preds), 1, 8).astype(int)
 
 
 def build_tabkan_model(
     preset: str,
     *,
     random_state: int,
-    flavor: str | TabKANFlavor | None = None,
+    flavor: str | None = None,
     depth: int | None = None,
     width: int | None = None,
     degree: int | None = None,
     **extra_params,
 ) -> TabKANClassifier:
-    """Instantiate the placeholder TabKAN with optional architecture overrides."""
-
-    presets = {
-        "tabkan-tiny": TabKANConfig(hidden_layers=(32, 16), learning_rate_init=5e-3, max_iter=200),
-        "tabkan-small": TabKANConfig(hidden_layers=(64, 32), learning_rate_init=3e-3, max_iter=250),
-        "tabkan-base": TabKANConfig(hidden_layers=(128, 64), learning_rate_init=1e-3, max_iter=300),
-    }
-
-    try:
-        base_config = presets[preset]
-    except KeyError as exc:  # pragma: no cover - defensive
-        raise ValueError(f"Unknown TabKAN preset '{preset}'.") from exc
-
-    resolved_flavor = TabKANFlavor(flavor) if flavor else base_config.flavor
-    resolved_degree = _resolve_degree(resolved_flavor, base_config.degree, degree)
-    hidden_layers = _resolve_hidden_layers(base_config.hidden_layers, depth, width)
-
-    config = TabKANConfig(
-        hidden_layers=hidden_layers,
-        flavor=resolved_flavor,
-        degree=resolved_degree,
-        learning_rate_init=base_config.learning_rate_init,
-        max_iter=base_config.max_iter,
-    )
-    return TabKANClassifier(
-        config=config,
-        random_state=random_state,
-        **extra_params,
-    )
-
-
-def _resolve_hidden_layers(
-    base_layers: Tuple[int, ...],
-    depth: int | None,
-    width: int | None,
-) -> Tuple[int, ...]:
-    if depth is None and width is None:
-        return base_layers
-
-    if depth is None:
-        depth = len(base_layers) or 1
-    if width is None:
-        width = base_layers[0] if base_layers else 32
-
-    if depth <= 0:
-        raise ValueError("depth must be a positive integer")
-    if width <= 0:
-        raise ValueError("width must be a positive integer")
-
-    return tuple([width] * depth)
-
-
-def _resolve_degree(
-    flavor: TabKANFlavor,
-    base_degree: int | None,
-    requested: int | None,
-) -> int | None:
-    if flavor != TabKANFlavor.CHEBYKAN:
-        return None
-    if requested is not None:
-        if requested <= 0:
-            raise ValueError("degree must be positive")
-        return requested
-    return base_degree
+    """Factory function for the model registry."""
+    kwargs: dict = {"random_state": random_state}
+    if flavor is not None:
+        kwargs["flavor"] = flavor
+    if depth is not None:
+        kwargs["depth"] = depth
+    if width is not None:
+        kwargs["width"] = width
+    if degree is not None:
+        kwargs["degree"] = degree
+    kwargs.update(extra_params)
+    return TabKANClassifier(preset, **kwargs)
