@@ -1,9 +1,16 @@
+from __future__ import annotations
+
+from typing import Tuple
+
 import torch
 import torch.nn as nn
 import lightning as L
 import numpy as np
+import pandas as pd
+
 from src.models.kan_layers import ChebyKANLayer, FourierKANLayer, BSplineKANLayer
 from src.metrics.qwk import quadratic_weighted_kappa
+from src.models.base import PrudentialModel
 
 
 class TabKAN(L.LightningModule):
@@ -98,3 +105,122 @@ class TabKAN(L.LightningModule):
             lr=self.hparams.lr,
             weight_decay=self.hparams.weight_decay,
         )
+
+
+class TabKANClassifier(PrudentialModel):
+    """Wraps TabKAN (Lightning) to expose the PrudentialModel fit/predict interface.
+
+    This allows the Trainer pipeline from main.py to use the real TabKAN
+    implementation instead of the sklearn placeholder.
+    """
+
+    PRESETS = {
+        "tabkan-tiny": {"widths": (32, 16), "lr": 5e-3, "max_epochs": 50},
+        "tabkan-small": {"widths": (64, 32), "lr": 3e-3, "max_epochs": 100},
+        "tabkan-base": {"widths": (128, 64), "lr": 1e-3, "max_epochs": 100},
+    }
+
+    def __init__(
+        self,
+        preset: str = "tabkan-base",
+        *,
+        random_state: int = 42,
+        flavor: str = "chebykan",
+        depth: int | None = None,
+        width: int | None = None,
+        degree: int = 3,
+        grid_size: int = 4,
+        spline_order: int = 3,
+        max_epochs: int | None = None,
+        **extra_params,
+    ) -> None:
+        params = {
+            "preset": preset, "flavor": flavor, "depth": depth,
+            "width": width, "degree": degree, "random_state": random_state,
+        }
+        params.update(extra_params)
+        super().__init__(**params)
+
+        base = self.PRESETS.get(preset, self.PRESETS["tabkan-base"])
+        self.kan_type = flavor
+        self.degree = degree
+        self.grid_size = grid_size
+        self.spline_order = spline_order
+        self.random_state = random_state
+        self.max_epochs = max_epochs or base["max_epochs"]
+        self.lr = base["lr"]
+
+        base_widths = list(base["widths"])
+        if depth is not None and width is not None:
+            self.widths = [width] * depth
+        elif depth is not None:
+            self.widths = [base_widths[0]] * depth
+        elif width is not None:
+            self.widths = [width] * len(base_widths)
+        else:
+            self.widths = base_widths
+
+        self.module: TabKAN | None = None
+
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> None:
+        L.seed_everything(self.random_state)
+
+        in_features = X.shape[1]
+        self.module = TabKAN(
+            in_features=in_features,
+            widths=self.widths,
+            kan_type=self.kan_type,
+            degree=self.degree,
+            grid_size=self.grid_size,
+            spline_order=self.spline_order,
+            lr=self.lr,
+        )
+
+        X_t = torch.tensor(X.values, dtype=torch.float32)
+        y_t = torch.tensor(y.values, dtype=torch.float32)
+        dataset = torch.utils.data.TensorDataset(X_t, y_t.unsqueeze(1))
+        loader = torch.utils.data.DataLoader(dataset, batch_size=256, shuffle=True)
+
+        trainer = L.Trainer(
+            max_epochs=self.max_epochs,
+            accelerator="auto",
+            enable_progress_bar=False,
+            enable_model_summary=False,
+            logger=False,
+            deterministic=True,
+        )
+        trainer.fit(self.module, train_dataloaders=loader)
+
+    def predict(self, X: pd.DataFrame) -> np.ndarray:
+        if self.module is None:
+            raise RuntimeError("Call fit() before predict().")
+
+        self.module.eval()
+        X_t = torch.tensor(X.values, dtype=torch.float32)
+        with torch.no_grad():
+            preds = self.module(X_t).cpu().numpy().flatten()
+        return np.clip(np.round(preds), 1, 8).astype(int)
+
+
+def build_tabkan_model(
+    preset: str,
+    *,
+    random_state: int,
+    flavor: str | None = None,
+    depth: int | None = None,
+    width: int | None = None,
+    degree: int | None = None,
+    **extra_params,
+) -> TabKANClassifier:
+    """Factory function for the model registry."""
+    kwargs: dict = {"random_state": random_state}
+    if flavor is not None:
+        kwargs["flavor"] = flavor
+    if depth is not None:
+        kwargs["depth"] = depth
+    if width is not None:
+        kwargs["width"] = width
+    if degree is not None:
+        kwargs["degree"] = degree
+    kwargs.update(extra_params)
+    return TabKANClassifier(preset, **kwargs)

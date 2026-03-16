@@ -215,6 +215,7 @@ __marimo__/
 checkpoints/
 logs/
 outputs/
+runs/
 multirun/
 lightning_logs/
 *.ckpt
