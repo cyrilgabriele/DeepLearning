@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 import lightning as L
 from sklearn.model_selection import StratifiedShuffleSplit
-from src.data.sota_preprocessing import SOTAPreprocessor
+from src.data.prudential_kan_preprocessing import PrudentialKANPreprocessor
 
 
 class TabularDataset(Dataset):
@@ -46,8 +46,8 @@ class PrudentialDataModule(L.LightningDataModule):
         self.num_workers = num_workers
         self.seed = seed
 
-        self.preprocessor = SOTAPreprocessor(
-            missing_threshold=missing_threshold, use_sota=use_sota
+        self.preprocessor = PrudentialKANPreprocessor(
+            missing_threshold=missing_threshold,
         )
         self.train_dataset = None
         self.val_dataset = None

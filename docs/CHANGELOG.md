@@ -17,6 +17,27 @@ Track what was changed, why it was changed, and any important notes.
 - Optional notes, issues, or future work
 ```
 
+### [2026-03-16] - Christof Steiner
+
+#### What
+- Merged origin/main preprocessing refactor into feature/tabkan-models
+- Fixed broken import: replaced deleted `SOTAPreprocessor` with `PrudentialKANPreprocessor` in dataset.py
+- Added `TabKANClassifier` wrapper + `build_tabkan_model()` factory so the Trainer pipeline from main.py works with real TabKAN (not sklearn placeholder)
+- Added structured logging system (`src/utils/logging.py`): per-run directories with train.log (human), metrics.jsonl (machine), epoch_metrics.csv, config.json, raw/processed data samples, feature stats, architecture breakdown, and output report
+- Added 18 integration tests (`tests/test_pipeline_integration.py`) covering preprocessing output validation, model forward pass with preprocessed data, threshold optimization, end-to-end pipeline for all 3 KAN types, and registry bridge
+- Added pipeline diagnostic trace (`src/diagnostics/pipeline_trace.py`) for synthetic-data verification
+
+#### Why
+- The merge broke both entry points: Hydra path (deleted SOTAPreprocessor) and Trainer path (missing build_tabkan_model). Both needed fixing for the codebase to function.
+- Structured logging needed for paper: every run must be reproducible and inspectable (preprocessing correctness, per-epoch loss/QWK progression, threshold optimization details).
+- Integration tests prove the full pipeline works: preprocessing [-1,1] output -> model accepts it -> finite output -> thresholds produce ordinal 1-8.
+
+#### Remarks
+- First real run on Prudential data: ChebyKAN QWK=0.5924 (5 epochs, default params). Published XGBoost benchmark is 0.607.
+- Deep analysis of preprocessing correctness added to Notion page (Section 11): QuantileTransformer mathematically verified (std=0.577), CatBoost encoding preserves category mapping, 47/63 binary features are <5% positive (data sparsity issue), class 3 is only 1.7% of data (imbalance).
+
+---
+
 ### [2026-03-10] - Cyril Gabriele
 
 #### What
