@@ -71,6 +71,7 @@ class Trainer:
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
         summary_path = self._persist_run_summary(metrics, timestamp)
         checkpoint_path = self._persist_checkpoint(model, timestamp)
+        self._export_eval_data(splits)
         test_predictions_path = self._generate_test_predictions(
             model=model,
             dataset=dataset,
@@ -170,28 +171,58 @@ class Trainer:
             return None
 
     def _persist_checkpoint(self, model: PrudentialModel, timestamp: str) -> Optional[Path]:
-        """Save a Torch checkpoint if the estimator exposes a module."""
-        try:  # Optional torch dependency
-            import torch
-        except ImportError:  # pragma: no cover - torch-less envs
-            return None
-
-        module = self._resolve_torch_module(model, torch)
-        if module is None:
-            return None
-
+        """Save a Torch checkpoint or a joblib pickle depending on model type."""
         checkpoint_root = Path("checkpoints") / self.config.trainer.experiment_name
-        checkpoint_path = checkpoint_root / f"model-{timestamp}.pt"
 
         try:
+            import torch
+            module = self._resolve_torch_module(model, torch)
+        except ImportError:
+            module = None
+
+        if module is not None:
+            checkpoint_path = checkpoint_root / f"model-{timestamp}.pt"
+            try:
+                checkpoint_root.mkdir(parents=True, exist_ok=True)
+                torch.save(module.state_dict(), checkpoint_path)
+                return checkpoint_path
+            except Exception as exc:  # pragma: no cover
+                print(f"Warning: torch.save failed at {checkpoint_path}: {exc}")
+            return None
+
+        # Sklearn / non-torch models: persist with joblib
+        try:
+            import joblib
+        except ImportError:  # pragma: no cover
+            return None
+
+        checkpoint_path = checkpoint_root / f"model-{timestamp}.joblib"
+        try:
             checkpoint_root.mkdir(parents=True, exist_ok=True)
-            torch.save(module.state_dict(), checkpoint_path)
+            joblib.dump(model, checkpoint_path)
             return checkpoint_path
-        except OSError as exc:
-            print(f"Warning: failed to persist checkpoint at {checkpoint_path}: {exc}")
-        except Exception as exc:  # pragma: no cover - torch save failures
-            print(f"Warning: torch.save failed for checkpoint {checkpoint_path}: {exc}")
+        except Exception as exc:  # pragma: no cover
+            print(f"Warning: joblib.dump failed at {checkpoint_path}: {exc}")
         return None
+
+    def _export_eval_data(self, splits) -> None:
+        """Persist the preprocessed eval split for downstream interpretability scripts."""
+        if splits.X_eval is None or splits.y_eval is None:
+            return
+        try:
+            import json
+            outputs_dir = Path("outputs")
+            outputs_dir.mkdir(parents=True, exist_ok=True)
+            splits.X_eval.to_parquet(outputs_dir / "X_eval.parquet", index=False)
+            splits.y_eval.to_frame(name="Response").to_parquet(
+                outputs_dir / "y_eval.parquet", index=False
+            )
+            feature_names = list(splits.X_eval.columns)
+            (outputs_dir / "feature_names.json").write_text(
+                json.dumps(feature_names, indent=2)
+            )
+        except Exception as exc:  # pragma: no cover
+            print(f"Warning: failed to export eval data: {exc}")
 
     @staticmethod
     def _resolve_torch_module(model: PrudentialModel, torch_module) -> Optional["torch.nn.Module"]:
