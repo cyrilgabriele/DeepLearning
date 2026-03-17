@@ -209,6 +209,7 @@ __marimo__/
 # custom
 .DS_Store
 /data
+/local_files
 
 
 # Training artifacts
