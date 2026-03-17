@@ -216,11 +216,13 @@ checkpoints/
 logs/
 outputs/
 runs/
+submissions/
 multirun/
 lightning_logs/
 *.ckpt
 artifacts/*
 !artifacts/.gitkeep
+sweeps/*.db
 
 # Kaggle data
 *.zip
