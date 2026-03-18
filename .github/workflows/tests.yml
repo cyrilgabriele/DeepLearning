@@ -1,4 +1,4 @@
-name: tests
+name: pipeline-trace
 
 on:
   pull_request:
@@ -7,28 +7,9 @@ permissions:
   contents: read
 
 jobs:
-  pytest:
-    name: pytest (${{ matrix.name }})
+  diagnostics:
+    name: pipeline trace diagnostics
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: data/test_preprocessing.py
-            id: data-preprocessing
-            path: tests/data/test_preprocessing.py
-          - name: data/test_prudential_kan_preprocessor.py
-            id: data-prudential-kan-preprocessor
-            path: tests/data/test_prudential_kan_preprocessor.py
-          - name: data/test_dataset_pipeline.py
-            id: data-dataset-pipeline
-            path: tests/data/test_dataset_pipeline.py
-          - name: models/test_tabkan.py
-            id: models-tabkan
-            path: tests/models/test_tabkan.py
-          - name: training/test_trainer.py
-            id: training-trainer
-            path: tests/training/test_trainer.py
     steps:
       - uses: actions/checkout@v4
 
@@ -56,13 +37,13 @@ jobs:
           uv export \
             --frozen \
             --group dev \
-            --output .venv/requirements-${{ matrix.id }}.txt
+            --output-file .venv/requirements.txt
 
       - name: Install dependencies
         run: |
           uv pip install \
             --python .venv/bin/python \
-            --requirements .venv/requirements-${{ matrix.id }}.txt
+            --requirement .venv/requirements.txt
 
-      - name: Run pytest
-        run: .venv/bin/python -m pytest ${{ matrix.path }}
+      - name: Run pipeline trace diagnostics
+        run: .venv/bin/python src/diagnostics/pipeline_trace.py
