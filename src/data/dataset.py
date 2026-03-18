@@ -3,8 +3,9 @@ from torch.utils.data import Dataset, DataLoader
 import pandas as pd
 import numpy as np
 import lightning as L
-from sklearn.model_selection import StratifiedShuffleSplit
-from src.data.prudential_kan_preprocessing import PrudentialKANPreprocessor
+
+from src.data import preprocess_kan_paper as kan_prep
+from src.data.prudential_features import get_feature_lists
 
 
 class TabularDataset(Dataset):
@@ -21,37 +22,39 @@ class TabularDataset(Dataset):
         return self.X[idx], self.y[idx]
 
 
-class PrudentialDataModule(L.LightningDataModule):
-    """Lightning DataModule for Prudential Life Insurance dataset.
+class _PreprocessorSummary:
+    def __init__(self, feature_lists):
+        self.feature_lists = feature_lists
+        self.dropped_features: list[str] = []
+        self.missing_threshold = 0.0
 
-    Wraps SOTAPreprocessor for preprocessing, creates stratified
-    train/val splits, and serves DataLoaders.
-    """
+
+class PrudentialDataModule(L.LightningDataModule):
+    """Lightning DataModule backed by the KAN-ready preprocessing pipeline."""
 
     def __init__(
         self,
         data_path: str,
-        val_split: float = 0.2,
         batch_size: int = 256,
         num_workers: int = 0,
-        use_sota: bool = True,
-        missing_threshold: float = 0.5,
-        seed: int = 42,
+        seed: int,
     ):
         super().__init__()
         self.save_hyperparameters()
         self.data_path = data_path
-        self.val_split = val_split
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.seed = seed
 
-        self.preprocessor = PrudentialKANPreprocessor(
-            missing_threshold=missing_threshold,
-        )
+        self.preprocessor = None
         self.train_dataset = None
         self.val_dataset = None
         self._num_features = None
+        self.X_train = None
+        self.y_train = None
+        self.X_val = None
+        self.y_val = None
+        self.feature_names: list[str] | None = None
 
     @property
     def num_features(self) -> int:
@@ -60,26 +63,25 @@ class PrudentialDataModule(L.LightningDataModule):
         return self._num_features
 
     def setup(self, stage=None):
-        df = pd.read_csv(self.data_path)
-        y = df["Response"].values
-        X = df.drop(columns=["Response"])
+        raw_df = pd.read_csv(self.data_path)
+        feature_lists = get_feature_lists(raw_df)
+        self.preprocessor = _PreprocessorSummary(feature_lists)
 
-        X_processed = self.preprocessor.fit_transform(X, y)
-        X_np = X_processed.values.astype(np.float32)
-        self._num_features = X_np.shape[1]
+        pipeline_outputs = kan_prep.run_pipeline(self.data_path, random_seed=self.seed)
+        self.feature_names = pipeline_outputs["feature_names"]
 
-        sss = StratifiedShuffleSplit(
-            n_splits=1, test_size=self.val_split, random_state=self.seed
-        )
-        train_idx, val_idx = next(sss.split(X_np, y))
+        X_train = pipeline_outputs["X_train_outer"]
+        y_train = pipeline_outputs["y_train_outer"].astype(np.float32)
+        X_val = pipeline_outputs["X_test_outer"]
+        y_val = pipeline_outputs["y_test_outer"].astype(np.float32)
 
-        self.train_dataset = TabularDataset(X_np[train_idx], y[train_idx].astype(np.float32))
-        self.val_dataset = TabularDataset(X_np[val_idx], y[val_idx].astype(np.float32))
-
-        self.X_train = X_np[train_idx]
-        self.y_train = y[train_idx].astype(np.float32)
-        self.X_val = X_np[val_idx]
-        self.y_val = y[val_idx].astype(np.float32)
+        self._num_features = X_train.shape[1]
+        self.train_dataset = TabularDataset(X_train, y_train)
+        self.val_dataset = TabularDataset(X_val, y_val)
+        self.X_train = X_train
+        self.y_train = y_train
+        self.X_val = X_val
+        self.y_val = y_val
 
     def train_dataloader(self):
         return DataLoader(

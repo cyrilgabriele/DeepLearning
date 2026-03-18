@@ -162,10 +162,19 @@ class TabKANClassifier(PrudentialModel):
 
         self.module: TabKAN | None = None
 
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> None:
+    def fit(
+        self,
+        X: pd.DataFrame,
+        y: pd.Series,
+        *,
+        validation_data: Tuple[pd.DataFrame, pd.Series] | None = None,
+    ) -> None:
         L.seed_everything(self.random_state)
 
-        in_features = X.shape[1]
+        X_values = self._to_numpy_features(X)
+        y_values = self._to_numpy_targets(y)
+
+        in_features = X_values.shape[1]
         self.module = TabKAN(
             in_features=in_features,
             widths=self.widths,
@@ -176,10 +185,18 @@ class TabKANClassifier(PrudentialModel):
             lr=self.lr,
         )
 
-        X_t = torch.tensor(X.values, dtype=torch.float32)
-        y_t = torch.tensor(y.values, dtype=torch.float32)
+        X_t = torch.tensor(X_values, dtype=torch.float32)
+        y_t = torch.tensor(y_values, dtype=torch.float32)
         dataset = torch.utils.data.TensorDataset(X_t, y_t.unsqueeze(1))
         loader = torch.utils.data.DataLoader(dataset, batch_size=256, shuffle=True)
+
+        val_loader = None
+        if validation_data is not None:
+            X_val, y_val = validation_data
+            X_val_t = torch.tensor(self._to_numpy_features(X_val), dtype=torch.float32)
+            y_val_t = torch.tensor(self._to_numpy_targets(y_val), dtype=torch.float32)
+            val_ds = torch.utils.data.TensorDataset(X_val_t, y_val_t.unsqueeze(1))
+            val_loader = torch.utils.data.DataLoader(val_ds, batch_size=256, shuffle=False)
 
         trainer = L.Trainer(
             max_epochs=self.max_epochs,
@@ -189,17 +206,32 @@ class TabKANClassifier(PrudentialModel):
             logger=False,
             deterministic=True,
         )
-        trainer.fit(self.module, train_dataloaders=loader)
+        fit_kwargs = {"train_dataloaders": loader}
+        if val_loader is not None:
+            fit_kwargs["val_dataloaders"] = val_loader
+        trainer.fit(self.module, **fit_kwargs)
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:
         if self.module is None:
             raise RuntimeError("Call fit() before predict().")
 
         self.module.eval()
-        X_t = torch.tensor(X.values, dtype=torch.float32)
+        X_t = torch.tensor(self._to_numpy_features(X), dtype=torch.float32)
         with torch.no_grad():
             preds = self.module(X_t).cpu().numpy().flatten()
         return np.clip(np.round(preds), 1, 8).astype(int)
+
+    @staticmethod
+    def _to_numpy_features(X: pd.DataFrame | np.ndarray) -> np.ndarray:
+        if isinstance(X, pd.DataFrame):
+            return X.to_numpy(dtype=np.float32, copy=False)
+        return np.asarray(X, dtype=np.float32)
+
+    @staticmethod
+    def _to_numpy_targets(y: pd.Series | np.ndarray) -> np.ndarray:
+        if isinstance(y, pd.Series):
+            return y.to_numpy(dtype=np.float32, copy=False)
+        return np.asarray(y, dtype=np.float32)
 
 
 def build_tabkan_model(

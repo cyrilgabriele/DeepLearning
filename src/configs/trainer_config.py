@@ -16,20 +16,7 @@ class TrainerConfig(BaseModel):
     test_csv: Optional[Path] = Field(
         None, description="Optional path to Kaggle's test.csv for inference/checkpointing."
     )
-    eval_size: float = Field(
-        ...,
-        description=(
-            "Fraction (0, 0.2] of training rows reserved for evaluation; use 0.0 to keep"
-            " all rows for training."
-        ),
-    )
-
-    @field_validator("eval_size")
-    @classmethod
-    def _check_eval_size(cls, value: float) -> float:
-        if not 0 <= value <= 0.2:
-            raise ValueError("eval_size must be within [0, 0.2]")
-        return value
+    seed: int = Field(42, ge=0, description="Global random seed controlling all stochastic ops.")
 
     @field_validator("train_csv")
     @classmethod

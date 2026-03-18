@@ -2,7 +2,8 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
-from src.data.prudential_kan_preprocessing import PrudentialKANPreprocessor
+
+from src.data import preprocess_kan_paper as kan_prep
 
 def verify_kan_readiness(X_processed, feature_lists):
     """
@@ -72,10 +73,13 @@ if __name__ == "__main__":
         y = train["Response"]
         X = train.drop(columns=["Response"])
         
-        print("Fitting preprocessor (this may take a minute)...")
-        preprocessor = PrudentialKANPreprocessor()
-        X_processed = preprocessor.fit_transform(X, y)
-        
-        verify_kan_readiness(X_processed, preprocessor.feature_lists)
+        print("Fitting preprocessing pipeline (this may take a minute)...")
+        base_state = kan_prep.fit_preprocessor(train)
+        X_base, _ = kan_prep.transform(train, base_state)
+        kan_state = kan_prep.fit_kan_value_pipeline(X_base, base_state)
+        X_processed, _ = kan_prep.transform(train, base_state, kan_state=kan_state)
+        X_processed = pd.DataFrame(X_processed, columns=kan_state.feature_names)
+
+        verify_kan_readiness(X_processed, kan_state.feature_names)
     else:
         print(f"Training data not found at {TRAIN_PATH}.")

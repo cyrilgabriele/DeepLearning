@@ -15,6 +15,7 @@ from lightning.pytorch.loggers import TensorBoardLogger, CSVLogger
 import numpy as np
 import torch
 
+from src.configs import set_global_seed
 from src.data.dataset import PrudentialDataModule
 from src.models.tabkan import TabKAN
 from src.models.mlp import MLPBaseline
@@ -233,16 +234,14 @@ def train_neural(cfg: DictConfig, dm: PrudentialDataModule):
 @hydra.main(config_path="../configs", config_name="config", version_base=None)
 def main(cfg: DictConfig):
     print(OmegaConf.to_yaml(cfg))
-    L.seed_everything(cfg.seed)
+    seed = set_global_seed(cfg.seed)
 
     data_path = Path(hydra.utils.get_original_cwd()) / cfg.data.path
     dm = PrudentialDataModule(
         data_path=str(data_path),
-        val_split=cfg.data.val_split,
         batch_size=cfg.train.batch_size,
         num_workers=cfg.train.num_workers,
-        missing_threshold=cfg.data.missing_threshold,
-        seed=cfg.seed,
+        seed=seed,
     )
     dm.setup()
 

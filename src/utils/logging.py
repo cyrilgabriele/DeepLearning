@@ -29,7 +29,10 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import torch
+try:  # Optional dependency: torch may be unavailable in lightweight test envs.
+    import torch
+except ImportError:  # pragma: no cover
+    torch = None  # type: ignore
 
 
 # ── Run directory ──
@@ -77,6 +80,36 @@ def setup_logger(
     logger.addHandler(fh)
 
     logger.info(f"Logging initialised -> {log_path}")
+    return logger
+
+
+def get_logger(
+    name: str = "tabkan",
+    *,
+    level: str | int = "INFO",
+) -> logging.Logger:
+    """Return the shared project logger, attaching a console handler if needed."""
+
+    logger = logging.getLogger(name)
+
+    if isinstance(level, str):
+        level_value = getattr(logging, level.upper(), logging.INFO)
+    else:
+        level_value = int(level)
+
+    if not logger.handlers:
+        fmt = logging.Formatter(
+            "%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+        handler = logging.StreamHandler()
+        handler.setLevel(level_value)
+        handler.setFormatter(fmt)
+        logger.addHandler(handler)
+
+    if logger.level > level_value or logger.level == logging.NOTSET:
+        logger.setLevel(level_value)
+
     return logger
 
 
@@ -367,6 +400,8 @@ def log_model(log: logging.Logger, jl: JSONLLogger, model, cfg, run_dir: str) ->
 
 def log_forward_pass(log: logging.Logger, jl: JSONLLogger, model, dm) -> None:
     """Log one forward pass before training."""
+    if torch is None:
+        raise RuntimeError("Torch is required to log forward passes.")
     log.info("")
     log.info("=" * 70)
     log.info("FORWARD PASS (before training, first val batch)")

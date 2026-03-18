@@ -30,7 +30,57 @@ Track what was changed, why it was changed, and any important notes.
 - Need to verify preprocessing correctness for the paper: the logs prove all features are in [-1, 1], zero NaN, and each feature type is processed correctly
 
 #### Remarks
-- First real run: ChebyKAN QWK=0.5924 (5 epochs, default params). Kaggle SOTA is ~0.679, published XGBoost baseline is 0.607. Room to improve with longer training and hyperparameter tuning.
+- none
+
+---
+
+### [2026-03-18] - Cyril Gabriele
+
+#### What
+- Replaced the legacy `Prudential*Preprocessor` stack with the paper-faithful `preprocess_xgboost_paper.py` and the minimally adapted `preprocess_kan_paper.py`, wiring Trainer/Evaluate/DataModule directly into those pipelines.
+- Simplified `PreprocessingConfig`/`TrainerConfig` (no more ad-hoc eval splits or K-fold knobs) and removed the obsolete dataset splitter plus helper modules/tests.
+- Updated diagnostics, configs, and regression tests to rely on the shared outer/inner splits and to exercise inference-time transforms via the new helper APIs; all suites now pass against the refactored pipeline.
+
+#### Why
+- Ensure every experiment—XGBoost or KAN—runs on identical, paper-aligned splits while keeping the exact preprocessing steps auditable and free of silent leakage.
+- Reduce configuration surface to only the recipe choice and eliminate dead code paths that diverged from the documented preprocessing assumptions.
+- Keep tooling/tests honest by hitting the same deterministic preprocessing routines that production training now uses.
+
+#### Remarks
+- All scripts that previously expected `PrudentialKANPreprocessor` now import the new modules; see `preprocess_*.py` docstrings for the explicit paper vs. KAN deviations.
+
+---
+
+### [2026-03-19] - Cyril Gabriele
+
+#### What
+- Added `PaperPreprocessingBase`, centralising the paper-faithful loading/encoding/splitting flow.
+- Refactored `preprocess_xgboost_paper.py` to wrap the shared base (with an explicit log noting the XGBoost recipe) and rebuilt `preprocess_kan_paper.py` as a subclass that applies only the median-imputation/Product_Info_2 tweaks required for TabKAN tensors.
+- Updated dependent modules/tests to call the new wrappers so both pipelines stay independent while sharing the exact baseline logic.
+
+#### Why
+- Keep KAN and XGBoost preprocessors fully separated yet guaranteed to stay in lockstep on baseline behaviour, making future audits/changes more maintainable.
+
+#### Remarks
+- Logging now makes it obvious which preprocessing path was invoked when reading experiment traces.
+
+---
+
+### [2026-03-20] - Cyril Gabriele
+
+#### What
+- Added `preprocess_kan_sota.py`, a CatBoost-encoding + MICE-imputation + quantile-scaling pipeline derived from `PaperPreprocessingBase` for TabKAN experiments.
+- Extended the preprocessing config (`kan_sota` recipe), trainer logic, and dataset regression tests so the SOTA pipeline can be selected like the existing paper recipes.
+- Documented the upgrade in tests/changelog to keep the new recipe auditable.
+- Routed every preprocessing pipeline through a single seed produced by `set_global_seed` (now configured via `TrainerConfig.seed`), removing stray `RANDOM_SEED` constants and updating the trainer/DataModule/evaluation scripts to thread the same seed everywhere.
+
+#### Why
+- Provide a ready-to-use, state-of-the-art preprocessing path that leverages dataset insights (target encodings, covariate-aware imputations, bounded feature scales) without disturbing the faithful paper baselines.
+- Ensure reproducibility is controlled from one place (the CLI config), avoiding hidden defaults in preprocessors or data modules.
+
+#### Remarks
+- Outputs remain deterministic and float32-bounded, making them drop-in replacements for downstream TabKAN models.
+- Tests now explicitly seed via `set_global_seed`, so local runs mirror the main entrypoint's determinism.
 
 ---
 

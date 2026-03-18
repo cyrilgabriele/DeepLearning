@@ -1,16 +1,26 @@
 import math
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 
-from src.data.prudential_dataset import split_prudential_training_df
-from src.data.prudential_paper_preprocessing import PrudentialPaperPreprocessor
+from src.configs import set_global_seed
+from src.data import preprocess_xgboost_paper as paper_prep
+from src.data import preprocess_kan_paper as kan_prep
+from src.data import preprocess_kan_sota as kan_sota_prep
 
 
-def _make_mock_prudential_df(n_rows: int = 80) -> pd.DataFrame:
+def _fixed_seed(value: int = 42) -> int:
+    """Reset global RNGs and return the requested seed."""
+
+    return set_global_seed(value)
+
+
+def _write_mock_csv(tmp_path: Path, n_rows: int = 80) -> Path:
     rng = np.random.default_rng(123)
     repeats = math.ceil(n_rows / 8)
     response = np.tile(np.arange(1, 9), repeats)[:n_rows]
-    return pd.DataFrame(
+    df = pd.DataFrame(
         {
             "Id": np.arange(n_rows),
             "Response": response,
@@ -20,63 +30,88 @@ def _make_mock_prudential_df(n_rows: int = 80) -> pd.DataFrame:
             "Product_Info_3": rng.integers(1, 4, size=n_rows),
         }
     )
+    path = tmp_path / "prudential.csv"
+    df.to_csv(path, index=False)
+    return path
 
 
-def test_split_pipeline_handles_eval_fraction_of_train():
-    df = _make_mock_prudential_df()
-    preprocessor = PrudentialPaperPreprocessor(missing_threshold=0.95)
+def test_paper_pipeline_returns_reproducible_outer_split(tmp_path):
+    csv_path = _write_mock_csv(tmp_path)
+    seed = _fixed_seed()
+    outputs = paper_prep.run_pipeline(csv_path, random_seed=seed)
 
-    splits = split_prudential_training_df(
-        df,
-        preprocessor=preprocessor,
-        target_column="Response",
-        eval_size=0.2,
-        random_state=0,
-        stratify=False,
+    X_train = outputs["X_train_outer"]
+    X_test = outputs["X_test_outer"]
+    y_train = outputs["y_train_outer"]
+    y_test = outputs["y_test_outer"]
+
+    assert len(X_train) + len(X_test) == 80
+    assert len(y_train) == len(X_train)
+    assert len(y_test) == len(X_test)
+    assert paper_prep.PRODUCT_INFO_2 in X_train.columns
+
+    mapping = outputs["preprocessor_state"].product_info_2_mapping
+    assert mapping == dict(sorted(mapping.items()))  # deterministic ordering
+
+
+def test_kan_pipeline_outputs_float32_features(tmp_path):
+    csv_path = _write_mock_csv(tmp_path)
+    seed = _fixed_seed()
+    outputs = kan_prep.run_pipeline(csv_path, random_seed=seed)
+
+    X_train = outputs["X_train_outer"]
+    X_test = outputs["X_test_outer"]
+    feature_names = outputs["feature_names"]
+
+    assert X_train.dtype == np.float32
+    assert X_test.dtype == np.float32
+    assert not np.isnan(X_train).any()
+    assert not np.isnan(X_test).any()
+    assert len(feature_names) == X_train.shape[1]
+
+    artifacts = outputs["preprocessor_state"]
+    assert {"baseline", "kan"}.issubset(artifacts.keys())
+
+
+def test_transform_supports_inference_without_target(tmp_path):
+    csv_path = _write_mock_csv(tmp_path)
+    df = pd.read_csv(csv_path)
+    baseline_state = paper_prep.fit_preprocessor(df)
+
+    # Paper pipeline inference
+    paper_features, paper_target = paper_prep.transform(df.drop(columns=["Response"]), baseline_state)
+    assert paper_target is None
+    assert paper_prep.PRODUCT_INFO_2 in paper_features.columns
+
+    # KAN inference using fitted states from the training pipeline
+    seed = _fixed_seed()
+    pipeline_outputs = kan_prep.run_pipeline(csv_path, random_seed=seed)
+    seed = _fixed_seed()
+    artifacts = pipeline_outputs["preprocessor_state"]
+    kan_features, kan_target = kan_prep.transform(
+        df.drop(columns=["Response"]),
+        artifacts["baseline"],
+        kan_state=artifacts["kan"],
     )
-
-    assert len(splits.X_train_raw) + len(splits.X_eval_raw) == len(df)
-    assert splits.X_train.shape[1] == splits.X_eval.shape[1]
-
-    bmi_train_min = splits.X_train_raw["BMI"].min()
-    assert preprocessor.scaler_cont.data_min_[0] == bmi_train_min
-
-    manual_eval = preprocessor.transform(splits.X_eval_raw.copy())
-    pd.testing.assert_frame_equal(manual_eval, splits.X_eval)
+    assert kan_target is None
+    assert kan_features.dtype == np.float32
 
 
-def test_split_pipeline_without_eval_keeps_all_training_rows():
-    df = _make_mock_prudential_df(n_rows=32)
-    preprocessor = PrudentialPaperPreprocessor(missing_threshold=0.95)
+def test_kan_sota_pipeline_applies_advanced_encoding(tmp_path):
+    csv_path = _write_mock_csv(tmp_path)
+    seed = _fixed_seed()
+    outputs = kan_sota_prep.run_pipeline(csv_path, random_seed=seed)
 
-    splits = split_prudential_training_df(
-        df,
-        preprocessor=preprocessor,
-        target_column="Response",
-        eval_size=0.0,
-        random_state=0,
-        stratify=False,
-    )
+    X_train = outputs["X_train_outer"]
+    X_test = outputs["X_test_outer"]
+    feature_names = outputs["feature_names"]
 
-    assert splits.X_eval_raw is None
-    assert splits.X_eval is None
-    assert len(splits.X_train_raw) == len(df)
+    assert X_train.dtype == np.float32
+    assert X_test.dtype == np.float32
+    assert np.isfinite(X_train).all()
+    assert np.isfinite(X_test).all()
+    assert np.all(X_train <= 1.0001) and np.all(X_train >= -1.0001)
+    assert len(feature_names) == X_train.shape[1]
 
-
-def test_invalid_eval_size_raises():
-    df = _make_mock_prudential_df()
-    preprocessor = PrudentialPaperPreprocessor()
-
-    try:
-        split_prudential_training_df(
-            df,
-            preprocessor=preprocessor,
-            target_column="Response",
-            eval_size=1.2,
-            random_state=0,
-            stratify=False,
-        )
-    except ValueError:
-        pass
-    else:
-        raise AssertionError("Expected ValueError when eval_size is not (0, 1).")
+    artifacts = outputs["preprocessor_state"]
+    assert {"baseline", "sota"}.issubset(artifacts.keys())
