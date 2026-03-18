@@ -211,6 +211,8 @@ class Trainer:
             return
         try:
             import json
+            from src.data.prudential_features import get_feature_lists
+
             data_dir = Path("outputs") / "data"
             reports_dir = Path("outputs") / "reports"
             data_dir.mkdir(parents=True, exist_ok=True)
@@ -223,6 +225,32 @@ class Trainer:
             (reports_dir / "feature_names.json").write_text(
                 json.dumps(feature_names, indent=2)
             )
+            # Export raw (pre-preprocessing) eval features for interpretable x-axes
+            if splits.X_eval_raw is not None:
+                splits.X_eval_raw.reset_index(drop=True).to_parquet(
+                    data_dir / "X_eval_raw.parquet", index=False
+                )
+            # Export feature type taxonomy so plots can annotate axes correctly
+            if splits.X_eval_raw is not None:
+                feat_lists = get_feature_lists(splits.X_eval_raw)
+                feature_type_map: dict = {}
+                for feat in feature_names:
+                    base = feat.replace("missing_", "") if feat.startswith("missing_") else feat
+                    if feat.startswith("missing_"):
+                        feature_type_map[feat] = "missing_indicator"
+                    elif feat in feat_lists["categorical"]:
+                        feature_type_map[feat] = "categorical"
+                    elif feat in feat_lists["binary"]:
+                        feature_type_map[feat] = "binary"
+                    elif feat in feat_lists["continuous"]:
+                        feature_type_map[feat] = "continuous"
+                    elif feat in feat_lists["ordinal"]:
+                        feature_type_map[feat] = "ordinal"
+                    else:
+                        feature_type_map[feat] = "unknown"
+                (reports_dir / "feature_types.json").write_text(
+                    json.dumps(feature_type_map, indent=2, sort_keys=True)
+                )
         except Exception as exc:  # pragma: no cover
             print(f"Warning: failed to export eval data: {exc}")
 

@@ -66,7 +66,9 @@ def run(
     eval_features_path: Path,
     output_dir: Path = Path("outputs"),
     n_features: int = 5,
+    eval_features_raw_path: Path | None = None,
 ) -> None:
+    import json
     import torch
     import matplotlib
     matplotlib.use("Agg")
@@ -76,13 +78,24 @@ def run(
     from src.models.kan_layers import ChebyKANLayer
     from src.interpretability.kan_symbolic import sample_edge
 
-    from src.interpretability.paths import figures as fig_dir
+    from src.interpretability.paths import figures as fig_dir, data as data_dir, reports as rep_dir
 
     glm_coef = pd.read_csv(glm_coef_path)
     shap_df = pd.read_parquet(shap_path)
     sym_df = pd.read_csv(chebykan_symbolic_path)
     X_eval = pd.read_parquet(eval_features_path)
     feature_names = list(X_eval.columns)
+
+    # Load raw (pre-preprocessing) features and feature type metadata
+    raw_path = eval_features_raw_path or (data_dir(output_dir) / "X_eval_raw.parquet")
+    X_eval_raw: pd.DataFrame | None = None
+    if raw_path.exists():
+        X_eval_raw = pd.read_parquet(raw_path).reset_index(drop=True)
+
+    feat_types_path = rep_dir(output_dir) / "feature_types.json"
+    feat_types: dict = {}
+    if feat_types_path.exists():
+        feat_types = json.loads(feat_types_path.read_text())
 
     top_features = _select_top_features(glm_coef, shap_df, sym_df, n=n_features)
     print(f"Top {n_features} features: {top_features}")
@@ -104,26 +117,45 @@ def run(
     glm_indexed = glm_coef.set_index("feature")
     feat_idx = {f: i for i, f in enumerate(feature_names)}
 
+    def _raw_vals(feat: str) -> pd.Series | None:
+        """Return raw (original scale) values for a feature, if available."""
+        if X_eval_raw is not None and feat in X_eval_raw.columns:
+            return X_eval_raw[feat].reset_index(drop=True)
+        return None
+
+    def _xlabel(feat: str, default: str = "Feature value") -> str:
+        ftype = feat_types.get(feat, "unknown")
+        if ftype == "categorical":
+            return f"{default} (CatBoost-encoded)"
+        if ftype == "continuous":
+            return f"{default} (original scale)"
+        return default
+
     for row, feat in enumerate(top_features):
+        raw_vals = _raw_vals(feat)
+
         # ── Column 0: GLM coefficient reference ──────────────────────────────
         ax0 = axes[row, 0]
         coef_val = float(glm_indexed.loc[feat, "coefficient"]) if feat in glm_indexed.index else 0.0
-        x_range = np.linspace(X_eval[feat].min(), X_eval[feat].max(), 200) if feat in X_eval.columns else np.linspace(-1, 1, 200)
+        # x-range in original scale when available, else preprocessed [-1,1]
+        x_src = raw_vals if raw_vals is not None else (X_eval[feat] if feat in X_eval.columns else None)
+        x_range = np.linspace(x_src.min(), x_src.max(), 200) if x_src is not None else np.linspace(-1, 1, 200)
         ax0.axhline(coef_val, color="#4C72B0", lw=2, label=f"coef={coef_val:.4f}")
         ax0.plot(x_range, coef_val * x_range, color="#4C72B0", lw=1.5, alpha=0.6, linestyle="--",
                  label="linear effect")
         ax0.axhline(0, color="gray", lw=0.5, linestyle=":")
         ax0.set_ylabel(feat[:20], fontsize=8)
         ax0.legend(fontsize=7)
-        ax0.set_xlabel("Feature value")
+        ax0.set_xlabel(_xlabel(feat))
 
         # ── Column 1: XGBoost SHAP dependence ────────────────────────────────
         ax1 = axes[row, 1]
         if feat in shap_df.columns and feat in X_eval.columns:
-            ax1.scatter(X_eval[feat], shap_df[feat], alpha=0.2, s=5,
+            x_plot = raw_vals if raw_vals is not None else X_eval[feat]
+            ax1.scatter(x_plot, shap_df[feat], alpha=0.2, s=5,
                         c=shap_df[feat], cmap="coolwarm")
             ax1.axhline(0, color="gray", lw=0.5, linestyle=":")
-            ax1.set_xlabel("Feature value")
+            ax1.set_xlabel(_xlabel(feat))
             ax1.set_ylabel("SHAP value")
         else:
             ax1.text(0.5, 0.5, "N/A", ha="center", va="center", transform=ax1.transAxes)
@@ -163,7 +195,7 @@ def run(
                 except Exception:
                     pass
                 ax2.legend(fontsize=6)
-            ax2.set_xlabel("Normalised input")
+            ax2.set_xlabel("Normalised input [-1, 1]")
             ax2.set_ylabel("Edge output")
         else:
             ax2.text(0.5, 0.5, "No active KAN edge", ha="center", va="center",
@@ -188,6 +220,7 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--chebykan-checkpoint", type=Path, default=Path("outputs/models/chebykan_pruned_module.pt"))
     p.add_argument("--chebykan-config", type=Path, default=Path("configs/chebykan_experiment.yaml"))
     p.add_argument("--eval-features", type=Path, default=Path("outputs/data/X_eval.parquet"))
+    p.add_argument("--eval-features-raw", type=Path, default=None)
     p.add_argument("--output-dir", type=Path, default=Path("outputs"))
     return p.parse_args()
 
@@ -202,4 +235,5 @@ if __name__ == "__main__":
         args.chebykan_config,
         args.eval_features,
         args.output_dir,
+        eval_features_raw_path=args.eval_features_raw,
     )
