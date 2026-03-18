@@ -164,8 +164,8 @@ def run(
     print(f"  Edges <0.90  : {agg['edges_below_090']}")
     print(f"  Edges <0.95  : {agg['edges_below_095']}")
 
-    output_dir.mkdir(parents=True, exist_ok=True)
-    out_path = output_dir / f"{flavor}_r2_report.json"
+    from src.interpretability.paths import reports as rep_dir
+    out_path = rep_dir(output_dir) / f"{flavor}_r2_report.json"
     out_path.write_text(json.dumps(report, indent=2))
     print(f"Saved → {out_path}")
     return report
@@ -176,7 +176,7 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--pruned-checkpoint", type=Path, required=True)
     p.add_argument("--pruning-summary", type=Path, required=True)
     p.add_argument("--config", type=Path, required=True)
-    p.add_argument("--eval-features", type=Path, default=Path("outputs/X_eval.parquet"))
+    p.add_argument("--eval-features", type=Path, default=Path("outputs/data/X_eval.parquet"))
     p.add_argument("--flavor", choices=["chebykan", "fourierkan"], required=True)
     p.add_argument("--candidate-library", choices=["scipy", "pysr"], default="scipy")
     p.add_argument("--output-dir", type=Path, default=Path("outputs"))

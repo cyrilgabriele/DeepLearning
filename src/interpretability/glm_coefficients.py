@@ -35,14 +35,14 @@ def extract_coefficients(model, feature_names: list[str]) -> pd.DataFrame:
 
 def run(checkpoint_path: Path, features_path: Path, output_dir: Path = Path("outputs")) -> Path:
     import joblib
+    from src.interpretability.paths import data as data_dir
 
     model = joblib.load(checkpoint_path)
     feature_names = json.loads(features_path.read_text())
 
     df = extract_coefficients(model, feature_names)
 
-    output_dir.mkdir(parents=True, exist_ok=True)
-    out_path = output_dir / "glm_coefficients.csv"
+    out_path = data_dir(output_dir) / "glm_coefficients.csv"
     df.to_csv(out_path, index=False)
     print(f"Saved {len(df)} coefficients to {out_path}")
 
@@ -61,7 +61,7 @@ def run(checkpoint_path: Path, features_path: Path, output_dir: Path = Path("out
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Extract GLM coefficients")
     p.add_argument("--checkpoint", type=Path, required=True)
-    p.add_argument("--features", type=Path, default=Path("outputs/feature_names.json"))
+    p.add_argument("--features", type=Path, default=Path("outputs/reports/feature_names.json"))
     p.add_argument("--output-dir", type=Path, default=Path("outputs"))
     return p.parse_args()
 

@@ -76,7 +76,7 @@ def run(
     from src.models.kan_layers import ChebyKANLayer
     from src.interpretability.kan_symbolic import sample_edge
 
-    output_dir.mkdir(parents=True, exist_ok=True)
+    from src.interpretability.paths import figures as fig_dir
 
     glm_coef = pd.read_csv(glm_coef_path)
     shap_df = pd.read_parquet(shap_path)
@@ -174,7 +174,7 @@ def run(
     plt.tight_layout()
 
     for ext in ("png", "pdf"):
-        out_path = output_dir / f"side_by_side_comparison.{ext}"
+        out_path = fig_dir(output_dir) / f"side_by_side_comparison.{ext}"
         plt.savefig(out_path, dpi=150, bbox_inches="tight")
         print(f"Saved → {out_path}")
     plt.close()
@@ -182,12 +182,12 @@ def run(
 
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Side-by-side GLM / SHAP / KAN symbolic plots")
-    p.add_argument("--glm-coefficients", type=Path, default=Path("outputs/glm_coefficients.csv"))
-    p.add_argument("--shap-values", type=Path, default=Path("outputs/shap_xgb_values.parquet"))
-    p.add_argument("--chebykan-symbolic", type=Path, default=Path("outputs/chebykan_symbolic_fits.csv"))
-    p.add_argument("--chebykan-checkpoint", type=Path, default=Path("outputs/chebykan_pruned_module.pt"))
+    p.add_argument("--glm-coefficients", type=Path, default=Path("outputs/data/glm_coefficients.csv"))
+    p.add_argument("--shap-values", type=Path, default=Path("outputs/data/shap_xgb_values.parquet"))
+    p.add_argument("--chebykan-symbolic", type=Path, default=Path("outputs/data/chebykan_symbolic_fits.csv"))
+    p.add_argument("--chebykan-checkpoint", type=Path, default=Path("outputs/models/chebykan_pruned_module.pt"))
     p.add_argument("--chebykan-config", type=Path, default=Path("configs/chebykan_experiment.yaml"))
-    p.add_argument("--eval-features", type=Path, default=Path("outputs/X_eval.parquet"))
+    p.add_argument("--eval-features", type=Path, default=Path("outputs/data/X_eval.parquet"))
     p.add_argument("--output-dir", type=Path, default=Path("outputs"))
     return p.parse_args()
 

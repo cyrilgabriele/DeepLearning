@@ -211,14 +211,16 @@ class Trainer:
             return
         try:
             import json
-            outputs_dir = Path("outputs")
-            outputs_dir.mkdir(parents=True, exist_ok=True)
-            splits.X_eval.to_parquet(outputs_dir / "X_eval.parquet", index=False)
+            data_dir = Path("outputs") / "data"
+            reports_dir = Path("outputs") / "reports"
+            data_dir.mkdir(parents=True, exist_ok=True)
+            reports_dir.mkdir(parents=True, exist_ok=True)
+            splits.X_eval.to_parquet(data_dir / "X_eval.parquet", index=False)
             splits.y_eval.to_frame(name="Response").to_parquet(
-                outputs_dir / "y_eval.parquet", index=False
+                data_dir / "y_eval.parquet", index=False
             )
             feature_names = list(splits.X_eval.columns)
-            (outputs_dir / "feature_names.json").write_text(
+            (reports_dir / "feature_names.json").write_text(
                 json.dumps(feature_names, indent=2)
             )
         except Exception as exc:  # pragma: no cover

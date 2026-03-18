@@ -98,7 +98,10 @@ def _plot_panel(
     fourierkan_by_risk: dict[int, pd.Series],
     output_dir: Path,
     top_n: int = 10,
+    fig_dir: Path | None = None,
 ) -> None:
+    if fig_dir is None:
+        fig_dir = output_dir
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -153,7 +156,7 @@ def _plot_panel(
     plt.tight_layout()
 
     for ext in ("png", "pdf"):
-        out_path = output_dir / f"per_risk_level_comparison.{ext}"
+        out_path = fig_dir / f"per_risk_level_comparison.{ext}"
         plt.savefig(out_path, dpi=150, bbox_inches="tight")
         print(f"Saved → {out_path}")
     plt.close()
@@ -169,7 +172,7 @@ def run(
     eval_labels_path: Path,
     output_dir: Path = Path("outputs"),
 ) -> None:
-    output_dir.mkdir(parents=True, exist_ok=True)
+    from src.interpretability.paths import figures as fig_dir, data as data_dir
 
     glm_imp = _glm_importance(glm_coef_path)
     shap_by_risk = _shap_importance_by_risk(shap_path, eval_features_path, xgb_checkpoint_path)
@@ -180,7 +183,8 @@ def run(
         fourierkan_symbolic_path, eval_features_path, xgb_checkpoint_path, "fourierkan"
     )
 
-    _plot_panel(glm_imp, shap_by_risk, chebykan_by_risk, fourierkan_by_risk, output_dir)
+    _plot_panel(glm_imp, shap_by_risk, chebykan_by_risk, fourierkan_by_risk,
+                output_dir, fig_dir=fig_dir(output_dir))
 
     # ── Export underlying data ────────────────────────────────────────────────
     rows = []
@@ -194,20 +198,20 @@ def run(
                 "chebykan": chebykan_by_risk.get(risk, pd.Series()).get(feat, 0.0),
                 "fourierkan": fourierkan_by_risk.get(risk, pd.Series()).get(feat, 0.0),
             })
-    out_csv = output_dir / "per_risk_level_data.csv"
+    out_csv = data_dir(output_dir) / "per_risk_level_data.csv"
     pd.DataFrame(rows).to_csv(out_csv, index=False)
     print(f"Saved underlying data → {out_csv}")
 
 
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Per-risk-level feature importance comparison")
-    p.add_argument("--glm-coefficients", type=Path, default=Path("outputs/glm_coefficients.csv"))
-    p.add_argument("--shap-values", type=Path, default=Path("outputs/shap_xgb_values.parquet"))
-    p.add_argument("--chebykan-symbolic", type=Path, default=Path("outputs/chebykan_symbolic_fits.csv"))
-    p.add_argument("--fourierkan-symbolic", type=Path, default=Path("outputs/fourierkan_symbolic_fits.csv"))
+    p.add_argument("--glm-coefficients", type=Path, default=Path("outputs/data/glm_coefficients.csv"))
+    p.add_argument("--shap-values", type=Path, default=Path("outputs/data/shap_xgb_values.parquet"))
+    p.add_argument("--chebykan-symbolic", type=Path, default=Path("outputs/data/chebykan_symbolic_fits.csv"))
+    p.add_argument("--fourierkan-symbolic", type=Path, default=Path("outputs/data/fourierkan_symbolic_fits.csv"))
     p.add_argument("--xgb-checkpoint", type=Path, required=True)
-    p.add_argument("--eval-features", type=Path, default=Path("outputs/X_eval.parquet"))
-    p.add_argument("--eval-labels", type=Path, default=Path("outputs/y_eval.parquet"))
+    p.add_argument("--eval-features", type=Path, default=Path("outputs/data/X_eval.parquet"))
+    p.add_argument("--eval-labels", type=Path, default=Path("outputs/data/y_eval.parquet"))
     p.add_argument("--output-dir", type=Path, default=Path("outputs"))
     return p.parse_args()
 

@@ -228,8 +228,8 @@ def run(
         layer_idx += 1
 
     df = pd.DataFrame(records)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    out_path = output_dir / f"{flavor}_symbolic_fits.csv"
+    from src.interpretability.paths import data as data_dir, figures as fig_dir
+    out_path = data_dir(output_dir) / f"{flavor}_symbolic_fits.csv"
     df.to_csv(out_path, index=False)
 
     n_flagged = int(df["flagged"].sum())
@@ -305,7 +305,8 @@ def _plot_example(module, df: pd.DataFrame, flavor: str, output_dir: Path, thres
     ax.set_title(f"{flavor} — Layer {layer_idx}, edge ({in_i}→{out_i})\nInput: {best_row['input_feature']}")
     ax.legend(fontsize=8)
     plt.tight_layout()
-    fig_path = output_dir / f"{flavor}_symbolic_example.png"
+    from src.interpretability import paths as _paths
+    fig_path = _paths.figures(output_dir) / f"{flavor}_symbolic_example.png"
     plt.savefig(fig_path, dpi=150)
     plt.close()
     print(f"Saved example plot → {fig_path}")
@@ -313,10 +314,12 @@ def _plot_example(module, df: pd.DataFrame, flavor: str, output_dir: Path, thres
 
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Symbolic regression on KAN edges")
-    p.add_argument("--pruned-checkpoint", type=Path, required=True)
-    p.add_argument("--pruning-summary", type=Path, required=True)
+    p.add_argument("--pruned-checkpoint", type=Path, required=True,
+                   help="e.g. outputs/models/chebykan_pruned_module.pt")
+    p.add_argument("--pruning-summary", type=Path, required=True,
+                   help="e.g. outputs/reports/chebykan_pruning_summary.json")
     p.add_argument("--config", type=Path, required=True)
-    p.add_argument("--eval-features", type=Path, default=Path("outputs/X_eval.parquet"))
+    p.add_argument("--eval-features", type=Path, default=Path("outputs/data/X_eval.parquet"))
     p.add_argument("--flavor", choices=["chebykan", "fourierkan"], required=True)
     p.add_argument("--use-pysr", action="store_true", help="Use PySR (requires Julia)")
     p.add_argument("--output-dir", type=Path, default=Path("outputs"))

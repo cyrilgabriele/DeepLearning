@@ -133,14 +133,14 @@ def run(
     artifacts_dir: Path = Path("artifacts"),
     outputs_dir: Path = Path("outputs"),
 ) -> None:
-    outputs_dir.mkdir(parents=True, exist_ok=True)
+    from src.interpretability.paths import figures as fig_dir, data as data_dir, reports as rep_dir
 
-    glm_coef_path = outputs_dir / "glm_coefficients.csv"
-    shap_path = outputs_dir / "shap_xgb_values.parquet"
-    chebykan_sym = outputs_dir / "chebykan_symbolic_fits.csv"
-    fourierkan_sym = outputs_dir / "fourierkan_symbolic_fits.csv"
-    chebykan_prune = outputs_dir / "chebykan_pruning_summary.json"
-    fourierkan_prune = outputs_dir / "fourierkan_pruning_summary.json"
+    glm_coef_path = data_dir(outputs_dir) / "glm_coefficients.csv"
+    shap_path = data_dir(outputs_dir) / "shap_xgb_values.parquet"
+    chebykan_sym = data_dir(outputs_dir) / "chebykan_symbolic_fits.csv"
+    fourierkan_sym = data_dir(outputs_dir) / "fourierkan_symbolic_fits.csv"
+    chebykan_prune = rep_dir(outputs_dir) / "chebykan_pruning_summary.json"
+    fourierkan_prune = rep_dir(outputs_dir) / "fourierkan_pruning_summary.json"
 
     # ── XGBoost: find latest checkpoint ──────────────────────────────────────
     xgb_ckpts = sorted(Path("checkpoints/xgb-baseline").glob("*.joblib")) if Path("checkpoints/xgb-baseline").exists() else []
@@ -230,16 +230,16 @@ def run(
 *All figures and CSVs are in the `outputs/` directory.*
 """
 
-    md_path = outputs_dir / "final_comparison_matrix.md"
+    md_path = rep_dir(outputs_dir) / "final_comparison_matrix.md"
     md_path.write_text(md_content)
     print(f"Saved Markdown → {md_path}")
 
-    narratives_path = outputs_dir / "model_narratives.md"
+    narratives_path = rep_dir(outputs_dir) / "model_narratives.md"
     narratives_path.write_text(f"# Model Narratives\n\n{narratives_md}\n")
     print(f"Saved narratives → {narratives_path}")
 
     # ── PNG table ─────────────────────────────────────────────────────────────
-    _render_table_png(rows, models, dimensions, outputs_dir)
+    _render_table_png(rows, models, dimensions, fig_dir(outputs_dir))
 
 
 def _render_table_png(rows, models, dimensions, output_dir: Path) -> None:
@@ -271,7 +271,7 @@ def _render_table_png(rows, models, dimensions, output_dir: Path) -> None:
 
     plt.title("Interpretability Comparison Matrix", fontsize=12, fontweight="bold", pad=15)
     plt.tight_layout()
-    png_path = output_dir / "final_comparison_matrix.png"
+    png_path = output_dir / "final_comparison_matrix.png"  # output_dir is already fig_dir here
     plt.savefig(png_path, dpi=150, bbox_inches="tight")
     plt.close()
     print(f"Saved table PNG → {png_path}")

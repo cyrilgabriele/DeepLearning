@@ -42,7 +42,7 @@ def run(
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    output_dir.mkdir(parents=True, exist_ok=True)
+    from src.interpretability.paths import figures as fig_dir, data as data_dir
 
     xgb_model = _load_model(checkpoint_path)
     X_eval = pd.read_parquet(eval_features_path)
@@ -56,13 +56,12 @@ def run(
     fig, ax = plt.subplots(figsize=(10, 8))
     shap.summary_plot(shap_values, X_eval, show=False, plot_size=None)
     plt.tight_layout()
-    beeswarm_path = output_dir / "shap_xgb_beeswarm.png"
+    beeswarm_path = fig_dir(output_dir) / "shap_xgb_beeswarm.png"
     plt.savefig(beeswarm_path, dpi=150, bbox_inches="tight")
     plt.close()
     print(f"Saved beeswarm plot → {beeswarm_path}")
 
     # ── Per-risk-level dependence plots ──────────────────────────────────────
-    # Use optimised thresholds from the saved wrapper to get predicted risk levels
     import joblib
     wrapper = joblib.load(checkpoint_path)
     y_pred_ord = wrapper.predict(X_eval)
@@ -96,14 +95,14 @@ def run(
         fig.suptitle(f"SHAP dependence — {feat}", fontsize=12)
         plt.tight_layout()
         safe_name = feat.replace("/", "_").replace(" ", "_")
-        dep_path = output_dir / f"shap_xgb_dependence_{safe_name}.png"
+        dep_path = fig_dir(output_dir) / f"shap_xgb_dependence_{safe_name}.png"
         plt.savefig(dep_path, dpi=150, bbox_inches="tight")
         plt.close()
         print(f"Saved dependence plot → {dep_path}")
 
     # ── Export raw SHAP values ────────────────────────────────────────────────
     shap_df = pd.DataFrame(shap_values, columns=X_eval.columns)
-    parquet_path = output_dir / "shap_xgb_values.parquet"
+    parquet_path = data_dir(output_dir) / "shap_xgb_values.parquet"
     shap_df.to_parquet(parquet_path, index=False)
     print(f"Saved raw SHAP values ({shap_df.shape}) → {parquet_path}")
 
@@ -111,8 +110,8 @@ def run(
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="SHAP explanations for XGBoost")
     p.add_argument("--checkpoint", type=Path, required=True)
-    p.add_argument("--eval-features", type=Path, default=Path("outputs/X_eval.parquet"))
-    p.add_argument("--eval-labels", type=Path, default=Path("outputs/y_eval.parquet"))
+    p.add_argument("--eval-features", type=Path, default=Path("outputs/data/X_eval.parquet"))
+    p.add_argument("--eval-labels", type=Path, default=Path("outputs/data/y_eval.parquet"))
     p.add_argument("--output-dir", type=Path, default=Path("outputs"))
     return p.parse_args()
 

@@ -214,13 +214,14 @@ def run(
         "qwk_drop": round(qwk_drop, 6),
     }
 
-    output_dir.mkdir(parents=True, exist_ok=True)
-    out_path = output_dir / f"{flavor}_pruning_summary.json"
+    from src.interpretability.paths import reports as rep_dir, models as mod_dir
+
+    out_path = rep_dir(output_dir) / f"{flavor}_pruning_summary.json"
     out_path.write_text(json.dumps(result, indent=2))
     print(f"Saved → {out_path}")
 
     # Save pruned checkpoint for symbolic regression
-    pruned_ckpt = output_dir / f"{flavor}_pruned_module.pt"
+    pruned_ckpt = mod_dir(output_dir) / f"{flavor}_pruned_module.pt"
     torch.save(pruned_module.state_dict(), pruned_ckpt)
     print(f"Saved pruned module → {pruned_ckpt}")
 
@@ -232,8 +233,8 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--checkpoint", type=Path, required=True)
     p.add_argument("--config", type=Path, required=True)
     p.add_argument("--flavor", choices=["chebykan", "fourierkan"], required=True)
-    p.add_argument("--eval-features", type=Path, default=Path("outputs/X_eval.parquet"))
-    p.add_argument("--eval-labels", type=Path, default=Path("outputs/y_eval.parquet"))
+    p.add_argument("--eval-features", type=Path, default=Path("outputs/data/X_eval.parquet"))
+    p.add_argument("--eval-labels", type=Path, default=Path("outputs/data/y_eval.parquet"))
     p.add_argument("--threshold", type=float, default=0.01)
     p.add_argument("--output-dir", type=Path, default=Path("outputs"))
     return p.parse_args()
