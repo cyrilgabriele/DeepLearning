@@ -26,10 +26,15 @@ import pandas as pd
 # ── Edge activation sampler ───────────────────────────────────────────────────
 
 def _sample_chebykan_edge(layer, out_idx: int, in_idx: int, n: int = 1000) -> tuple[np.ndarray, np.ndarray]:
-    """Return (x_input, y_output) for a single ChebyKAN edge."""
+    """Return (x_norm, y_output) for a single ChebyKAN edge.
+
+    x_norm = tanh(linspace(-3, 3, n)), range ≈ [-0.995, +0.995].
+    This covers binary feature encoded positions at ±1.0 and is the
+    value to pass directly into encode_to_raw_lookup.
+    """
     import torch
-    x = torch.linspace(-1.0, 1.0, n)
-    x_norm = torch.tanh(x)
+    x = torch.linspace(-3.0, 3.0, n)        # pre-tanh, extended domain
+    x_norm = torch.tanh(x)                   # encoded domain ≈ [-0.995, +0.995]
 
     coeffs = layer.cheby_coeffs[out_idx, in_idx, :].detach()  # (degree+1,)
     base_w = layer.base_weight[out_idx, in_idx].detach()
@@ -39,17 +44,21 @@ def _sample_chebykan_edge(layer, out_idx: int, in_idx: int, n: int = 1000) -> tu
         cheby.append(2 * x_norm * cheby[-1] - cheby[-2])
     basis = torch.stack(cheby, dim=-1)  # (n, degree+1)
 
-    y = (basis * coeffs).sum(dim=-1) + base_w * x
-    return x.numpy(), y.detach().numpy()
+    y = (basis * coeffs).sum(dim=-1) + base_w * x_norm
+    return x_norm.numpy(), y.detach().numpy()   # ← return x_norm, not x
 
 
 def _sample_fourierkan_edge(layer, out_idx: int, in_idx: int, n: int = 1000) -> tuple[np.ndarray, np.ndarray]:
-    """Return (x_input, y_output) for a single FourierKAN edge."""
+    """Return (x_norm, y_output) for a single FourierKAN edge.
+
+    x_norm = tanh(linspace(-3, 3, n)), range ≈ [-0.995, +0.995].
+    """
     import torch
     import math
 
-    x = torch.linspace(-1.0, 1.0, n)
-    x_scaled = (torch.tanh(x) + 1) * math.pi
+    x = torch.linspace(-3.0, 3.0, n)
+    x_norm = torch.tanh(x)
+    x_scaled = (x_norm + 1) * math.pi
     k = torch.arange(1, layer.grid_size + 1, dtype=torch.float32)
 
     a = layer.fourier_a[out_idx, in_idx, :].detach()
@@ -57,8 +66,8 @@ def _sample_fourierkan_edge(layer, out_idx: int, in_idx: int, n: int = 1000) -> 
     base_w = layer.base_weight[out_idx, in_idx].detach()
 
     x_k = x_scaled.unsqueeze(-1) * k
-    y = (torch.cos(x_k) * a + torch.sin(x_k) * b).sum(dim=-1) + base_w * torch.tanh(x)
-    return x.numpy(), y.detach().numpy()
+    y = (torch.cos(x_k) * a + torch.sin(x_k) * b).sum(dim=-1) + base_w * x_norm
+    return x_norm.numpy(), y.detach().numpy()   # ← return x_norm, not x
 
 
 def sample_edge(layer, out_idx: int, in_idx: int, n: int = 1000):
