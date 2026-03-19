@@ -223,7 +223,8 @@ def _plot_activation_grid(
 
         ftype = feat_types.get(feat, "unknown")
         is_binary = ftype in ("binary", "missing_indicator")
-        has_raw = X_raw is not None and feat in X_raw.columns
+        is_numeric_raw = ftype in ("continuous", "ordinal")
+        has_raw = X_raw is not None and feat in X_raw.columns and is_numeric_raw
 
         active_edges = df[(df["layer"] == 0) & (df["input_feature"] == feat)]
         best_r2_row = None
@@ -510,6 +511,7 @@ def _parse_args() -> argparse.Namespace:
                    help="e.g. outputs/reports/chebykan_pruning_summary.json")
     p.add_argument("--config", type=Path, required=True)
     p.add_argument("--eval-features", type=Path, default=Path("outputs/data/X_eval.parquet"))
+    p.add_argument("--eval-features-raw", type=Path, default=None)
     p.add_argument("--flavor", choices=["chebykan", "fourierkan"], required=True)
     p.add_argument("--use-pysr", action="store_true", help="Use PySR (requires Julia)")
     p.add_argument("--output-dir", type=Path, default=Path("outputs"))
@@ -518,6 +520,7 @@ def _parse_args() -> argparse.Namespace:
 
 if __name__ == "__main__":
     args = _parse_args()
+    X_raw_arg = pd.read_parquet(args.eval_features_raw) if args.eval_features_raw else None
     run(
         args.pruned_checkpoint,
         args.pruning_summary,
@@ -526,4 +529,5 @@ if __name__ == "__main__":
         args.flavor,
         args.use_pysr,
         args.output_dir,
+        X_raw=X_raw_arg,
     )

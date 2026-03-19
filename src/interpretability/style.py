@@ -86,12 +86,12 @@ def encode_to_raw_lookup(
     Returns:
         Array of original-scale values, same length as x_norm.
     """
-    enc = X_eval[feat].values
-    raw = X_raw[feat].values
+    enc = np.asarray(X_eval[feat], dtype=float)
+    raw = np.asarray(X_raw[feat], dtype=float)
     valid = ~(np.isnan(enc) | np.isnan(raw))
     enc, raw = enc[valid], raw[valid]
     order = np.argsort(enc)
     enc_sorted, raw_sorted = enc[order], raw[order]
     if x_norm is None:
-        x_norm = X_eval[feat].values
+        x_norm = np.asarray(X_eval[feat], dtype=float)
     return np.interp(x_norm, enc_sorted, raw_sorted)

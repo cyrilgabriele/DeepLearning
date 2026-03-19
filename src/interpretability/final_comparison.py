@@ -239,7 +239,7 @@ def _plot_qwk_retention(qwk_curves: dict[str, list[float]], output_dir: Path) ->
     fig, ax = plt.subplots(figsize=(8, 5))
 
     for model_name, scores in qwk_curves.items():
-        auc = float(np.trapz(scores, dx=0.1))
+        auc = float(np.trapezoid(scores, dx=0.1) if hasattr(np, "trapezoid") else np.trapz(scores, dx=0.1))
         ax.plot(retention_pcts, scores, color=MODEL_COLORS[model_name],
                 lw=2, marker="o", ms=5, label=f"{model_name} (AUC={auc:.3f})")
 
