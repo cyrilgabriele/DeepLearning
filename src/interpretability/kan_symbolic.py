@@ -166,6 +166,173 @@ def _is_active(layer, out_idx: int, in_idx: int, threshold: float) -> bool:
     return bool(variances[out_idx, in_idx].item() >= threshold)
 
 
+def _top_features_by_variance(
+    variances: "torch.Tensor",
+    feature_names: list[str],
+    top_n: int = 10,
+) -> list[str]:
+    """Return top_n input features ranked by sum of edge output variance."""
+    import torch
+    per_input = variances.sum(dim=0)
+    n = min(top_n, len(feature_names), per_input.shape[0])
+    ranked_idx = per_input.argsort(descending=True)[:n]
+    return [feature_names[int(i)] for i in ranked_idx]
+
+
+def _plot_activation_grid(
+    module,
+    df: pd.DataFrame,
+    flavor: str,
+    output_dir: Path,
+    threshold: float,
+    feat_types: dict,
+    X_eval: pd.DataFrame | None,
+    X_raw: pd.DataFrame | None,
+) -> None:
+    """TabKAN-style 2×5 grid: one subplot per top-10 input feature."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from src.models.kan_layers import ChebyKANLayer, FourierKANLayer
+    from src.interpretability.kan_pruning import _compute_edge_variances
+    from src.interpretability.style import (
+        apply_paper_style, savefig_pdf, MODEL_COLORS,
+        encode_to_raw_lookup, FEATURE_TYPE_MARKERS,
+    )
+
+    apply_paper_style()
+    first_layer = next(
+        (l for l in module.kan_layers if isinstance(l, (ChebyKANLayer, FourierKANLayer))), None
+    )
+    if first_layer is None:
+        return
+
+    feature_names = list(X_eval.columns) if X_eval is not None else []
+    variances = _compute_edge_variances(first_layer)
+    top_feats = _top_features_by_variance(variances, feature_names, top_n=10)
+
+    model_color = MODEL_COLORS.get("ChebyKAN" if flavor == "chebykan" else "FourierKAN", "steelblue")
+    fig, axes = plt.subplots(2, 5, figsize=(18, 7))
+    axes_flat = axes.flatten()
+
+    for ax, feat in zip(axes_flat, top_feats):
+        feat_i = feature_names.index(feat) if feat in feature_names else -1
+        if feat_i < 0:
+            ax.set_visible(False)
+            continue
+
+        ftype = feat_types.get(feat, "unknown")
+        is_binary = ftype in ("binary", "missing_indicator")
+        has_raw = X_raw is not None and feat in X_raw.columns
+
+        active_edges = df[(df["layer"] == 0) & (df["input_feature"] == feat)]
+        best_r2_row = None
+
+        for _, erow in active_edges.iterrows():
+            out_i = int(erow["edge_out"])
+            x_norm, y_vals = sample_edge(first_layer, out_i, feat_i, n=300)
+            x_plot = (encode_to_raw_lookup(feat, X_eval, X_raw, x_norm)
+                      if (has_raw and not is_binary) else x_norm)
+            ax.plot(x_plot, y_vals, color="gray", alpha=0.3, lw=1)
+            if best_r2_row is None or erow["r_squared"] > best_r2_row["r_squared"]:
+                best_r2_row = erow
+
+        if best_r2_row is not None:
+            out_i = int(best_r2_row["edge_out"])
+            x_norm, y_vals = sample_edge(first_layer, out_i, feat_i, n=300)
+            x_plot = (encode_to_raw_lookup(feat, X_eval, X_raw, x_norm)
+                      if (has_raw and not is_binary) else x_norm)
+            ax.plot(x_plot, y_vals, color=model_color, lw=2,
+                    label=f"{best_r2_row['formula'][:20]}\nR²={best_r2_row['r_squared']:.3f}")
+            if is_binary:
+                for enc_pos in [-1.0, 1.0]:
+                    y_mark = float(np.interp(enc_pos, x_norm, y_vals))
+                    ax.axvline(enc_pos, color="gray", lw=1, ls="--", alpha=0.7)
+                    ax.scatter([enc_pos], [y_mark], s=40, color="black", zorder=5)
+
+        marker = FEATURE_TYPE_MARKERS.get(ftype, "")
+        ax.set_title(f"{feat[:18]} {marker}", fontsize=8, fontweight="bold")
+        x_lbl = "Encoded [-1,1]" if is_binary else ("Original scale" if has_raw else "Encoded")
+        ax.set_xlabel(x_lbl, fontsize=7)
+        ax.set_ylabel("Edge output", fontsize=7)
+        if best_r2_row is not None:
+            ax.legend(fontsize=5, loc="best")
+
+    for ax in axes_flat[len(top_feats):]:
+        ax.set_visible(False)
+
+    plt.suptitle(f"{flavor.title()} — Learned Activation Functions (Top-10 Features)",
+                 fontsize=12, fontweight="bold")
+    plt.tight_layout()
+    from src.interpretability.paths import figures as fig_dir
+    out = fig_dir(output_dir) / f"{flavor}_activations.pdf"
+    savefig_pdf(fig, out)
+    print(f"Saved → {out}")
+    plt.close()
+
+
+def _plot_feature_ranking(
+    module,
+    flavor: str,
+    output_dir: Path,
+    feature_names: list[str],
+    feat_types: dict,
+) -> None:
+    """Horizontal bar chart of all features ranked by edge variance sum."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Patch
+    from src.models.kan_layers import ChebyKANLayer, FourierKANLayer
+    from src.interpretability.kan_pruning import _compute_edge_variances
+    from src.interpretability.style import (
+        apply_paper_style, savefig_pdf, FEATURE_TYPE_COLORS,
+        FEATURE_TYPE_MARKERS, feature_type_label,
+    )
+
+    apply_paper_style()
+    first_layer = next(
+        (l for l in module.kan_layers if isinstance(l, (ChebyKANLayer, FourierKANLayer))), None
+    )
+    if first_layer is None:
+        return
+
+    variances = _compute_edge_variances(first_layer)
+    per_input = variances.sum(dim=0)
+    n_feats = min(len(feature_names), per_input.shape[0])
+    importances = {feature_names[i]: float(per_input[i]) for i in range(n_feats)}
+    sorted_feats = sorted(importances, key=importances.get, reverse=True)
+
+    colors = [FEATURE_TYPE_COLORS.get(feat_types.get(f, "unknown"), "#AAAAAA") for f in sorted_feats]
+    labels = [feature_type_label(f, feat_types) for f in sorted_feats]
+    values = [importances[f] for f in sorted_feats]
+
+    fig_height = max(6, len(sorted_feats) * 0.25)
+    fig, ax = plt.subplots(figsize=(10, fig_height))
+    ax.barh(range(len(sorted_feats)), values, color=colors, alpha=0.85)
+    ax.set_yticks(range(len(sorted_feats)))
+    ax.set_yticklabels(labels, fontsize=7)
+    ax.invert_yaxis()
+    ax.set_xlabel("Edge output variance (sum over all outputs)", fontsize=9)
+    ax.set_title(f"{flavor.title()} — Feature Importance (Edge Variance)",
+                 fontsize=11, fontweight="bold")
+
+    present_types = sorted(set(feat_types.get(f, "unknown") for f in sorted_feats))
+    legend_elements = [
+        Patch(facecolor=FEATURE_TYPE_COLORS.get(t, "#AAAAAA"),
+              label=f"{t} {FEATURE_TYPE_MARKERS.get(t, '')}")
+        for t in present_types
+    ]
+    ax.legend(handles=legend_elements, fontsize=7, loc="lower right")
+    plt.tight_layout()
+
+    from src.interpretability.paths import figures as fig_dir
+    out = fig_dir(output_dir) / f"{flavor}_feature_ranking.pdf"
+    savefig_pdf(fig, out)
+    print(f"Saved → {out}")
+    plt.close()
+
+
 # ── Main per-model runner ─────────────────────────────────────────────────────
 
 def run(
@@ -177,6 +344,8 @@ def run(
     use_pysr: bool = False,
     output_dir: Path = Path("outputs"),
     n_samples: int = 1000,
+    feat_types: dict | None = None,
+    X_raw: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     import torch
     from src.configs import load_experiment_config
@@ -246,8 +415,20 @@ def run(
     print(f"Mean R²: {df['r_squared'].mean():.4f}  Median: {df['r_squared'].median():.4f}")
     print(f"Saved → {out_path}")
 
-    # ── Example visualization ─────────────────────────────────────────────────
-    _plot_example(module, df, flavor, output_dir, threshold)
+    # ── Load feat_types and X_raw if not provided ─────────────────────────────
+    if not feat_types:
+        ft_path = Path(output_dir) / "reports" / "feature_types.json"
+        if ft_path.exists():
+            feat_types = json.loads(ft_path.read_text())
+    if X_raw is None:
+        xr_path = Path(output_dir) / "data" / "X_eval_raw.parquet"
+        if xr_path.exists():
+            X_raw = pd.read_parquet(xr_path)
+
+    # ── TabKAN-style activation grid and feature ranking ──────────────────────
+    _plot_activation_grid(module, df, flavor, output_dir, threshold,
+                          feat_types or {}, X_eval, X_raw)
+    _plot_feature_ranking(module, flavor, output_dir, feature_names, feat_types or {})
 
     return df
 
