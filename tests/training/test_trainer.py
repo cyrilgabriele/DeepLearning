@@ -10,6 +10,7 @@ from src.configs import (
     PreprocessingConfig,
     TrainerConfig,
     load_experiment_config,
+    set_global_seed,
 )
 from src.training.trainer import Trainer
 
@@ -57,14 +58,10 @@ def test_trainer_runs_on_mock_data(tmp_path):
             experiment_name="test",
             train_csv=train_csv,
             test_csv=test_csv,
-            eval_size=0.2,
+            seed=123,
         ),
         preprocessing=PreprocessingConfig(
-            recipe="paper",
-            missing_threshold=0.5,
-            stratify=True,
-            use_stratified_kfold=True,
-            kan_n_splits=5,
+            recipe="xgboost_paper",
         ),
         model=ModelConfig(
             name="tabkan-tiny",
@@ -76,7 +73,8 @@ def test_trainer_runs_on_mock_data(tmp_path):
         ),
     )
 
-    trainer = Trainer(config, device="cpu")
+    seed = set_global_seed(config.trainer.seed)
+    trainer = Trainer(config, device="cpu", random_seed=seed)
     artifacts = trainer.run()
     assert set(artifacts.metrics) == {"mae", "accuracy", "f1_macro", "qwk"}
     assert artifacts.device in {"cpu", "cuda", "mps"}
@@ -89,13 +87,9 @@ def test_config_loader_reads_yaml(tmp_path):
 trainer:
   experiment_name: base
   train_csv: placeholder.csv
-  eval_size: 0.2
+  seed: 11
 preprocessing:
-  recipe: kan
-  missing_threshold: 0.5
-  stratify: true
-  use_stratified_kfold: true
-  kan_n_splits: 5
+  recipe: kan_paper
 model:
   name: tabkan-base
   flavor: chebykan
@@ -108,8 +102,7 @@ model:
     config_path.write_text(cfg_text)
 
     config = load_experiment_config(config_path)
-    assert config.trainer.eval_size == 0.2
-    assert config.preprocessing.recipe == "kan"
+    assert config.preprocessing.recipe == "kan_paper"
     params = config.model.registry_kwargs()
     assert params["flavor"] == "chebykan"
     assert params["depth"] == 2

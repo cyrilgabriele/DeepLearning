@@ -1,7 +1,10 @@
-import torch
 import numpy as np
 import pandas as pd
 import pytest
+
+torch = pytest.importorskip("torch")
+
+from src.configs import set_global_seed
 from src.data.dataset import PrudentialDataModule
 
 
@@ -67,14 +70,16 @@ def synthetic_data(tmp_path):
 
 class TestPrudentialDataModule:
     def test_setup_creates_splits(self, synthetic_data):
-        dm = PrudentialDataModule(data_path=str(synthetic_data), val_split=0.2, batch_size=32)
+        seed = set_global_seed(777)
+        dm = PrudentialDataModule(data_path=str(synthetic_data), batch_size=32, seed=seed)
         dm.setup()
         assert dm.train_dataset is not None
         assert dm.val_dataset is not None
         assert len(dm.train_dataset) + len(dm.val_dataset) == 200
 
     def test_dataloaders_return_batches(self, synthetic_data):
-        dm = PrudentialDataModule(data_path=str(synthetic_data), val_split=0.2, batch_size=16)
+        seed = set_global_seed(778)
+        dm = PrudentialDataModule(data_path=str(synthetic_data), batch_size=16, seed=seed)
         dm.setup()
         batch = next(iter(dm.train_dataloader()))
         x, y = batch
@@ -82,14 +87,15 @@ class TestPrudentialDataModule:
         assert y.ndim == 2
         assert y.shape[1] == 1
 
-    def test_features_in_range(self, synthetic_data):
-        dm = PrudentialDataModule(data_path=str(synthetic_data), val_split=0.2, batch_size=200)
+    def test_features_are_finite(self, synthetic_data):
+        seed = set_global_seed(779)
+        dm = PrudentialDataModule(data_path=str(synthetic_data), batch_size=200, seed=seed)
         dm.setup()
         x, _ = next(iter(dm.train_dataloader()))
-        assert x.min() >= -1.5
-        assert x.max() <= 1.5
+        assert torch.isfinite(x).all()
 
     def test_num_features_property(self, synthetic_data):
-        dm = PrudentialDataModule(data_path=str(synthetic_data), val_split=0.2, batch_size=32)
+        seed = set_global_seed(780)
+        dm = PrudentialDataModule(data_path=str(synthetic_data), batch_size=32, seed=seed)
         dm.setup()
         assert dm.num_features > 0

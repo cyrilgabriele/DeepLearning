@@ -1,6 +1,7 @@
 from src.utils.logging import (
     make_run_dir,
     setup_logger,
+    get_logger,
     JSONLLogger,
     EpochMetricsCSV,
     log_preprocessing,
@@ -14,6 +15,7 @@ from src.utils.logging import (
 __all__ = [
     "make_run_dir",
     "setup_logger",
+    "get_logger",
     "JSONLLogger",
     "EpochMetricsCSV",
     "log_preprocessing",

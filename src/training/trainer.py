@@ -11,32 +11,36 @@ from typing import Dict, Optional
 import pandas as pd
 from sklearn.metrics import accuracy_score, cohen_kappa_score, f1_score, mean_absolute_error
 
-from src.configs import ExperimentConfig, GLOBAL_RANDOM_SEED
-from src.data.prudential_dataset import (
-    PrudentialDataSplits,
-    load_and_prepare_prudential_training_data,
-)
-from src.data.prudential_kan_preprocessing import PrudentialKANPreprocessor
-from src.data.prudential_paper_preprocessing import PrudentialPaperPreprocessor
+from src.configs import ExperimentConfig
+from src.data import preprocess_xgboost_paper as paper_prep
+from src.data import preprocess_kan_paper as kan_prep
+from src.data import preprocess_kan_sota as kan_sota_prep
 from src.models import PrudentialModel, TrainingArtifacts, create_model
+
+
+@dataclass(frozen=True)
+class PreparedDataset:
+    X_train: pd.DataFrame
+    y_train: pd.Series
+    X_eval: Optional[pd.DataFrame]
+    y_eval: Optional[pd.Series]
+    recipe: str
+    preprocess_artifacts: Dict[str, object]
+    feature_names: Optional[list[str]] = None
+    X_train_inner: Optional[pd.DataFrame] = None
+    y_train_inner: Optional[pd.Series] = None
+    X_val_inner: Optional[pd.DataFrame] = None
+    y_val_inner: Optional[pd.Series] = None
 
 
 @dataclass(frozen=True)
 class Trainer:
     config: ExperimentConfig
     device: str
-    random_seed: int = GLOBAL_RANDOM_SEED
+    random_seed: int
 
     def run(self) -> TrainingArtifacts:
-        trainer_cfg = self.config.trainer
-        preprocessor = self._build_preprocessor()
-        splits = load_and_prepare_prudential_training_data(
-            trainer_cfg.train_csv,
-            preprocessor=preprocessor,
-            eval_size=trainer_cfg.eval_size,
-            random_state=self.random_seed,
-            stratify=self.config.preprocessing.stratify,
-        )
+        dataset = self._prepare_data()
 
         model_kwargs = self.config.model.registry_kwargs()
         model_kwargs.setdefault("device", self.device)
@@ -46,15 +50,26 @@ class Trainer:
             random_state=self.random_seed,
             **model_kwargs,
         )
-        model.fit(splits.X_train, splits.y_train)
 
-        metrics = self._evaluate(model, splits)
+        X_train = dataset.X_train_inner if dataset.X_train_inner is not None else dataset.X_train
+        y_train = dataset.y_train_inner if dataset.y_train_inner is not None else dataset.y_train
+        validation_data = None
+        if dataset.X_val_inner is not None and dataset.y_val_inner is not None:
+            validation_data = (dataset.X_val_inner, dataset.y_val_inner)
+
+        fit_kwargs = {}
+        if validation_data is not None:
+            fit_kwargs["validation_data"] = validation_data
+
+        model.fit(X_train, y_train, **fit_kwargs)
+
+        metrics = self._evaluate(model, dataset)
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
         summary_path = self._persist_run_summary(metrics, timestamp)
         checkpoint_path = self._persist_checkpoint(model, timestamp)
         test_predictions_path = self._generate_test_predictions(
             model=model,
-            preprocessor=splits.preprocessor,
+            dataset=dataset,
             timestamp=timestamp,
         )
         return TrainingArtifacts(
@@ -69,25 +84,50 @@ class Trainer:
         )
 
 
-    def _build_preprocessor(self):
-        prep_cfg = self.config.preprocessing
+    def _prepare_data(self) -> "PreparedDataset":
+        recipe = self.config.preprocessing.recipe
+        train_csv = self.config.trainer.train_csv
 
-        if prep_cfg.recipe == "paper":
-            return PrudentialPaperPreprocessor(missing_threshold=prep_cfg.missing_threshold)
+        if recipe == "xgboost_paper":
+            outputs = paper_prep.run_pipeline(train_csv, random_seed=self.random_seed)
+            artifacts = {
+                "state": outputs["preprocessor_state"],
+                "inner_splits": outputs["inner_splits"],
+            }
+            inner_train = None
+            inner_val = None
+            inner_train_y = None
+            inner_val_y = None
+            if outputs["inner_splits"]:
+                inner_train, inner_val, inner_train_y, inner_val_y = outputs["inner_splits"][0]
+            return PreparedDataset(
+                X_train=outputs["X_train_outer"],
+                y_train=outputs["y_train_outer"],
+                X_eval=outputs["X_test_outer"],
+                y_eval=outputs["y_test_outer"],
+                recipe=recipe,
+                preprocess_artifacts=artifacts,
+                feature_names=list(outputs["X_train_outer"].columns),
+                X_train_inner=inner_train,
+                y_train_inner=inner_train_y,
+                X_val_inner=inner_val,
+                y_val_inner=inner_val_y,
+            )
 
-        return PrudentialKANPreprocessor(
-            missing_threshold=prep_cfg.missing_threshold,
-            random_state=self.random_seed,
-            use_stratified_kfold=prep_cfg.use_stratified_kfold,
-            n_splits=prep_cfg.kan_n_splits,
-        )
+        if recipe == "kan_paper":
+            outputs = kan_prep.run_pipeline(train_csv, random_seed=self.random_seed)
+            return self._build_kan_dataset(outputs, recipe, kan_prep.TARGET_COLUMN)
+        if recipe == "kan_sota":
+            outputs = kan_sota_prep.run_pipeline(train_csv, random_seed=self.random_seed)
+            return self._build_kan_dataset(outputs, recipe, kan_sota_prep.TARGET_COLUMN)
+        raise ValueError(f"Unknown preprocessing recipe: {recipe}")
 
-    def _evaluate(self, model, splits: PrudentialDataSplits) -> Dict[str, Optional[float]]:
-        if splits.X_eval is None:
+    def _evaluate(self, model, dataset: "PreparedDataset") -> Dict[str, Optional[float]]:
+        if dataset.X_eval is None:
             return self._nan_metrics()
 
-        preds = model.predict(splits.X_eval)
-        y_true = splits.y_eval
+        preds = model.predict(dataset.X_eval)
+        y_true = dataset.y_eval
         return self._build_metrics(y_true, preds)
 
     @staticmethod
@@ -167,7 +207,7 @@ class Trainer:
         self,
         *,
         model: PrudentialModel,
-        preprocessor,
+        dataset: "PreparedDataset",
         timestamp: str,
     ) -> Optional[Path]:
         """Transform test.csv and emit predictions for Kaggle submission."""
@@ -186,7 +226,7 @@ class Trainer:
             print(f"Warning: failed to read test CSV at {test_path}: {exc}")
             return None
 
-        processed = preprocessor.transform(test_df.copy())
+        processed = self._transform_test_dataframe(test_df.copy(), dataset)
         preds = model.predict(processed)
 
         ids = test_df["Id"] if "Id" in test_df.columns else pd.Series(range(len(preds)))
@@ -201,4 +241,84 @@ class Trainer:
             return predictions_path
         except OSError as exc:  # pragma: no cover - filesystem guard
             print(f"Warning: failed to write test predictions at {predictions_path}: {exc}")
-            return None
+        return None
+
+    def _transform_test_dataframe(self, df: pd.DataFrame, dataset: "PreparedDataset") -> pd.DataFrame:
+        if dataset.recipe == "xgboost_paper":
+            processed, _ = paper_prep.transform(
+                df,
+                dataset.preprocess_artifacts["state"],
+            )
+            return processed
+
+        if dataset.recipe == "kan_paper":
+            base_state = dataset.preprocess_artifacts["baseline"]
+            kan_state = dataset.preprocess_artifacts["kan"]
+            processed_array, _ = kan_prep.transform(
+                df,
+                base_state,
+                kan_state=kan_state,
+            )
+            return pd.DataFrame(processed_array, columns=dataset.feature_names)
+
+        if dataset.recipe == "kan_sota":
+            base_state = dataset.preprocess_artifacts["baseline"]
+            sota_state = dataset.preprocess_artifacts["sota"]
+            processed_array, _ = kan_sota_prep.transform(
+                df,
+                base_state,
+                sota_state=sota_state,
+            )
+            return pd.DataFrame(processed_array, columns=dataset.feature_names)
+
+        raise ValueError(f"Unknown preprocessing recipe for test transform: {dataset.recipe}")
+
+    def _build_kan_dataset(
+        self,
+        outputs: Dict[str, object],
+        recipe: str,
+        target_name: str,
+    ) -> "PreparedDataset":
+        feature_names = outputs["feature_names"]
+        artifacts = outputs["preprocessor_state"]
+        row_indices = outputs.get("row_indices", {})
+        train_index = row_indices.get("outer_train")
+        test_index = row_indices.get("outer_test")
+        X_train = pd.DataFrame(outputs["X_train_outer"], columns=feature_names, index=train_index)
+        y_train = pd.Series(
+            outputs["y_train_outer"],
+            name=target_name,
+            index=train_index,
+        )
+        X_eval = pd.DataFrame(outputs["X_test_outer"], columns=feature_names, index=test_index)
+        y_eval = pd.Series(
+            outputs["y_test_outer"],
+            name=target_name,
+            index=test_index,
+        )
+        inner_indices = outputs.get("inner_split_indices") or []
+        inner_train = None
+        inner_val = None
+        inner_train_y = None
+        inner_val_y = None
+        if inner_indices and train_index is not None:
+            first = inner_indices[0]
+            train_idx = first["train"]
+            val_idx = first["val"]
+            inner_train = X_train.loc[train_idx]
+            inner_val = X_train.loc[val_idx]
+            inner_train_y = y_train.loc[train_idx]
+            inner_val_y = y_train.loc[val_idx]
+        return PreparedDataset(
+            X_train=X_train,
+            y_train=y_train,
+            X_eval=X_eval,
+            y_eval=y_eval,
+            recipe=recipe,
+            preprocess_artifacts=artifacts,
+            feature_names=feature_names,
+            X_train_inner=inner_train,
+            y_train_inner=inner_train_y,
+            X_val_inner=inner_val,
+            y_val_inner=inner_val_y,
+        )

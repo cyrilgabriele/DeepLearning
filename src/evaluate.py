@@ -1,9 +1,11 @@
 """Standalone evaluation: load a checkpoint, optimize thresholds, report QWK."""
 import argparse
-import torch
-import numpy as np
 from pathlib import Path
 
+import numpy as np
+import torch
+
+from src.configs import set_global_seed
 from src.data.dataset import PrudentialDataModule
 from src.models.tabkan import TabKAN
 from src.models.mlp import MLPBaseline
@@ -16,12 +18,13 @@ def main():
     parser.add_argument("--data_path", type=str, required=True, help="Path to train.csv")
     parser.add_argument("--model_type", type=str, choices=["chebykan", "fourierkan", "mlp"],
                         required=True)
-    parser.add_argument("--val_split", type=float, default=0.2)
     parser.add_argument("--batch_size", type=int, default=256)
+    parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
-    dm = PrudentialDataModule(data_path=args.data_path, val_split=args.val_split,
-                              batch_size=args.batch_size)
+    seed = set_global_seed(args.seed)
+
+    dm = PrudentialDataModule(data_path=args.data_path, batch_size=args.batch_size, seed=seed)
     dm.setup()
 
     if args.model_type == "mlp":

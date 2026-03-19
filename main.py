@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Sequence
 from venv import logger
 
-from src.configs import detect_device, load_experiment_config, set_global_seed, GLOBAL_RANDOM_SEED
+from src.configs import detect_device, load_experiment_config, set_global_seed
 from src.training.trainer import Trainer
 
 
@@ -15,11 +15,11 @@ def run(argv: Sequence[str] | None = None) -> None:
     """Parse CLI arguments and dispatch the trainer."""
 
     args = _build_parser().parse_args(list(argv) if argv is not None else None)
-    seed = set_global_seed()
+    config = load_experiment_config(args.config)
+    seed = set_global_seed(config.trainer.seed)
     logger.info(f"seed: {seed}")
     device = detect_device()
     logger.info(f"device: {device}")
-    config = load_experiment_config(args.config)
 
 
     trainer = Trainer(config, random_seed=seed, device=device)

@@ -21,7 +21,7 @@ import torch
 import lightning as L
 
 from src.data.prudential_features import get_feature_lists
-from src.data.prudential_kan_preprocessing import PrudentialKANPreprocessor
+from src.data import preprocess_kan_paper as kan_prep
 from src.models.kan_layers import ChebyKANLayer, FourierKANLayer, BSplineKANLayer
 from src.models.tabkan import TabKAN
 from src.models.base import PrudentialModel
@@ -149,16 +149,15 @@ def stage_2_feature_classification(df):
 
 def stage_3_preprocessing(df):
     """Stage 3: Full preprocessing pipeline."""
-    _header("STAGE 3: Preprocessing (PrudentialKANPreprocessor)")
-    y = df["Response"]
-    X = df.drop(columns=["Response"])
+    _header("STAGE 3: Preprocessing (paper + KAN pipeline)")
+    base_state = kan_prep.fit_preprocessor(df)
+    X_base, y = kan_prep.transform(df, base_state)
+    kan_state = kan_prep.fit_kan_value_pipeline(X_base, base_state)
+    X_processed_array, _ = kan_prep.transform(df, base_state, kan_state=kan_state)
+    X_processed = pd.DataFrame(X_processed_array, columns=kan_state.feature_names)
 
-    preprocessor = PrudentialKANPreprocessor(missing_threshold=0.5)
-    X_processed = preprocessor.fit_transform(X, y)
-
-    print(f"Input shape:  {X.shape}")
+    print(f"Input shape:  {X_base.shape}")
     print(f"Output shape: {X_processed.shape}")
-    print(f"Dropped features: {preprocessor.dropped_features}")
     print(f"Missing indicator columns added: {len([c for c in X_processed.columns if c.startswith('missing_')])}")
     print(f"\nValue ranges:")
     print(f"  Global min: {X_processed.min().min():.4f}")
@@ -167,16 +166,7 @@ def stage_3_preprocessing(df):
     print(f"  NaN count: {X_processed.isnull().sum().sum()}")
     print(f"  Dtypes: {X_processed.dtypes.unique()}")
 
-    # Check per-type ranges
-    fl = preprocessor.feature_lists
-    for ftype in ["binary", "continuous", "ordinal", "categorical"]:
-        cols = [c for c in fl[ftype] if c in X_processed.columns]
-        if cols:
-            subset = X_processed[cols]
-            print(f"  {ftype:12s}: min={subset.min().min():.4f}, max={subset.max().max():.4f}, "
-                  f"mean={subset.mean().mean():.4f}, cols={len(cols)}")
-
-    return X_processed, y, preprocessor
+    return X_processed, y, kan_state
 
 
 def stage_4_model_forward(X_processed, y):
@@ -358,7 +348,7 @@ def main():
 
     df = stage_1_raw_data()
     stage_2_feature_classification(df)
-    X_processed, y, preprocessor = stage_3_preprocessing(df)
+    X_processed, y, _ = stage_3_preprocessing(df)
     stage_4_model_forward(X_processed, y)
     stage_5_kan_layer_internals(X_processed)
     model, X_np, y_np = stage_6_training_loop(X_processed, y)

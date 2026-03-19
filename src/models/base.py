@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional, TYPE_CHECKING
+from typing import Any, Dict, Optional, Tuple, TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -21,7 +21,13 @@ class PrudentialModel(ABC):
         self.model_params = model_params
 
     @abstractmethod
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> None:  # pragma: no cover - interface
+    def fit(
+        self,
+        X: pd.DataFrame,
+        y: pd.Series,
+        *,
+        validation_data: Optional[Tuple[pd.DataFrame, pd.Series]] = None,
+    ) -> None:  # pragma: no cover - interface
         """Fit the estimator using processed features."""
 
     @abstractmethod
