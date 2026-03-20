@@ -1,0 +1,19 @@
+{
+  "model": "bsplinekan",
+  "best_qwk": 0.6194,
+  "best_params": {
+    "n_layers": 1,
+    "width_0": 256,
+    "grid_size": 9,
+    "lr": 0.00017310855167537937,
+    "weight_decay": 1.0721502922720423e-05,
+    "batch_size": 512
+  },
+  "total_trials": 50,
+  "best_trial_number": 31,
+  "best_trial_attrs": {
+    "duration": 188.9,
+    "epochs": 66,
+    "num_params": 423425
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "model": "fourierkan",
+  "best_qwk": 0.6157,
+  "best_params": {
+    "n_layers": 1,
+    "width_0": 32,
+    "grid_size": 9,
+    "lr": 0.000167002722230329,
+    "weight_decay": 0.00023972125006827,
+    "batch_size": 512
+  },
+  "total_trials": 50,
+  "best_trial_number": 36,
+  "best_trial_attrs": {
+    "duration": 139.1,
+    "epochs": 42,
+    "num_params": 77313
+  }
+}
