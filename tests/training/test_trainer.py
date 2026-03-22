@@ -82,6 +82,42 @@ def test_trainer_runs_on_mock_data(tmp_path):
     assert artifacts.test_predictions_path.exists()
 
 
+def test_trainer_runs_xgboost_paper_model(tmp_path):
+    train_csv = _write_mock_training_csv(tmp_path)
+    test_csv = _write_mock_test_csv(tmp_path)
+    config = ExperimentConfig(
+        trainer=TrainerConfig(
+            experiment_name="xgb-paper",
+            train_csv=train_csv,
+            test_csv=test_csv,
+            seed=21,
+        ),
+        preprocessing=PreprocessingConfig(
+            recipe="xgboost_paper",
+        ),
+        model=ModelConfig(
+            name="xgboost-paper",
+            flavor=None,
+            depth=1,
+            width=1,
+            degree=1,
+            params={
+                "auto_tune": False,
+                "n_estimators": 3,
+                "max_depth": 3,
+                "learning_rate": 0.3,
+            },
+        ),
+    )
+
+    seed = set_global_seed(config.trainer.seed)
+    trainer = Trainer(config, device="cpu", random_seed=seed)
+    artifacts = trainer.run()
+    assert artifacts.metrics["accuracy"] is not None
+    assert artifacts.test_predictions_path is not None
+    assert artifacts.test_predictions_path.exists()
+
+
 def test_config_loader_reads_yaml(tmp_path):
     cfg_text = """
 trainer:

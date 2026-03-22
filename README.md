@@ -47,7 +47,8 @@ uv run python src/train.py model=chebykan train.max_epochs=5
 
 ### Via YAML config (Trainer pipeline)
 - `main.py` accepts a required YAML config that captures **all** trainer, preprocessing, and model parameters.
-- Start from `configs/smoke_experiment.yaml`, adjust every field (especially `trainer.train_csv`/`trainer.test_csv`) to match your environment, and launch via `python main.py --config configs/smoke_experiment.yaml`.
+- Start from `configs/smoke_experiment.yaml` (TabKAN) or `configs/xgboost_paper_experiment.yaml` (paper-faithful XGBoost), adjust every field (especially `trainer.train_csv`/`trainer.test_csv`) to match your environment, and launch via `python main.py --config <path>.yaml`.
+- To average over multiple random seeds with the paper model, set `model.params.seed_trials` in your config (or `seed_trials` in the Hydra preset) to a list of integers; the best-QWK run will be kept.
 - A fixed global random seed (`42`) is applied automatically to numpy/scikit-learn (and PyTorch if installed), so every run is deterministic.
 - The CLI instantiates `Trainer`, which fits the chosen preprocessor on the training subset, builds the requested model, and prints MAE/accuracy/F1 on the evaluation slice.
 
