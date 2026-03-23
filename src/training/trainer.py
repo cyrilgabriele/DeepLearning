@@ -61,6 +61,10 @@ class Trainer:
         if validation_data is not None:
             fit_kwargs["validation_data"] = validation_data
 
+        inner_splits = dataset.preprocess_artifacts.get("inner_splits") if dataset.preprocess_artifacts else None
+        if inner_splits:
+            fit_kwargs["validation_splits"] = inner_splits
+
         model.fit(X_train, y_train, **fit_kwargs)
 
         metrics = self._evaluate(model, dataset)

@@ -1,0 +1,681 @@
+Analysis Accuracy of XGBoost Model for 
+Multiclass Classification - A Case Study of 
+Applicant Level Risk Prediction for Life 
+Insurance 
+ 
+Widya Fajar Mustika 
+Department of Mathematics 
+Universitas Indonesia 
+Depok, Indonesia 
+widya.fm@sci.ui.ac.id 
+ Hendri Murfi 
+Department of Mathematics 
+Universitas Indonesia 
+Depok, Indonesia 
+hendri@sci.ui.ac.id 
+ Yekti Widyaningsih 
+Department of Mathematics 
+Universitas Indonesia 
+Depok, Indonesia 
+yekti@sci.ui.ac.id 
+ 
+ 
+Abstract - Risk level assessment for insurance applicants is 
+an important part of life insurance, so it needs to  be classified. 
+Determination of the level of risk claims on life i nsurance is 
+based on the applicant's historical data. Submissio n to become 
+a member of a life insurance requires a short time.  But the 
+application of a machine learning model can help cl assify 
+prospective insurance applicants based on the level  of risk 
+quickly. One machine learning model is Extreme Gradi ent 
+tree boosting (XGBoost) which is a decision tree ba sed model. 
+This model is used to predict risk in life insurance . The 
+missing values in the data used are overcome by sev eral 
+strategies in the data processing process to increa se the 
+accuracy value of the XGBoost model. The results of this study 
+show that the accuracy of the XGBoost model is 0.60 730 with 
+kappa units which indicates that the XGBoost model is very 
+good and can be applied to the problem of predictin g the level 
+of risk claims for life insurance applicants. When compared to 
+the decision tree, random forest and Bayesian ridge  models, 
+the performance of the XGoost model still excels in  processing 
+missing values in the data used. 
+Keywords — risk level prediction, big data, machine learning, 
+multi-class classification, ensemble learning, XGBo ost 
+I.  INTRODUCTION  
+Insurance is an agreement between two parties, name ly 
+the insurer and insurance applicant (the insured) w hich is 
+the basis for receiving premiums by insurance compa nies to 
+provide compensation due to damage or loss due to a n 
+uncertain event [1]. Insurance is a risk transfer a ctivity from 
+one party to another party in which there are rules  and 
+principles compiled by both parties. 
+There are several types of insurance offered by 
+insurance companies, one of which is life insurance . Life 
+insurance is insurance that protects both individua ls and 
+families from unexpected financial losses, which ar e caused 
+by death, lifelong disability, or no longer product ive [2].  
+Risk is defined as the results or consequences caus ed by 
+events that occur or that will occur in the future.  The 
+community needs life protection for a more prospero us life. In fighting for prosperity, it cannot be separated from the 
+risks that arise. Risk prediction is one of the mos t effective 
+ways to overcome financial shortages [3]. The risk in life 
+insurance is caused by several factors, namely acci dents, 
+medical conditions or health, lifestyle, and age gr oups. The 
+risks associated with life insurance claims are gen erally 
+different for each person. Therefore, it is very im portant for 
+life insurance companies to predict the level of ri sk for 
+prospective insurance policyholders to determine th e 
+premium value according to the level of risk. 
+The applicant's risk level usually is categorized 
+following the filing data held by the applicant. Th e manual 
+categorization requires a lot of time because there  are many 
+life insurance applicants with various data, i.e., age, height, 
+weight, work history, insurance history, medical hi story, 
+family history [4]. Moreover, the historical data r elated to 
+this need is also big. Machine learning is a common  method 
+to imitate human capability in fast predicting the level of 
+risk [5]. From the machine learning point of view, the 
+problem of the risk level prediction is supervised learning, 
+that is, a multi-class classification problem. 
+XGBoost is a recent machine learning model that is 
+popular because of its good accuracy and efficient out-of-
+core ensemble learning [6]. XGBoost uses a decision  tree as 
+a base learner and a generalization of the gradient  boosting 
+method to construct the next base learners. This mo del 
+construction is rather different from another ensem ble 
+learning, e.g., random forest, where the constructi on a base 
+learning does not depend on other base learners. Mo reover, 
+XGBoost is the sparsity aware algorithm that can ha ndle the 
+missing values of the historical data. It means tha t historical 
+data containing missing values can be processed wit hout 
+any imputation preprocessing. 
+In this paper, we apply and analyze the accuracy of  
+XGBoost for the problem of risk level prediction in  life 
+insurance. We compare the accuracy with ones of the  
+decision tree and random forest with standard imput ation 
+978-1-7281-2380-6/19/$31.00 ©2019 IEEE2019 5th International Conference on Science in Information Technology (ICSITech)
+Authorized licensed use limited to: University of St. Gallen. Downloaded on March 16,2026 at 20:04:56 UTC from IEEE Xplore.  Restrictions apply. 
+
+--- PAGE BREAK ---
+
+preprocessing. Our simulations show that the XGBoos t 
+model outperforms both decision tree and random for est. 
+The rest of the paper is organized as follows: In s ection 
+2, the reviews of related works are presented. Sect ion 3 
+describes the methods of research. Section 4 descri bes the 
+implementation, simulation., result, and discussion .  Finally, 
+we give a conclusion in Section 5.  
+II.  RELATED  WORK 
+Big data is related to large data. Definition of bi g data is 
+a term that describes a large volume of data at hig h speed, 
+complex, and contains variables that require advanc ed 
+techniques and technology to enable the capture, st orage, 
+distribution, management and analysis of informatio n [7]. 
+In Galicia's paper, it represents an ensemble model  for 
+forecasting large data time series. The ensemble mo del used 
+consists of three methods (decision tree, gradient tree 
+boosting, and random forest) which are proposed bec ause 
+the three results have been achieved in the big dat a 
+application where the weights of the ensemble model  are 
+calculated using the least square method [8]. 
+The use of the XGBoost model related to problems in  
+the insurance industry, namely Chen and Guestrin (2 016) 
+has conducted research related to the comparison of  the 
+scalability of the XGBoost model and other models i n the 
+case of regression problems insurance of motor vehi cle [6]. 
+Fauzan and Murfi (2017) have implemented the XGBoos t 
+model in predicting whether policyholders "submit c laims" 
+or "not submit claims" on insurance claims [9]. Cha ng 
+(2018) applied the XGBoost model in the constructio n of a 
+financial credit risk assessment model. These three  studies 
+applied the XGBoost model in dealing with problems in life 
+insurance, but cases in all three models handled ca ses of 
+binary regression and classification [10]. Based on  the 
+related research, in this thesis will be applied an d analyzed 
+the extreme gradient boosting (XGBoost) model in th e case 
+of the multiclass classification to predict the lev el of risk in 
+Prudential life insurance. The accuracy of the XGBo ost 
+model will be compared with several other machine 
+learning models to see the performance of the XGBoo st 
+model. 
+III.  METHODS  
+In this section, we discuss the methods used. The 
+method used is the CART method, which is the basic 
+method for the XGBoost model. 
+A.  Classification and Regression Trees 
+The Classification and Regression Trees (CART) 
+method was introduced by Leo Breiman in 1984. CART is 
+a method of a decision tree that is included in 
+nonparametric statistics [11]. CART is a binary dec ision 
+tree that is built by dividing a node into two root  vertices 
+repeatedly. The basic idea of the CART tree formati on is to 
+choose to split between all possible splitting at e ach node so 
+that the root node of the child produced is the pur est. 
+For example, given training data, namely D as follows: 
+                                            (1)                                          (2) 
+                                           (3) 
+                                          (4) 
+Where  is the number of life insurance applicants,  is 
+the number of predictor variables in the data,  is the data 
+for applicants for applicant,  is all values of the  
+predictor variable, and  is the actual target, namely the 
+risk level of life insurance applicants.  
+In the case of the multiclass classification, CART was 
+built based on training data, so that training data  with the 
+same level or value would be grouped. The CART 
+formation process is done by selecting features and  
+threshold values or splitting rules that make the p urest data 
+partitions, observations with the same level or val ue 
+grouped on each branch of the tree formed. In the c ase of 
+multilevel classification, the output function  of CART is 
+a structure of binary tree graphs with a level that  
+corresponds to input data where each node of the gr aph 
+contains a data set of life insurance applicants, s o the 
+function  in a data x, can be written 
+       ,            (5) 
+                                                 (6) 
+                                 (7) 
+where  is the number of leaf node at ,36  is a 
+function that maps data  to one of the leaf node at ,  
+index data which is on a leaf node , and  
+weight of leaf on . The purity of a node can be calculated 
+with Gini impurity, which is defined by: 
+                                                 (8) 
+where  is many levels, which have probability , with 
+ The value of this root node will be 
+minimum if the data on the node only consists of on e level 
+or if the node contains data with a similar or homo geneous 
+level. 
+B.  Extreme Gradient Boosting (XGBoost)  
+The ensemble method consists of two main approaches , 
+namely bagging and boosting. Bagging method, which is to 
+build several models independently, is used to incr ease the 
+accuracy of predictions sequentially at a given tim e, where 
+the final prediction is the average prediction [12] . Boosting, 
+which is to build several models in a sequence wher e the 
+error function used to build a model depends on the  
+performance of the previous model. The process of 
+boosting method depends on the accuracy of the basi c 
+model of the weak hypothesis that is the smallest [ 13]. 
+An example of a boosting approach is the gradient 
+boosting method that can be implemented in various 
+problems, both regression, and classification. Rese arch on 
+gradient boosting has been carried out from various  2019 5th International Conference on Science in Information Technology (ICSITech)
+Authorized licensed use limited to: University of St. Gallen. Downloaded on March 16,2026 at 20:04:56 UTC from IEEE Xplore.  Restrictions apply. 
+
+--- PAGE BREAK ---
+
+sciences since the 1990s. Gradient boosting was fir st 
+introduced by Leo Breiman (1984) that boosting can be 
+interpreted as an appropriate optimization algorith m [14]. 
+The boosting process is to minimize Root Mean Squar e 
+Error (RMSE) sequentially, where the concept of gra dient 
+boosting lies in its development, namely the expans ion of 
+additional criterion fittings [15]. 
+The Extreme Gradient Boosting (XGBoost) method is 
+the development of a gradient boosting model that h as 
+superior results and process speeds. XGBoost has th e 
+advantage of processing missing value data without 
+imputation of data at the beginning of learning. [1 6].  
+The XGBoost method applies the process of 
+classification and regression trees (CART) as weak learners 
+and increases the performance of each tree formed b y 
+minimizing its objective regularization function. T he 
+XGBoost method has good ability to predict, especia lly in 
+the case of classification, because this method has  concepts 
+such as sparsity awareness algorithms for each tree  that is 
+formed as well as out of core calculations that aim  to speed 
+up computing [6]. 
+Algorithm 1: Exact Greedy Algorithm for Split Findi ng  
+Input: , instance set of the current node 
+Input: , feature dimension 
+ 
+dan  
+for  to : 
+     
+    for in sorted do: 
+         ,   
+         ,  
+          
+   end 
+end  
+Output: Split with max score  
+Fig.1 Exact Greedy Algorithm for Split Finding 
+ 
+C.  Sparsity Aware Split Finding  
+Missing values is information or data that is not 
+available for an object given. Missing data because  there is 
+no data or information for an object, not found or indeed 
+data or information is difficult to find. The exist ence of 
+missing values with only a small number, for exampl e, only 
+1% of all data, is basically not a problem for the entire 
+dataset. However, if the percentage of the missing values is 
+quite large, it is necessary to handle whether the data 
+containing many of the missing is still feasible to  be 
+processed or not.  
+The novelty introduced by XGBoost is the ability to  
+overcome missing values. When a value is a missing value 
+in the dataset, it will be immediately classified u sing the 
+default direction. The default direction of each no de on the 
+CART is formed through the sparsity aware split alg orithm. The algorithm stage begins with the formation of a root 
+node containing a subset of observation data, then the 
+algorithm collects all observational data with the value of 
+each feature not a missing value in the dataset I. Next, 
+calculate the gain obtained from splitting to the r ight and 
+left to each observation on dataset I. is then stor ed based on 
+the maximum split direction for all observations on  dataset 
+I as the optimal value of features. This stage cont inues to 
+repeat for each feature, and the default direction is obtained 
+by taking the optimal value for each feature. Follo wing are 
+the sparsity algorithms aware of split finding [6],  
+Algorithm 2: Sparsity aware Split Finding 
+Input: , instance set of the current node  
+Input:    
+Input:  feature dimension 
+Also applies to the approximate setting, only colle ct 
+statistic of non-missing entries into buckets 
+ 
+  
+for  to  do 
+       // enumerate missing values goto right  
+        
+       for   in sorted do  
+ 
+  
+  
+end      
+// enumerate missing values goto left 
+        
+       for   in sorted do 
+  
+   
+  
+end 
+end 
+Output: Split and default direction with max gain  
+Fig 2. Sparsity Aware Split Finding Algorithm 
+IV.  IMPLEMENTATION,  SIMULATION,  RESULT,  AND  
+DISCUSSION 
+This section explains the research process, startin g from 
+the stages of data collection. Then processing the data to get 
+the accuracy of the XGBoost model. 
+A.  Data Sets 
+The data used in this study is risk level data from  the 
+Prudential Life Insurance company. This data shows 
+information on life insurance applicants used to bu ild and 
+evaluate risk predictors. This data is obtained fro m the 
+https://www.kaggle.com/c/prudential-lifeinsurance-
+assessment website, a site that organizes open comp etitions 
+for data science and machine learning. The followin g is the 
+details of the data that will be used in this study  
+• Data measuring 59381 x 128 in the .csv format. 2019 5th International Conference on Science in Information Technology (ICSITech)
+Authorized licensed use limited to: University of St. Gallen. Downloaded on March 16,2026 at 20:04:56 UTC from IEEE Xplore.  Restrictions apply. 
+
+--- PAGE BREAK ---
+
+• There are 128 features that explain the attributes of life 
+insurance applicants 
+• There are missing values in the dataset of 393110 f rom 
+13 different features in the dataset 
+• The dataset containing the missing values is shown in 
+Fig 3. 
+Fig 3. Percentage of features with missing values o n Prudential data  
+Fig 3. shows the percentage of features with missin g 
+values from the least to the most. The results of t he 
+identification of the dataset against missing value s are there 
+are missing values on some features in the dataset.  The 
+lowest percentage of features with the least missin g values 
+is the Employment_Info_1 feature, and the highest 
+percentage of features with the most missing values  is the 
+Medical_History_10 feature. The missing values resu lt in a 
+method that does not work optimally, even error, an d 
+causes the method accuracy to be low. 
+B.  Preprocessing Data  
+The Prudential dataset contains categorical data th at 
+cannot be processed, namely in the form of A1, B1, C3, ... 
+and so on in the Product_Info_2 feature. Therefore,  a 
+technique is needed to convert the data into a form  that can 
+be processed. In this study, a technique was used t o 
+overcome this problem, namely the encoder label 
+technique. 
+The label encoder technique is used to convert non-
+numeric categorical data types to numerical data. T he data 
+in the Product_Info_2 feature is converted accordin g to the 
+sequence starting at 0,1,2,3,4, ..., 18. If the cat egory in the 
+Product_Info_2 feature reappears, it will be labele d 
+according to the previous labeling 
+The non-numeric data set transformation becomes 
+numeric for the Product_Info_2 feature can be seen in 
+Figure 4.5. Data changes in the Product_Info_2 feat ure, 
+namely A1 to 0, A2 to 1, A3 to 2, A4 to 3, A5 to 4,  A6 to 5, 
+A7 to 6, A8 to 7, B1 to 8, B2 to 9, C1 to 10, C2 be comes 
+11, C3 becomes 12, C3 becomes 13, D3 becomes 14, D2  
+becomes 15, D3 becomes 16, D4 becomes 17, and E1 
+becomes 18.  C.  Learning  
+ In the early stages of the simulation process, the  data is 
+divided into two parts randomly, namely training da ta and 
+testing data with a percentage of 20% data testing and 80% 
+training data. Then 80% of the training data is div ided into 
+two parts pickled with a proportion of 20% data tes ting and 
+80% 
+training data. 
+This new 
+data 
+sharing 
+process is 
+done five 
+times, 
+resulting in five new datasets. 
+Then, each dataset is carried out parameter 
+optimization, which aims to determine the best para meter 
+value of the model in the training data provided. I f a 
+parameter in XGBoost is optimized, the other 
+hyperparameter values are the default value. 
+• The parameters used in building the XGBoost model 
+are: 
+• The maximum depth which is the depth of the tree. 
+• Minimum child weight, which is the minimum amount 
+of weight obtained from the derivative of both erro r 
+(hessian) functions. 
+• Subsample, namely the comparison or subsampling 
+ratio of the dataset proposed to build the CART. 
+• Colsample bytree, which is a comparison or 
+subsampling dataset ratio used to construct each tr ee in 
+a row and prevent overfitting. 
+• Learning rate, known as shrinkage techniques that w ork 
+in each tree boosting and reduce the influence of e ach 
+tree and leaf to improve the XGBoost model 
+• Alpha, namely L1 regularization and lambda, namely 
+L2 regularization obtained from each iteration 
+D.  Evaluation  
+The evaluation in this study is based on the value of 
+quadratic weighted kappa, which measures the agreem ent 
+(agreement) between two raters in classifying objec ts. The 
+kappa value is between 0 and 1. The more the kappa value 
+approaches 1, the better the model is formed. The r esponse 
+variable has eight possible ratings, and each appli cation is 
+characterized by tuples whose values correspond to those of 
+Rater A (actual target) and Rater B (target predict ion 
+results). The Quadratic weighted kappa calculation phase is 
+as follows: 
+ 
+:  application received with rank to actual target and 
+rank  o target prediction results Maximum depth  Accuracy  
+5 0.57659 
+10 0.59569 
+15 0.59659 
+20 0.59017 
+25 0.58354 
+30 0.57897 
+35 0.57715 
+2019 5th International Conference on Science in Information Technology (ICSITech)
+Authorized licensed use limited to: University of St. Gallen. Downloaded on March 16,2026 at 20:04:56 UTC from IEEE Xplore.  Restrictions apply. 
+
+--- PAGE BREAK ---
+
+ : weights are calculated based on the difference 
+between assessors:   
+E: rating expectations are calculated, assuming tha t there is 
+no correlation between rating scores. 
+A.  Result and Discussion 
+The evaluation results of the XGBoost model on test ing 
+data are in the form of accuracy with kappa units. The best 
+parameters that have been optimized will be used fo r the 
+final evaluation. The evaluation results of the XGB oost 
+model based on the optimized parameters will be wri tten in 
+TABLE I.until TABLE V. 
+TABLE I.  ACCURACY RESULTS FROM MAXIMUM DEPTH 
+OPTIMIZATION  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Based on TABLE I, the optimal value is obtained for  
+the maximum depth parameter at value 15 with the hi ghest 
+accuracy of 0.59659. The optimal maximum depth 
+parameter value will be used to optimize the minimu m 
+child weight parameters. Furthermore, optimization of the 
+minimum child weight parameters is done. The result s of 
+the optimization of the parameters of the minimum c hild 
+weight can be seen in TABLE II. 
+TABLE II.  ACCURACY RESULTS FROM MINIMUM CHILD WEIGHT 
+OPTIMIZATION  
+ 
+ 
+ 
+Based on Table II obtained the optimal value for th e 
+minimum child weight parameter at value 1 with the 
+highest accuracy of 0.59817. The optimal value of 
+maximum depth and minimum child weight parameters w ill 
+be used to optimize learning rate parameters. Next,  the 
+learn 
+ing 
+rate 
+para 
+mete 
+r 
+opti 
+miza 
+tion 
+is done; the results 
+of the 
+optimization of the rate parameters can be seen in TABLE 
+III. TABLE III.  ACCURACY RESULTS FROM LEARNING RATE   
+OPTIMIZATION   
+ 
+ 
+ 
+Based on Table III obtained the optimal value for t he 
+learning rate parameter at a value of 0.1 with the highest 
+accuracy of 0.59808. The maximum parameter value, 
+minimum child weight, and optimal learning rate wil l be 
+used to optimize the subsample parameters. Furtherm ore, 
+optimization of subsample and colsample bytree para meters 
+is done; the results of accuracy from the optimizat ion of the 
+subsample and colsample bytree parameters can be se en in 
+TABLE IV. 
+TABLE IV.  ACCURACY RESULTS FROM SUBSAMPLE  AND  
+COLSAMPLE  BY  TREE  OPTIMIZATION  
+ 
+Based on TABLE IV obtained the optimal value for th e 
+colsample bytree parameter at value 1 with the high est 
+accuracy of 0.59808. Colsample bytree parameter val ues 
+cannot be extended anymore, because the maximum val ue 
+is 1. The maximum depth parameter, minimum child 
+weight, learning rate, subsample, and optimal colsa mple 
+bytree will be used to optimize alpha parameters. 
+Furthermore, alpha and lambda parameters optimizati on is 
+done, the result of alpha and lambda parameters 
+optimization can be seen in TABLE V. 
+TABLE V.  ACCURACY RESULTS FROM ALPHA AND LAMBDA  
+OPTIMIZATION  
+ 
+ 
+ 
+Based on Table V obtained alpha parameter at value 1 
+with the highest accuracy of 0.60064 and the optima l value 
+for lambda parameters at value 1 with the highest a ccuracy 
+of 0.60064. After optimizing all parameters in the XGBoost 
+model, parameter optimization based on optimal para meter 
+values is used to evaluate the initial testing data , the most 
+optimal parameter values are obtained. Furthermore,  based 
+on the value of the best parameters, the results of  the 
+optimization are evaluated on testing data. The res ults of 
+the evaluation obtained the best accuracy of the XG Boost 
+model with a measurement unit of the kappa coeffici ent of 
+0.60730. Minimum Child Weight  Accuracy  
+1 0.59817 
+5 0.59590 
+10 0.59722 
+15 0.59737 
+Learning Rate  Accuracy  
+0.001 0 
+0.01 0.30356 
+0.1 0.59808 
+1 0.47647 
+1.5 0.38208 Parameter 
+Value Accuracy 
+Subsample Colsample bytree 
+0.5 0.59087 0.58806 
+0.6 0.59133 0.59055 
+0.7 0.59466 0.59260 
+0.8 0.59522 0.59358 
+0.9 0.59571 0.59438 
+1 0.59808 0.59808 Parameter 
+Value Accuracy 
+Alpha Lambda 
+0 0.59808 0.59566 
+0.25 0.59826 0.59871 
+0.5 0.59829 0.59638 
+0.75 0.59951 0.59835 
+1 0.60064 0.60064 2019 5th International Conference on Science in Information Technology (ICSITech)
+Authorized licensed use limited to: University of St. Gallen. Downloaded on March 16,2026 at 20:04:56 UTC from IEEE Xplore.  Restrictions apply. 
+
+--- PAGE BREAK ---
+
+The performance of the XGBoost model will be 
+compared to other machine learning models that have  been 
+used to predict the risk level of life insurance ap plicants. 
+Machine learning models that have been developed to  solve 
+cases of classification, among them are decision tr ee and 
+random forest  [17]. The treatment used is filling the 
+missing values with the mean value and removing the  
+missing values. . 
+TABLE VI.  ACCURACY RESULTS DECISION TREE AND RANDOM 
+FOREST USING A MEAN TECHNIQUE  
+Machine Learning 
+Model Accuracy 
+XGBoost 0.60730 
+Decision Tree 0.41678 
+Random Forest 0.47599 
+ 
+Based on Table VI, we see that the three models of data 
+processing were carried out to deal with missing va lues 
+with the mean technique, which is to fill the missi ng values 
+with the average value. The accuracy of the three 
+comparison models is determined based on the kappa 
+coefficient value. The comparison model that has th e 
+highest accuracy is the random forest model with an  
+accuracy of 0.47599. Then the comparison model that  has 
+the lowest accuracy is the decision tree model with  an 
+accuracy of 0.41678. When compared with the XGBoost  
+model, the highest accuracy is the XGBoost model wi th an 
+accuracy of 0.60730. This happened because of missi ng 
+values in all three models treated with the mean te chnique, 
+where the value of the missing values was filled wi th the 
+average value of life insurance data used. If at a feature, the 
+average value is zero, then this will affect accura cy, where 
+the accuracy of the model is low. 
+TABLE VII.  ACCURACY RESULTS DECISION TREE AND RANDOM 
+FOREST  USING DROP  TECHNIQUE  
+Machine Learning 
+Model Accuracy 
+XGBoost 0,60730 
+Decision Tree 0.41286 
+Random Forest 0.47623 
+ 
+Accuracy on the three models based on Table VII 
+produces accuracy that is lower than the accuracy o f the 
+XGBoost model. The treatment with the drop techniqu e 
+also produces accuracy that is close to the mean te chnique. 
+The accuracy of the xgboost model is still superior  when 
+compared to the three comparison models. In the lea rning 
+process, the xgboost model does not fill the missin g values 
+with a value, but the value of the missing values w ill still be 
+used in the learning process with the default direc tion found 
+in the sparsity aware algorithm for splitting findi ng.  
+V.  CONCLUSION  
+ Based on the results of the research and analysis that 
+have been conducted, it can be concluded that the E xtreme Gradient Boosting (XGBoost) model can be applied in  the 
+case of prediction of the applicant's risk level in  life 
+insurance which is a case of multiclass classificat ion in the 
+context of machine learning. The best parameters af ter 
+being optimized used in this study are maximum dept h = 
+15, minimum child weight = 1, subsample = 1, colsam ple 
+bytree = 1, learning rate = 0.1; alpha = 1, lambda = 1. The 
+accuracy of the XGBoost model by using the optimize d 
+parameters shows high accuracy of 0.60730. The data set 
+used is included in the big data with quite a lot o f missing 
+values, but this has proven to not affect the perfo rmance of 
+the XGBoost model itself. In the research, the XGBo ost 
+model is considered capable of handling missing val ues 
+well. 
+The performance of the XGBoost model is superior 
+compared to the decision tree, random forest, and B ayesian 
+ridge models when predicting the risk level of life  insurance 
+applicants. This is evidenced by the three comparat ive 
+models of learning with the treatment of the missin g values, 
+namely using the mean and drop techniques. But this  does 
+not change the accuracy of the three models into hi gh-value 
+accuracy. 
+ACKNOWLEDGMENT  
+This Paper was supported by Universitas Indonesia 
+under PIT9 2019 grant. Any opinions, findings, conc lusion, 
+and recommendations are the authors’ and do not 
+necessarily reflect those of the sponsor. 
+REFERENCES  
+[1]  H. Kaushalya, G. Karunasena, and D. Amarathunga, “R ole of 
+insurance in post disaster recovery planning in bus iness community,” 
+Procedia Economics and Finance, 4th International C onference on 
+Building Resilience, vol 18, pp 626 – 634, 2014 . 
+[2]  A. L. Alhassan and NBiekpe, “Determinants of Life I nsurance 
+Consumption in Africa,” Research in International B usiness and 
+Finance, vol 37, pp 17 – 27, 2016. 
+[3]  X. Xie, G. Fu, Y. Xue, Z. Zhao, P. Chen, B. Lu, and  S. Jiang. “Risk 
+prediction and factors risk analysis based on IFOA- GRNN and 
+apriori algorithms: Application of artifiacl intell igence in accident 
+prevention,”. Process Safety and Environmental Prot ection, vol/ 122, 
+2019. 
+[4]  S. Lim and S. Chi, “Xgboost application on bridge m anagement 
+systems for proactive damage estimation,”. Advanced  Engineering 
+Informatics, vol. 41, 2019. 
+[5]  O. Y. Al-Jarrah, P. D. Yoo, S.  Muhaidat, G. K. Kar agiannidis, and 
+K. Taha, “Efficient machine learning for big data: A review,” Big 
+Data Res., vol. 2 (3), pp. 87 – 93, 2015. 
+[6]  T. Chen and C. Guestrin, “XGBoost: A Scalable Tree Boosting 
+System,” International Conference on Knowledge Disc overy and 
+Data Mining, New York: ACM, pp. 785–794, 2016. 
+[7]  A. Gandomi and M. Haider, “Beyond the hype: Big dat a concepts, 
+methods, and analytics,” International Journal of I nformation 
+Management, vol. 35(2), pp. 137 – 144, 2015. 
+[8]  A. Galicia, R. T. Llames, A. Troncoso, I. Koprinska , and F. M. 
+Alvarez, “Multi-step forecasting for big data time series based on 
+ensemble learning”. Elsevier: Knowledge-Based Syste ms, vol. 163, 
+pp. 830 – 841, 2019. 
+[9]  M. A. Fauzan and H. Murfi, “The accuracy of XGBoost  for 
+insurance claim prediction,” International Journal Advance Soft 
+Computing, vol. 10 (2), pp. 159 – 171, 2018. 
+[10]  Y. C. Chang, K. H. Chang, and G. J. Wu, “Applicatio n of extreme 
+gradient boosting trees in the construction of cred it risk assessment 
+models for financial institutions,” Applied Soft Co mputing Journal, 
+vol. 73, pp. 914 – 920, 2018. 2019 5th International Conference on Science in Information Technology (ICSITech)
+Authorized licensed use limited to: University of St. Gallen. Downloaded on March 16,2026 at 20:04:56 UTC from IEEE Xplore.  Restrictions apply. 
+
+--- PAGE BREAK ---
+
+[11]  A. Andriyashin, Financial application of classifica tion and regression 
+trees. CASE-Center of applied statistics and econom ics. Berlin: 
+Humbolt University, 2005. 
+[12]  E.  M. Oliveira and F. L. C. Oliveira, “Forecasting  Mid-Long Term 
+Electric Energy Consumption Through Bagging ARIMA a nd 
+Exponential Smoothing Methods,”  Energy, vol. 144, pp.776 – 788, 
+2017. 
+[13]  Y. Freund and R. E. Schapire, R. “A Decision-Theore tic 
+Generalization of On-Line Learning and an Applicati on to 
+Boosting,” Journal of Computer and System Sciences,  vol. 55, 
+pp.119 – 139, 1997. 
+[14]  L. Breiman, J. H. Friedman, R. Olshen, C. J. and St one, 
+Classification and Regression Trees, 1984.  
+[15]  J. H. Friedman, Greedy Function Approximation: A Gr adient 
+Boosting Machine. Ann. Stat, Vol. 29, p.5, 2001. 
+[16]  Z. Xu, L. Yan, and M. Wang, “Complex Production Pro cess 
+Prediction Model Based On EMD-XGBOOST-RLSE,” The 9t h 
+International Conference on Modelling, Identificati on and Control 
+(ICMIC), pp.940 – 947, 2017. 
+[17]  S. Sumathi. Introduction to Data Mining and Its App lications. 
+Germany: Springer Verlag berlin Heidelberg, 2017. 2019 5th International Conference on Science in Information Technology (ICSITech)
+Authorized licensed use limited to: University of St. Gallen. Downloaded on March 16,2026 at 20:04:56 UTC from IEEE Xplore.  Restrictions apply. 

@@ -6,6 +6,7 @@ from typing import Callable, Dict
 
 from .base import PrudentialModel
 from .tabkan import build_tabkan_model
+from .xgboost_paper import build_xgboost_paper_model
 
 
 ModelFactory = Callable[..., PrudentialModel]
@@ -15,6 +16,7 @@ MODEL_REGISTRY: Dict[str, ModelFactory] = {
     "tabkan-tiny": build_tabkan_model,
     "tabkan-small": build_tabkan_model,
     "tabkan-base": build_tabkan_model,
+    "xgboost-paper": build_xgboost_paper_model,
 }
 
 
@@ -35,4 +37,3 @@ def create_model(model_name: str, *, random_state: int, **model_params) -> Prude
 
 def available_models() -> Dict[str, ModelFactory]:
     return dict(MODEL_REGISTRY)
-

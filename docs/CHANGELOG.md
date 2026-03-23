@@ -17,6 +17,22 @@ Track what was changed, why it was changed, and any important notes.
 - Optional notes, issues, or future work
 ```
 
+### [2026-03-21] - Cyril Gabriele
+
+#### What
+- Added `XGBoostPaperModel`, a PrudentialModel wrapper that reproduces the ICSITech 2019 sequential tuning pipeline (label encoding, paper grids, refit on train+val) and exposes it through the registry.
+- Registered the model under `xgboost-paper`, wired it into the Trainer config surface, and added dedicated unit tests plus a Trainer integration test.
+- Added explicit configs (`configs/model/xgboost_paper.yaml` for Hydra overrides and `configs/xgboost_paper_experiment.yaml` for the Trainer CLI) so the paper setup can run without editing code.
+- Added optional `seed_trials` support so the estimator can train several random seeds and keep the highest-validation-QWK run.
+
+#### Why
+- The preprocessing refactor already mirrors the paper splits; we now have the matching estimator so we can benchmark KAN variants against the exact XGBoost procedure documented in the case study.
+
+#### Remarks
+- The tuning grid is customisable (used for lightweight tests) but defaults to the values reported in the paper, and predictions remain 1–8 ordinal classes for downstream QWK metrics.
+
+---
+
 ### [2026-03-16] - Christof Steiner
 
 #### What
