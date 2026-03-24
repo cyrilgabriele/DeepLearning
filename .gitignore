@@ -210,6 +210,7 @@ __marimo__/
 .DS_Store
 /data
 /local_files
+/.claude
 
 
 # Training artifacts
