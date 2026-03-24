@@ -137,7 +137,7 @@ def _compute_qwk_retention_curve(
     import torch
     import joblib
     from sklearn.metrics import cohen_kappa_score
-    from src.interpretability.kan_pruning import _compute_edge_variances
+    from src.interpretability.kan_pruning import _compute_edge_l1
     from src.models.kan_layers import ChebyKANLayer, FourierKANLayer
     from src.configs import load_experiment_config
     from src.models.tabkan import TabKAN
@@ -172,7 +172,7 @@ def _compute_qwk_retention_curve(
         )
         if first_layer is None:
             return feature_names, module
-        variances = _compute_edge_variances(first_layer)
+        variances = _compute_edge_l1(first_layer)
         per_input = variances.sum(dim=0)
         order = per_input.argsort(descending=True)
         ranked = [feature_names[int(i)] for i in order if int(i) < n_feats]

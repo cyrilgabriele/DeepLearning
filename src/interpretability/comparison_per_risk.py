@@ -84,8 +84,8 @@ def _kan_importance_by_risk(
     if kan_layer is not None:
         try:
             import torch
-            from src.interpretability.kan_pruning import _compute_edge_variances
-            variances = _compute_edge_variances(kan_layer)
+            from src.interpretability.kan_pruning import _compute_edge_l1
+            variances = _compute_edge_l1(kan_layer)
             imp_dict = _kan_importance_from_variance(variances, feature_names)
             importance_series = pd.Series(imp_dict)
         except Exception:

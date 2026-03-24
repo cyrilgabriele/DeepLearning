@@ -4,7 +4,7 @@ trainer:
   test_csv: data/prudential-life-insurance-assessment/test.csv
   eval_size: 0.15
 preprocessing:
-  recipe: kan
+  recipe: kan_paper
   missing_threshold: 0.5
   stratify: true
   use_stratified_kfold: true
