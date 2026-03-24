@@ -4,8 +4,16 @@ import pandas as pd
 import numpy as np
 import lightning as L
 
-from src.data import preprocess_kan_paper as kan_prep
+from src.data import preprocess_kan_paper as kan_paper_prep
+from src.data import preprocess_kan_sota as kan_sota_prep
+from src.data import preprocess_xgboost_paper as xgb_paper_prep
 from src.data.prudential_features import get_feature_lists
+
+PREPROCESSING_PIPELINES = {
+    "kan_paper": kan_paper_prep,
+    "kan_sota": kan_sota_prep,
+    "xgb_paper": xgb_paper_prep,
+}
 
 
 class TabularDataset(Dataset):
@@ -37,7 +45,8 @@ class PrudentialDataModule(L.LightningDataModule):
         data_path: str,
         batch_size: int = 256,
         num_workers: int = 0,
-        seed: int,
+        seed: int = 42,
+        preprocessing: str = "kan_paper",
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -45,6 +54,7 @@ class PrudentialDataModule(L.LightningDataModule):
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.seed = seed
+        self.preprocessing = preprocessing
 
         self.preprocessor = None
         self.train_dataset = None
@@ -67,13 +77,19 @@ class PrudentialDataModule(L.LightningDataModule):
         feature_lists = get_feature_lists(raw_df)
         self.preprocessor = _PreprocessorSummary(feature_lists)
 
-        pipeline_outputs = kan_prep.run_pipeline(self.data_path, random_seed=self.seed)
-        self.feature_names = pipeline_outputs["feature_names"]
+        prep_module = PREPROCESSING_PIPELINES.get(self.preprocessing)
+        if prep_module is None:
+            raise ValueError(
+                f"Unknown preprocessing '{self.preprocessing}'. "
+                f"Choose from: {list(PREPROCESSING_PIPELINES.keys())}"
+            )
+        pipeline_outputs = prep_module.run_pipeline(self.data_path, random_seed=self.seed)
+        self.feature_names = pipeline_outputs.get("feature_names")
 
-        X_train = pipeline_outputs["X_train_outer"]
-        y_train = pipeline_outputs["y_train_outer"].astype(np.float32)
-        X_val = pipeline_outputs["X_test_outer"]
-        y_val = pipeline_outputs["y_test_outer"].astype(np.float32)
+        X_train = np.asarray(pipeline_outputs["X_train_outer"], dtype=np.float32)
+        y_train = np.asarray(pipeline_outputs["y_train_outer"], dtype=np.float32)
+        X_val = np.asarray(pipeline_outputs["X_test_outer"], dtype=np.float32)
+        y_val = np.asarray(pipeline_outputs["y_test_outer"], dtype=np.float32)
 
         self._num_features = X_train.shape[1]
         self.train_dataset = TabularDataset(X_train, y_train)

@@ -1,0 +1,10 @@
+name: xgb
+n_estimators: 370
+max_depth: 10
+learning_rate: 0.02682428855671751
+subsample: 0.6926
+colsample_bytree: 0.721
+min_child_weight: 2
+reg_alpha: 0.00329713
+reg_lambda: 0.0141746
+gamma: 3.8939

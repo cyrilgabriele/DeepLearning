@@ -2,7 +2,7 @@
 
 Usage:
     .venv/Scripts/python.exe -m src.sweep --model chebykan --n-trials 50
-    .venv/Scripts/python.exe -m src.sweep --model xgb --n-trials 50
+    .venv/Scripts/python.exe -m src.sweep --model xgb --n-trials 50 --preprocessing paper_base
     .venv/Scripts/python.exe -m src.sweep --model mlp --n-trials 50
     .venv/Scripts/python.exe -m src.sweep --model bsplinekan --n-trials 50
     .venv/Scripts/python.exe -m src.sweep --model fourierkan --n-trials 50
@@ -17,6 +17,7 @@ _PROJECT_ROOT = str(Path(__file__).resolve().parent.parent)
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
+import yaml
 import numpy as np
 import torch
 import lightning as L
@@ -24,25 +25,29 @@ from lightning.pytorch.callbacks import EarlyStopping
 import optuna
 from optuna.trial import Trial
 
-from src.data.dataset import PrudentialDataModule
+from src.data.dataset import PrudentialDataModule, PREPROCESSING_PIPELINES
 from src.models.tabkan import TabKAN
 from src.models.mlp import MLPBaseline
 from src.models.xgb_baseline import XGBBaseline
+from src.models.xgboost_paper import XGBoostPaperModel
 from src.metrics.qwk import optimize_thresholds
 
 
 _SWEEP_DIR = Path(_PROJECT_ROOT) / "sweeps"
+_CONFIG_DIR = Path(_PROJECT_ROOT) / "configs" / "model"
+
+MODELS = ["chebykan", "bsplinekan", "fourierkan", "mlp", "xgb", "xgb_paper"]
+PREPROCESSINGS = list(PREPROCESSING_PIPELINES.keys())
 
 
-def create_datamodule() -> PrudentialDataModule:
+def create_datamodule(preprocessing: str = "kan_paper") -> PrudentialDataModule:
     data_path = Path(_PROJECT_ROOT) / "data" / "prudential-life-insurance-assessment" / "train.csv"
     dm = PrudentialDataModule(
         data_path=str(data_path),
-        val_split=0.2,
         batch_size=256,
         num_workers=0,
-        missing_threshold=0.5,
         seed=42,
+        preprocessing=preprocessing,
     )
     dm.setup()
     return dm
@@ -52,14 +57,14 @@ def _get_dm_with_batch_size(dm: PrudentialDataModule, batch_size: int) -> Pruden
     if batch_size == dm.batch_size:
         return dm
     dm_trial = PrudentialDataModule(
-        data_path=str(Path(_PROJECT_ROOT) / "data" / "prudential-life-insurance-assessment" / "train.csv"),
-        val_split=0.2,
+        data_path=dm.data_path,
         batch_size=batch_size,
         num_workers=0,
-        missing_threshold=0.5,
-        seed=42,
+        seed=dm.seed,
+        preprocessing=dm.preprocessing,
     )
-    dm_trial.setup()
+    # Reuse already-computed data to avoid reprocessing
+    dm_trial._num_features = dm._num_features
     dm_trial.preprocessor = dm.preprocessor
     dm_trial.train_dataset = dm.train_dataset
     dm_trial.val_dataset = dm.val_dataset
@@ -67,7 +72,7 @@ def _get_dm_with_batch_size(dm: PrudentialDataModule, batch_size: int) -> Pruden
     dm_trial.y_train = dm.y_train
     dm_trial.X_val = dm.X_val
     dm_trial.y_val = dm.y_val
-    dm_trial._num_features = dm._num_features
+    dm_trial.feature_names = dm.feature_names
     return dm_trial
 
 
@@ -108,6 +113,54 @@ def objective_xgb(trial: Trial, dm: PrudentialDataModule) -> float:
 
     trial.set_user_attr("duration", round(duration, 1))
     trial.set_user_attr("n_estimators", n_estimators)
+    return val_qwk
+
+
+# ── XGBoost Paper objective (auto-tuning, no Optuna needed) ──
+
+def run_xgb_paper(dm: PrudentialDataModule, preprocessing: str = "kan_paper") -> float:
+    """Run the paper-faithful XGBoostPaperModel with built-in sequential tuning."""
+    from sklearn.metrics import cohen_kappa_score
+
+    print("\n  XGBoostPaperModel: auto_tune=True, sequential grid search (paper methodology)")
+    print(f"  Grid: max_depth, min_child_weight, lr, subsample, colsample, alpha, lambda")
+
+    t0 = time.time()
+    model = XGBoostPaperModel(
+        auto_tune=True,
+        refit_full_training=True,
+        n_estimators=500,
+    )
+    model.fit(
+        dm.X_train,
+        dm.y_train.astype(int),
+        validation_data=(dm.X_val, dm.y_val.astype(int)),
+    )
+    duration = time.time() - t0
+
+    # Use tuning kappa (evaluated BEFORE refit on train+val) as the
+    # comparable validation score.  Evaluating model.predict(X_val) after
+    # refit_full_training=True would test on data the model was trained on.
+    val_qwk = model.best_kappa_ if model.best_kappa_ is not None else 0.0
+
+    print(f"\n  XGBoostPaperModel COMPLETE")
+    print(f"  QWK={val_qwk:.4f} (tuning, before refit) | time={duration:.1f}s")
+    print(f"  Best params: {model.best_params_}")
+
+    # Save results
+    _SWEEP_DIR.mkdir(exist_ok=True)
+    suffix = f"_{preprocessing}" if preprocessing != "kan_paper" else ""
+    results = {
+        "model": "xgb_paper",
+        "preprocessing": preprocessing,
+        "best_qwk": round(val_qwk, 4),
+        "best_params": {k: v for k, v in model.best_params_.items()},
+        "duration": round(duration, 1),
+    }
+    results_path = _SWEEP_DIR / f"xgb_paper{suffix}_best.json"
+    results_path.write_text(json.dumps(results, indent=2))
+    print(f"\n  Saved: {results_path}")
+
     return val_qwk
 
 
@@ -251,18 +304,86 @@ def objective_kan(trial: Trial, dm: PrudentialDataModule, kan_type: str) -> floa
     return val_qwk
 
 
-# ── Main ──
+# ── Config generation ──
 
-MODELS = ["chebykan", "bsplinekan", "fourierkan", "mlp", "xgb"]
+def _save_tuned_config(model_name: str, best_params: dict, suffix: str = "") -> Path:
+    """Generate a Hydra YAML config from the best sweep params."""
+    bp = best_params
+    n_layers = bp.get("n_layers", 1)
+    widths = [bp[f"width_{i}"] for i in range(n_layers)] if "n_layers" in bp else []
+
+    if model_name == "xgb":
+        config = {
+            "name": "xgb",
+            "n_estimators": bp["n_estimators"],
+            "max_depth": bp["max_depth"],
+            "learning_rate": bp["learning_rate"],
+            "subsample": round(bp["subsample"], 4),
+            "colsample_bytree": round(bp["colsample_bytree"], 4),
+            "min_child_weight": bp["min_child_weight"],
+            "reg_alpha": float(f"{bp['reg_alpha']:.6g}"),
+            "reg_lambda": float(f"{bp['reg_lambda']:.6g}"),
+            "gamma": round(bp["gamma"], 4),
+        }
+    elif model_name == "mlp":
+        config = {
+            "name": "mlp",
+            "widths": widths,
+            "dropout": round(bp["dropout"], 4),
+            "lr": float(f"{bp['lr']:.6g}"),
+            "weight_decay": float(f"{bp['weight_decay']:.6g}"),
+        }
+    elif model_name == "chebykan":
+        config = {
+            "name": "chebykan",
+            "kan_type": "chebykan",
+            "widths": widths,
+            "degree": bp["degree"],
+            "grid_size": None,
+            "lr": float(f"{bp['lr']:.6g}"),
+            "weight_decay": float(f"{bp['weight_decay']:.6g}"),
+        }
+    elif model_name == "bsplinekan":
+        config = {
+            "name": "bsplinekan",
+            "kan_type": "bsplinekan",
+            "widths": widths,
+            "degree": None,
+            "grid_size": bp["grid_size"],
+            "spline_order": 3,
+            "lr": float(f"{bp['lr']:.6g}"),
+            "weight_decay": float(f"{bp['weight_decay']:.6g}"),
+        }
+    elif model_name == "fourierkan":
+        config = {
+            "name": "fourierkan",
+            "kan_type": "fourierkan",
+            "widths": widths,
+            "degree": None,
+            "grid_size": bp["grid_size"],
+            "lr": float(f"{bp['lr']:.6g}"),
+            "weight_decay": float(f"{bp['weight_decay']:.6g}"),
+        }
+    else:
+        return Path("/dev/null")
+
+    config_name = f"{model_name}{suffix}_tuned"
+    config_path = _CONFIG_DIR / f"{config_name}.yaml"
+    with open(config_path, "w") as f:
+        yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+    return config_path
 
 
-def run_sweep(model_name: str, n_trials: int, timeout: int | None, dm: PrudentialDataModule):
+# ── Sweep runner ──
+
+def run_sweep(model_name: str, n_trials: int, timeout: int | None, dm: PrudentialDataModule, preprocessing: str = "kan_paper"):
     _SWEEP_DIR.mkdir(exist_ok=True)
-    db_path = _SWEEP_DIR / f"{model_name}_sweep.db"
+    suffix = f"_{preprocessing}" if preprocessing != "kan_paper" else ""
+    db_path = _SWEEP_DIR / f"{model_name}{suffix}_sweep.db"
     storage = f"sqlite:///{db_path}"
 
     study = optuna.create_study(
-        study_name=f"{model_name}_sweep",
+        study_name=f"{model_name}{suffix}_sweep",
         direction="maximize",
         storage=storage,
         load_if_exists=True,
@@ -275,7 +396,7 @@ def run_sweep(model_name: str, n_trials: int, timeout: int | None, dm: Prudentia
     else:
         obj_fn = lambda trial: objective_kan(trial, dm, model_name)
 
-    print(f"\nStarting {model_name} sweep: {n_trials} trials")
+    print(f"\nStarting {model_name} sweep ({preprocessing}): {n_trials} trials")
     print(f"Storage: {db_path}")
     print("=" * 70)
 
@@ -284,7 +405,7 @@ def run_sweep(model_name: str, n_trials: int, timeout: int | None, dm: Prudentia
     # Print results
     completed = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
     print(f"\n{'=' * 70}")
-    print(f"{model_name.upper()} SWEEP COMPLETE — {len(completed)} trials")
+    print(f"{model_name.upper()} SWEEP COMPLETE ({preprocessing}) — {len(completed)} trials")
     print(f"{'=' * 70}")
     print(f"Best QWK: {study.best_value:.4f}")
     print(f"Best params:")
@@ -294,14 +415,18 @@ def run_sweep(model_name: str, n_trials: int, timeout: int | None, dm: Prudentia
     # Save results
     results = {
         "model": model_name,
+        "preprocessing": preprocessing,
         "best_qwk": round(study.best_value, 4),
         "best_params": study.best_params,
         "total_trials": len(completed),
         "best_trial_number": study.best_trial.number,
         "best_trial_attrs": dict(study.best_trial.user_attrs),
     }
-    results_path = _SWEEP_DIR / f"{model_name}_best.json"
+    results_path = _SWEEP_DIR / f"{model_name}{suffix}_best.json"
     results_path.write_text(json.dumps(results, indent=2))
+
+    # Generate tuned config
+    config_path = _save_tuned_config(model_name, study.best_params, suffix)
 
     # Top 10
     top = sorted(completed, key=lambda t: t.value if t.value is not None else -1, reverse=True)[:10]
@@ -313,23 +438,31 @@ def run_sweep(model_name: str, n_trials: int, timeout: int | None, dm: Prudentia
         print(f"  {rank}. QWK={t.value:.4f} | {t.params} | time={dur}s")
 
     print(f"\nSaved: {results_path}")
+    print(f"Config: {config_path}")
+    print(f"  Run with: python -m src.train model={config_path.stem}")
     return study
 
+
+# ── Main ──
 
 def main():
     parser = argparse.ArgumentParser(description="Optuna sweep for Prudential models")
     parser.add_argument("--model", type=str, required=True, choices=MODELS, help="Model to sweep")
     parser.add_argument("--n-trials", type=int, default=50, help="Number of trials")
     parser.add_argument("--timeout", type=int, default=None, help="Max seconds")
+    parser.add_argument("--preprocessing", type=str, default="kan_paper", choices=PREPROCESSINGS, help="Preprocessing pipeline")
     args = parser.parse_args()
 
     L.seed_everything(42)
 
-    print(f"Loading data...")
-    dm = create_datamodule()
+    print(f"Loading data (preprocessing: {args.preprocessing})...")
+    dm = create_datamodule(preprocessing=args.preprocessing)
     print(f"Features: {dm.num_features} | Train: {len(dm.train_dataset)} | Val: {len(dm.val_dataset)}")
 
-    run_sweep(args.model, args.n_trials, args.timeout, dm)
+    if args.model == "xgb_paper":
+        run_xgb_paper(dm, preprocessing=args.preprocessing)
+    else:
+        run_sweep(args.model, args.n_trials, args.timeout, dm, preprocessing=args.preprocessing)
 
 
 if __name__ == "__main__":

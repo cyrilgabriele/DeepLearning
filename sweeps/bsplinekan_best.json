@@ -1,19 +1,20 @@
 {
   "model": "bsplinekan",
-  "best_qwk": 0.6194,
+  "preprocessing": "kan_paper",
+  "best_qwk": 0.632,
   "best_params": {
     "n_layers": 1,
-    "width_0": 256,
-    "grid_size": 9,
-    "lr": 0.00017310855167537937,
-    "weight_decay": 1.0721502922720423e-05,
-    "batch_size": 512
+    "width_0": 64,
+    "grid_size": 10,
+    "lr": 0.0081762870169237,
+    "weight_decay": 6.954504546935677e-06,
+    "batch_size": 256
   },
-  "total_trials": 50,
-  "best_trial_number": 31,
+  "total_trials": 100,
+  "best_trial_number": 56,
   "best_trial_attrs": {
-    "duration": 188.9,
-    "epochs": 66,
-    "num_params": 423425
+    "duration": 62.6,
+    "epochs": 47,
+    "num_params": 125633
   }
 }
