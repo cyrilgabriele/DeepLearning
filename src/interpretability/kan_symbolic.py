@@ -88,30 +88,52 @@ def _r2(y_true: np.ndarray, y_pred: np.ndarray) -> float:
 
 
 def _fit_scipy_candidates(x: np.ndarray, y: np.ndarray) -> tuple[str, float]:
-    """Fit a library of candidate formulas using scipy and return (formula, r²)."""
+    """Fit a library of candidate formulas using scipy and return (formula, r²).
+
+    Selection uses a BIC-penalised score (Smits & Kotanchek 2005, Springer GPTP-II):
+        score = R² - k · log(n) / n
+    where k = number of free parameters and n = number of sample points.
+    This prefers simpler formulas when the R² gain from added complexity is small,
+    producing more interpretable results without sacrificing fit quality.
+
+    Candidate library includes Fourier harmonic pairs (k=1..4) recommended by
+    Cranmer (2023) arXiv:2305.01582 and Liu et al. (2024) arXiv:2404.19756 to
+    improve symbolic fit quality for FourierKAN edges.
+    """
     from scipy.optimize import curve_fit
 
-    candidates: list[tuple[str, object, list]] = [
-        ("a*x + b",            lambda x, a, b: a * x + b,                             [1., 0.]),
-        ("a*x^2 + b*x + c",    lambda x, a, b, c: a * x**2 + b * x + c,               [1., 0., 0.]),
-        ("a*x^3 + b*x^2 + c*x + d", lambda x, a, b, c, d: a*x**3 + b*x**2 + c*x + d, [1., 0., 0., 0.]),
-        ("a*|x| + b",          lambda x, a, b: a * np.abs(x) + b,                      [1., 0.]),
-        ("a*sqrt(|x|) + b",    lambda x, a, b: a * np.sqrt(np.abs(x)) + b,             [1., 0.]),
-        ("a*log(|x|+1) + b",   lambda x, a, b: a * np.log(np.abs(x) + 1) + b,         [1., 0.]),
-        ("a*exp(x) + b",       lambda x, a, b: a * np.exp(np.clip(x, -5, 5)) + b,     [1., 0.]),
-        ("a*sin(x) + b",       lambda x, a, b: a * np.sin(x) + b,                     [1., 0.]),
-        ("a*sin(2*x) + b",     lambda x, a, b: a * np.sin(2 * x) + b,                 [1., 0.]),
-        ("a*cos(x) + b",       lambda x, a, b: a * np.cos(x) + b,                     [1., 0.]),
-        ("a (constant)",       lambda x, a: np.full_like(x, a),                        [0.]),
+    # (name, function, p0, n_params)
+    candidates: list[tuple[str, object, list, int]] = [
+        ("a*x + b",                  lambda x, a, b: a * x + b,                               [1., 0.],         2),
+        ("a*x^2 + b*x + c",          lambda x, a, b, c: a * x**2 + b * x + c,                 [1., 0., 0.],     3),
+        ("a*x^3 + b*x^2 + c*x + d",  lambda x, a, b, c, d: a*x**3 + b*x**2 + c*x + d,         [1., 0., 0., 0.], 4),
+        ("a*|x| + b",                lambda x, a, b: a * np.abs(x) + b,                        [1., 0.],         2),
+        ("a*sqrt(|x|) + b",          lambda x, a, b: a * np.sqrt(np.abs(x)) + b,               [1., 0.],         2),
+        ("a*log(|x|+1) + b",         lambda x, a, b: a * np.log(np.abs(x) + 1) + b,            [1., 0.],         2),
+        ("a*exp(x) + b",             lambda x, a, b: a * np.exp(np.clip(x, -5, 5)) + b,        [1., 0.],         2),
+        ("a*sin(x) + b",             lambda x, a, b: a * np.sin(x) + b,                        [1., 0.],         2),
+        ("a*sin(2*x) + b",           lambda x, a, b: a * np.sin(2 * x) + b,                    [1., 0.],         2),
+        ("a*cos(x) + b",             lambda x, a, b: a * np.cos(x) + b,                        [1., 0.],         2),
+        ("a (constant)",             lambda x, a: np.full_like(x, a),                           [0.],             1),
+        # Fourier harmonic pairs k=1..4 (Cranmer 2023 / Liu et al. 2024)
+        ("a*sin(x) + b*cos(x)",      lambda x, a, b: a * np.sin(x) + b * np.cos(x),            [1., 1.],         2),
+        ("a*sin(2*x) + b*cos(2*x)",  lambda x, a, b: a * np.sin(2*x) + b * np.cos(2*x),        [1., 1.],         2),
+        ("a*sin(3*x) + b*cos(3*x)",  lambda x, a, b: a * np.sin(3*x) + b * np.cos(3*x),        [1., 1.],         2),
+        ("a*sin(4*x) + b*cos(4*x)",  lambda x, a, b: a * np.sin(4*x) + b * np.cos(4*x),        [1., 1.],         2),
     ]
 
-    best_formula, best_r2 = "a (constant)", -np.inf
-    for name, func, p0 in candidates:
+    n = len(x)
+    log_n_over_n = np.log(n) / n  # BIC penalty scale factor
+
+    best_formula, best_bic, best_r2 = "a (constant)", -np.inf, 0.0
+    for name, func, p0, k in candidates:
         try:
             popt, _ = curve_fit(func, x, y, p0=p0, maxfev=2000)
             y_pred = func(x, *popt)
             r2 = _r2(y, y_pred)
-            if r2 > best_r2:
+            bic_score = r2 - k * log_n_over_n
+            if bic_score > best_bic:
+                best_bic = bic_score
                 best_r2 = r2
                 best_formula = name
         except Exception:
@@ -151,29 +173,59 @@ def fit_symbolic_edge(
     x: np.ndarray,
     y: np.ndarray,
     use_pysr: bool = False,
+    pysr_fallback_threshold: float = 0.90,
 ) -> tuple[str, float]:
-    if use_pysr:
-        return _fit_pysr(x, y)
-    return _fit_scipy_candidates(x, y)
+    """Fit a symbolic formula to edge samples, returning (formula, r²).
+
+    When use_pysr=True, runs scipy first and only invokes PySR on edges where
+    scipy achieves R² < pysr_fallback_threshold. This two-stage approach follows
+    Cranmer (2023) arXiv:2305.01582: fixed libraries are cost-efficient when the
+    functional form is anticipated; PySR is reserved for genuinely complex edges.
+    """
+    formula, r2 = _fit_scipy_candidates(x, y)
+    if use_pysr and r2 < pysr_fallback_threshold:
+        pysr_formula, pysr_r2 = _fit_pysr(x, y)
+        if pysr_r2 > r2:
+            return pysr_formula, pysr_r2
+    return formula, r2
 
 
 # ── Active edge detection ─────────────────────────────────────────────────────
 
+def _quality_tier(r2: float) -> str:
+    """Three-tier quality classification based on Liu et al. (2024) arXiv:2404.19756.
+
+    clean      R² ≥ 0.99 — reliable for symbolic lock-in
+    acceptable 0.90 ≤ R² < 0.99 — captures shape with residuals
+    flagged    R² < 0.90 — formula does not describe the edge
+    """
+    if r2 >= 0.99:
+        return "clean"
+    if r2 >= 0.90:
+        return "acceptable"
+    return "flagged"
+
+
 def _is_active(layer, out_idx: int, in_idx: int, threshold: float) -> bool:
-    """True if the edge has non-negligible output variance."""
-    from src.interpretability.kan_pruning import _compute_edge_variances
-    variances = _compute_edge_variances(layer)
-    return bool(variances[out_idx, in_idx].item() >= threshold)
+    """True if the edge L1 norm meets the activity threshold."""
+    from src.interpretability.kan_pruning import _compute_edge_l1
+    l1 = _compute_edge_l1(layer)
+    return bool(l1[out_idx, in_idx].item() >= threshold)
 
 
-def _top_features_by_variance(
-    variances: "torch.Tensor",
+def _top_features_by_l1(
+    l1_scores: "torch.Tensor",
     feature_names: list[str],
     top_n: int = 10,
 ) -> list[str]:
-    """Return top_n input features ranked by sum of edge output variance."""
+    """Return top_n input features ranked by sum of edge L1 norms.
+
+    Uses L1 norm of activation functions as the importance signal, consistent
+    with the pruning criterion from Liu et al. (2024) arXiv:2404.19756 and
+    Akazan & Mbingui (2025) arXiv:2509.23366.
+    """
     import torch
-    per_input = variances.sum(dim=0)
+    per_input = l1_scores.sum(dim=0)
     n = min(top_n, len(feature_names), per_input.shape[0])
     ranked_idx = per_input.argsort(descending=True)[:n]
     return [feature_names[int(i)] for i in ranked_idx]
@@ -194,7 +246,7 @@ def _plot_activation_grid(
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from src.models.kan_layers import ChebyKANLayer, FourierKANLayer
-    from src.interpretability.kan_pruning import _compute_edge_variances
+    from src.interpretability.kan_pruning import _compute_edge_l1
     from src.interpretability.style import (
         apply_paper_style, savefig_pdf, MODEL_COLORS,
         encode_to_raw_lookup, FEATURE_TYPE_MARKERS,
@@ -208,8 +260,8 @@ def _plot_activation_grid(
         return
 
     feature_names = list(X_eval.columns) if X_eval is not None else []
-    variances = _compute_edge_variances(first_layer)
-    top_feats = _top_features_by_variance(variances, feature_names, top_n=10)
+    l1_scores = _compute_edge_l1(first_layer)
+    top_feats = _top_features_by_l1(l1_scores, feature_names, top_n=10)
 
     model_color = MODEL_COLORS.get("ChebyKAN" if flavor == "chebykan" else "FourierKAN", "steelblue")
     fig, axes = plt.subplots(2, 5, figsize=(18, 7))
@@ -285,7 +337,7 @@ def _plot_feature_ranking(
     import matplotlib.pyplot as plt
     from matplotlib.patches import Patch
     from src.models.kan_layers import ChebyKANLayer, FourierKANLayer
-    from src.interpretability.kan_pruning import _compute_edge_variances
+    from src.interpretability.kan_pruning import _compute_edge_l1
     from src.interpretability.style import (
         apply_paper_style, savefig_pdf, FEATURE_TYPE_COLORS,
         FEATURE_TYPE_MARKERS, feature_type_label,
@@ -298,8 +350,8 @@ def _plot_feature_ranking(
     if first_layer is None:
         return
 
-    variances = _compute_edge_variances(first_layer)
-    per_input = variances.sum(dim=0)
+    l1_scores = _compute_edge_l1(first_layer)
+    per_input = l1_scores.sum(dim=0)
     n_feats = min(len(feature_names), per_input.shape[0])
     importances = {feature_names[i]: float(per_input[i]) for i in range(n_feats)}
     sorted_feats = sorted(importances, key=importances.get, reverse=True)
@@ -380,9 +432,9 @@ def run(
         if not isinstance(layer, (ChebyKANLayer, FourierKANLayer)):
             continue
 
-        # Precompute all edge variances once per layer (avoids O(n²) recomputation)
-        from src.interpretability.kan_pruning import _compute_edge_variances
-        variances = _compute_edge_variances(layer)
+        # Precompute all edge L1 norms once per layer (avoids O(n²) recomputation)
+        from src.interpretability.kan_pruning import _compute_edge_l1
+        variances = _compute_edge_l1(layer)
         n_active = int((variances >= threshold).sum().item())
         print(f"Layer {layer_idx}: {layer.in_features}→{layer.out_features} edges, {n_active} active")
         for out_i in range(layer.out_features):
@@ -402,6 +454,7 @@ def run(
                     "formula": formula,
                     "r_squared": round(r2, 6),
                     "flagged": r2 < 0.90,
+                    "quality_tier": _quality_tier(r2),
                 })
 
         layer_idx += 1

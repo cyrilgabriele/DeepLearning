@@ -90,21 +90,21 @@ class TestEdgeSampling:
 class TestEdgeVariance:
     def test_zero_edge_has_low_variance(self):
         from src.models.kan_layers import ChebyKANLayer
-        from src.interpretability.kan_pruning import _edge_variance_chebykan
+        from src.interpretability.kan_pruning import _edge_l1_chebykan
 
         layer = ChebyKANLayer(in_features=3, out_features=2, degree=3)
         _set_edge_to_zero(layer, 0, 0)
-        variances = _edge_variance_chebykan(layer)
-        assert variances[0, 0].item() < 1e-6
+        l1 = _edge_l1_chebykan(layer)
+        assert l1[0, 0].item() < 1e-6
 
     def test_active_edge_has_nonzero_variance(self):
         from src.models.kan_layers import ChebyKANLayer
-        from src.interpretability.kan_pruning import _edge_variance_chebykan
+        from src.interpretability.kan_pruning import _edge_l1_chebykan
 
         layer = ChebyKANLayer(in_features=3, out_features=2, degree=3)
         _set_edge_to_identity(layer, 0, 0)
-        variances = _edge_variance_chebykan(layer)
-        assert variances[0, 0].item() > 1e-4
+        l1 = _edge_l1_chebykan(layer)
+        assert l1[0, 0].item() > 1e-4
 
 
 class TestSymbolicFitting:

@@ -55,8 +55,8 @@ def evaluate_symbolic_fit(
     """
     import torch
     from src.models.kan_layers import ChebyKANLayer, FourierKANLayer
-    from src.interpretability.kan_pruning import _compute_edge_variances
-    from src.interpretability.kan_symbolic import sample_edge, fit_symbolic_edge
+    from src.interpretability.kan_pruning import _compute_edge_l1
+    from src.interpretability.kan_symbolic import sample_edge, fit_symbolic_edge, _quality_tier
 
     use_pysr = candidate_library == "pysr"
 
@@ -70,13 +70,12 @@ def evaluate_symbolic_fit(
             continue
 
         # Precompute all edge variances once per layer
-        variances = _compute_edge_variances(layer)
-        total_before += variances.numel()
+        l1_scores = _compute_edge_l1(layer)
+        total_before += l1_scores.numel()
 
         for out_i in range(layer.out_features):
             for in_i in range(layer.in_features):
-                var = variances[out_i, in_i].item()
-                if var < threshold:
+                if l1_scores[out_i, in_i].item() < threshold:
                     continue
                 total_after += 1
 
@@ -95,6 +94,7 @@ def evaluate_symbolic_fit(
                     "formula": formula,
                     "r_squared": round(r2, 6),
                     "flagged": r2 < 0.90,
+                    "quality_tier": _quality_tier(r2),
                 })
 
         layer_idx += 1
@@ -114,6 +114,10 @@ def evaluate_symbolic_fit(
             "median_r2": round(float(np.median(r2_values)), 6),
             "edges_below_090": int(sum(1 for r in r2_values if r < 0.90)),
             "edges_below_095": int(sum(1 for r in r2_values if r < 0.95)),
+            # Three-tier quality breakdown (Liu et al. 2024 arXiv:2404.19756)
+            "edges_clean": int(sum(1 for r in r2_values if r >= 0.99)),
+            "edges_acceptable": int(sum(1 for r in r2_values if 0.90 <= r < 0.99)),
+            "edges_flagged": int(sum(1 for r in r2_values if r < 0.90)),
         },
     }
 
@@ -161,8 +165,9 @@ def run(
     print(f"  Active edges : {report['pruning']['edges_after']}")
     print(f"  Mean R²      : {agg['mean_r2']:.4f}")
     print(f"  Median R²    : {agg['median_r2']:.4f}")
-    print(f"  Edges <0.90  : {agg['edges_below_090']}")
-    print(f"  Edges <0.95  : {agg['edges_below_095']}")
+    print(f"  Clean  (≥0.99): {agg['edges_clean']}")
+    print(f"  Accept (0.90–0.99): {agg['edges_acceptable']}")
+    print(f"  Flagged (<0.90): {agg['edges_flagged']}")
 
     from src.interpretability.paths import reports as rep_dir
     out_path = rep_dir(output_dir) / f"{flavor}_r2_report.json"

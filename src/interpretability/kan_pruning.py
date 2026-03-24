@@ -26,8 +26,13 @@ import torch
 
 # ── Edge magnitude ────────────────────────────────────────────────────────────
 
-def _edge_variance_chebykan(layer, n_samples: int = 1000) -> torch.Tensor:
-    """Output variance for each (out, in) edge of a ChebyKANLayer."""
+def _edge_l1_chebykan(layer, n_samples: int = 1000) -> torch.Tensor:
+    """Mean absolute output (L1 norm) for each (out, in) edge of a ChebyKANLayer.
+
+    Uses the criterion from Liu et al. (2024) arXiv:2404.19756: edges are ranked
+    by ||φ||_1 = (1/n) Σ |φ(xᵢ)|, which measures the functional magnitude of the
+    activation rather than its variance.
+    """
     x = torch.linspace(-1.0, 1.0, n_samples)
     x_norm = torch.tanh(x)
 
@@ -40,11 +45,14 @@ def _edge_variance_chebykan(layer, n_samples: int = 1000) -> torch.Tensor:
     edge_out = torch.einsum("sd,oid->soi", basis, layer.cheby_coeffs.detach())
     base_contrib = layer.base_weight.detach().unsqueeze(0) * x_norm[:, None, None]
     edge_out = edge_out + base_contrib
-    return edge_out.var(dim=0)  # (out, in)
+    return edge_out.abs().mean(dim=0)  # (out, in) — L1 norm per edge
 
 
-def _edge_variance_fourierkan(layer, n_samples: int = 1000) -> torch.Tensor:
-    """Output variance for each (out, in) edge of a FourierKANLayer."""
+def _edge_l1_fourierkan(layer, n_samples: int = 1000) -> torch.Tensor:
+    """Mean absolute output (L1 norm) for each (out, in) edge of a FourierKANLayer.
+
+    Uses the criterion from Liu et al. (2024) arXiv:2404.19756.
+    """
     import math
     x = torch.linspace(-1.0, 1.0, n_samples)
     x_scaled = (torch.tanh(x) + 1) * math.pi  # (n_samples,)
@@ -59,15 +67,20 @@ def _edge_variance_fourierkan(layer, n_samples: int = 1000) -> torch.Tensor:
     sin_out = torch.einsum("sg,oig->soi", sin_b, layer.fourier_b.detach())
     base_contrib = layer.base_weight.detach().unsqueeze(0) * x.tanh()[:, None, None]
     edge_out = cos_out + sin_out + base_contrib
-    return edge_out.var(dim=0)  # (out, in)
+    return edge_out.abs().mean(dim=0)  # (out, in) — L1 norm per edge
 
 
-def _compute_edge_variances(layer) -> torch.Tensor:
+def _compute_edge_l1(layer) -> torch.Tensor:
+    """Return per-edge L1 norm tensor (out, in) for any supported KAN layer.
+
+    Implements the activation magnitude criterion from Liu et al. (2024)
+    arXiv:2404.19756 (§2.5): ||φ||_1 = (1/n) Σ|φ(xᵢ)|.
+    """
     from src.models.kan_layers import ChebyKANLayer, FourierKANLayer
     if isinstance(layer, ChebyKANLayer):
-        return _edge_variance_chebykan(layer)
+        return _edge_l1_chebykan(layer)
     if isinstance(layer, FourierKANLayer):
-        return _edge_variance_fourierkan(layer)
+        return _edge_l1_fourierkan(layer)
     raise TypeError(f"Unsupported layer type: {type(layer)}")
 
 
@@ -98,7 +111,7 @@ def prune_kan(model, threshold: float = 0.01) -> tuple:
             masks.append(None)
             continue
 
-        variances = _compute_edge_variances(layer)  # (out, in)
+        variances = _compute_edge_l1(layer)  # (out, in) — L1 norm per edge
         mask = variances >= threshold  # True = keep
 
         total_before += mask.numel()
