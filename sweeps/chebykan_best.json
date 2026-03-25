@@ -1,0 +1,21 @@
+{
+  "model": "chebykan",
+  "preprocessing": "kan_paper",
+  "best_qwk": 0.6254,
+  "best_params": {
+    "n_layers": 2,
+    "width_0": 128,
+    "width_1": 64,
+    "degree": 6,
+    "lr": 0.005469718211738354,
+    "weight_decay": 0.0005425921367964894,
+    "batch_size": 2048
+  },
+  "total_trials": 100,
+  "best_trial_number": 94,
+  "best_trial_attrs": {
+    "duration": 27.1,
+    "epochs": 58,
+    "num_params": 209345
+  }
+}
