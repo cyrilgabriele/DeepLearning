@@ -71,6 +71,7 @@ class Trainer:
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
         summary_path = self._persist_run_summary(metrics, timestamp)
         checkpoint_path = self._persist_checkpoint(model, timestamp)
+        self._export_eval_data(splits)
         test_predictions_path = self._generate_test_predictions(
             model=model,
             dataset=dataset,
@@ -170,28 +171,88 @@ class Trainer:
             return None
 
     def _persist_checkpoint(self, model: PrudentialModel, timestamp: str) -> Optional[Path]:
-        """Save a Torch checkpoint if the estimator exposes a module."""
-        try:  # Optional torch dependency
-            import torch
-        except ImportError:  # pragma: no cover - torch-less envs
-            return None
-
-        module = self._resolve_torch_module(model, torch)
-        if module is None:
-            return None
-
+        """Save a Torch checkpoint or a joblib pickle depending on model type."""
         checkpoint_root = Path("checkpoints") / self.config.trainer.experiment_name
-        checkpoint_path = checkpoint_root / f"model-{timestamp}.pt"
 
         try:
+            import torch
+            module = self._resolve_torch_module(model, torch)
+        except ImportError:
+            module = None
+
+        if module is not None:
+            checkpoint_path = checkpoint_root / f"model-{timestamp}.pt"
+            try:
+                checkpoint_root.mkdir(parents=True, exist_ok=True)
+                torch.save(module.state_dict(), checkpoint_path)
+                return checkpoint_path
+            except Exception as exc:  # pragma: no cover
+                print(f"Warning: torch.save failed at {checkpoint_path}: {exc}")
+            return None
+
+        # Sklearn / non-torch models: persist with joblib
+        try:
+            import joblib
+        except ImportError:  # pragma: no cover
+            return None
+
+        checkpoint_path = checkpoint_root / f"model-{timestamp}.joblib"
+        try:
             checkpoint_root.mkdir(parents=True, exist_ok=True)
-            torch.save(module.state_dict(), checkpoint_path)
+            joblib.dump(model, checkpoint_path)
             return checkpoint_path
-        except OSError as exc:
-            print(f"Warning: failed to persist checkpoint at {checkpoint_path}: {exc}")
-        except Exception as exc:  # pragma: no cover - torch save failures
-            print(f"Warning: torch.save failed for checkpoint {checkpoint_path}: {exc}")
+        except Exception as exc:  # pragma: no cover
+            print(f"Warning: joblib.dump failed at {checkpoint_path}: {exc}")
         return None
+
+    def _export_eval_data(self, splits) -> None:
+        """Persist the preprocessed eval split for downstream interpretability scripts."""
+        if splits.X_eval is None or splits.y_eval is None:
+            return
+        try:
+            import json
+            from src.data.prudential_features import get_feature_lists
+
+            data_dir = Path("outputs") / "data"
+            reports_dir = Path("outputs") / "reports"
+            data_dir.mkdir(parents=True, exist_ok=True)
+            reports_dir.mkdir(parents=True, exist_ok=True)
+            splits.X_eval.to_parquet(data_dir / "X_eval.parquet", index=False)
+            splits.y_eval.to_frame(name="Response").to_parquet(
+                data_dir / "y_eval.parquet", index=False
+            )
+            feature_names = list(splits.X_eval.columns)
+            (reports_dir / "feature_names.json").write_text(
+                json.dumps(feature_names, indent=2)
+            )
+            # Export raw (pre-preprocessing) eval features for interpretable x-axes
+            if splits.X_eval_raw is not None:
+                splits.X_eval_raw.reset_index(drop=True).to_parquet(
+                    data_dir / "X_eval_raw.parquet", index=False
+                )
+            # Export feature type taxonomy so plots can annotate axes correctly
+            if splits.X_eval_raw is not None:
+                feat_lists = get_feature_lists(splits.X_eval_raw)
+                feature_type_map: dict = {}
+                for feat in feature_names:
+                    base = feat.replace("missing_", "") if feat.startswith("missing_") else feat
+                    if feat.startswith("missing_"):
+                        feature_type_map[feat] = "missing_indicator"
+                    elif feat in feat_lists["categorical"]:
+                        feature_type_map[feat] = "categorical"
+                    elif feat in feat_lists["binary"]:
+                        feature_type_map[feat] = "binary"
+                    elif feat in feat_lists["continuous"]:
+                        feature_type_map[feat] = "continuous"
+                    elif feat in feat_lists["ordinal"]:
+                        feature_type_map[feat] = "ordinal"
+                    else:
+                        feature_type_map[feat] = "unknown"
+                (reports_dir / "feature_types.json").write_text(
+                    json.dumps(feature_type_map, indent=2, sort_keys=True)
+                )
+        except Exception as exc:  # pragma: no cover
+            print(f"Warning: failed to export eval data: {exc}")
 
     @staticmethod
     def _resolve_torch_module(model: PrudentialModel, torch_module) -> Optional["torch.nn.Module"]:

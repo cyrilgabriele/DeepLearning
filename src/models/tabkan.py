@@ -37,6 +37,9 @@ class TabKAN(L.LightningModule):
         spline_order: int = 3,
         lr: float = 1e-3,
         weight_decay: float = 1e-5,
+        sparsity_lambda: float = 0.0,
+        l1_weight: float = 1.0,
+        entropy_weight: float = 1.0,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -71,12 +74,56 @@ class TabKAN(L.LightningModule):
         h = self.kan_layers(x)
         return self.head(h)
 
+    def _sparsity_reg(self) -> torch.Tensor:
+        """L1 + entropy regularisation over KAN activation functions.
+
+        Implements the sparsity objective from Liu et al. (2024) arXiv:2404.19756 §2.5:
+            ℓ_reg = λ · (μ₁ Σ_l ||Φ_l||₁ + μ₂ Σ_l S(Φ_l))
+        where ||Φ_l||₁ is the summed L1 norm of all activation functions in layer l,
+        and S(Φ_l) is the entropy of the distribution of edge magnitudes within layer l.
+        L1 drives activations toward zero; entropy (minimised) produces a concentrated
+        (sparse) distribution rather than many equally-small activations.
+        """
+        if self.hparams.sparsity_lambda == 0.0:
+            return torch.zeros(1, device=self.device).squeeze()
+
+        reg = torch.zeros(1, device=self.device).squeeze()
+        for layer in self.kan_layers:
+            if not isinstance(layer, (ChebyKANLayer, FourierKANLayer)):
+                continue
+
+            if isinstance(layer, ChebyKANLayer):
+                # Mean absolute coefficient value per edge + base weight magnitude
+                l1_per_edge = layer.cheby_coeffs.abs().mean(dim=-1) + layer.base_weight.abs()
+            else:
+                # Average over cosine and sine coefficients + base weight
+                l1_per_edge = (
+                    (layer.fourier_a.abs().mean(dim=-1) + layer.fourier_b.abs().mean(dim=-1)) / 2
+                    + layer.base_weight.abs()
+                )
+
+            # L1 term: sum of all per-edge activation magnitudes
+            l1_term = l1_per_edge.sum()
+
+            # Entropy term: -Σ p_ij · log(p_ij), where p_ij = l1_ij / Σ l1
+            total = l1_per_edge.sum() + 1e-10
+            p = (l1_per_edge / total).clamp(min=1e-10)
+            entropy_term = -(p * torch.log(p)).sum()
+
+            reg = reg + self.hparams.l1_weight * l1_term + self.hparams.entropy_weight * entropy_term
+
+        return self.hparams.sparsity_lambda * reg
+
     def training_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)
         loss = self.loss_fn(y_hat, y)
+        reg = self._sparsity_reg()
+        total_loss = loss + reg
         self.log("train/loss", loss, prog_bar=True)
-        return loss
+        if self.hparams.sparsity_lambda > 0.0:
+            self.log("train/sparsity_reg", reg, prog_bar=False)
+        return total_loss
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
@@ -132,6 +179,9 @@ class TabKANClassifier(PrudentialModel):
         grid_size: int = 4,
         spline_order: int = 3,
         max_epochs: int | None = None,
+        sparsity_lambda: float = 0.0,
+        l1_weight: float = 1.0,
+        entropy_weight: float = 1.0,
         **extra_params,
     ) -> None:
         params = {
@@ -149,6 +199,9 @@ class TabKANClassifier(PrudentialModel):
         self.random_state = random_state
         self.max_epochs = max_epochs or base["max_epochs"]
         self.lr = base["lr"]
+        self.sparsity_lambda = sparsity_lambda
+        self.l1_weight = l1_weight
+        self.entropy_weight = entropy_weight
 
         base_widths = list(base["widths"])
         if depth is not None and width is not None:
@@ -183,6 +236,9 @@ class TabKANClassifier(PrudentialModel):
             grid_size=self.grid_size,
             spline_order=self.spline_order,
             lr=self.lr,
+            sparsity_lambda=self.sparsity_lambda,
+            l1_weight=self.l1_weight,
+            entropy_weight=self.entropy_weight,
         )
 
         X_t = torch.tensor(X_values, dtype=torch.float32)
