@@ -17,6 +17,27 @@ Track what was changed, why it was changed, and any important notes.
 - Optional notes, issues, or future work
 ```
 
+### [2026-03-25] - Christof Steiner
+
+#### What
+- Added `src/sweep.py`: Optuna-based Bayesian hyperparameter sweep with SQLite persistence, supporting all 5 model types (ChebyKAN, FourierKAN, BSplineKAN, MLP, XGBoost) with per-model search spaces and objectives.
+- Generalized the sweep to ensure a fair comparison: reverted KAN-only enhancements (residual blocks, ordinal loss, cosine schedule) so all models compete on equal footing.
+- Added Optuna-tuned YAML configs (`chebykan_tuned.yaml`, `fourierkan_tuned.yaml`, `bsplinekan_tuned.yaml`, `xgboost_regression_tuned.yaml`) containing best hyperparameters from 50-trial sweeps.
+- Fixed validation leakage in `XGBoostPaperModel` sweep: now reports tuning QWK before refit on train+val, not post-refit evaluation on the leaked validation set.
+- Added `src/submit.py` for Kaggle submission generation from best sweep parameters.
+- Stored sweep results as JSON in `sweeps/` for all 6 configurations (3 KAN variants, MLP, XGBoost regression, XGBoost classifier).
+
+#### Why
+- Need a rigorous, fair hyperparameter budget across all architectures so the paper comparison reflects model capacity rather than tuning effort.
+- The original ChebyKAN-only sweep was not comparable — extending Optuna to all models with identical trial budgets and preprocessing (`kan_paper`) ensures apples-to-apples results.
+- The XGBoost leakage fix was critical: reporting post-refit QWK inflated the tree baseline, making KAN variants look worse than they are.
+
+#### Remarks
+- Kaggle private leaderboard results: XGBoost Regression 0.660, BSplineKAN 0.630, ChebyKAN 0.633, FourierKAN 0.619, MLP 0.606, XGBoost Classifier 0.591.
+
+
+---
+
 ### [2026-03-21] - Cyril Gabriele
 
 #### What
