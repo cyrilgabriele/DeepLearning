@@ -17,6 +17,22 @@ Track what was changed, why it was changed, and any important notes.
 - Optional notes, issues, or future work
 ```
 
+### [2026-03-26] - Gian Seifert
+
+#### What
+- Added full interpretability pipeline for GLM, XGBoost, ChebyKAN, and FourierKAN.
+- New modules: GLM coefficient extraction, SHAP for XGBoost, KAN edge pruning, symbolic regression (scipy curve_fit with 11 candidates), R² evaluation pipeline, per-risk-level comparison, side-by-side visualization, and final comparison matrix.
+- Added GLM baseline model
+
+#### Why
+- Provide interpretability analysis to compare how each model explains its predictions and to assess whether KAN activations can be approximated by closed-form symbolic expressions.
+- the design decisions for the kan pruning and regressin can be found in more detail and with sources under the kan design decisions md
+
+#### Remarks
+- 
+
+---
+
 ### [2026-03-25] - Christof Steiner
 
 #### What
