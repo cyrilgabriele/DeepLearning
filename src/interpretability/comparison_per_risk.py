@@ -3,10 +3,9 @@
 Produces a panel figure (8 subplots, one per risk class) showing
 feature importance from GLM | XGBoost SHAP | ChebyKAN | FourierKAN.
 
-Uses horizontal bars with feature-type markers and three Kendall's τ
-annotations per panel (GLM↔SHAP, GLM↔ChebyKAN, SHAP↔ChebyKAN).
-FourierKAN importance is global — its τ equals ChebyKAN in all panels
-and is therefore omitted from τ annotations.
+The TabKAN paper defines KAN feature importance globally from first-layer
+coefficient magnitudes, not per-risk. We therefore keep KAN series global and
+label them as such instead of fabricating conditional KAN scores.
 
 Usage:
     uv run python -m src.interpretability.comparison_per_risk \\
@@ -31,17 +30,6 @@ import pandas as pd
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
-
-def _kan_importance_from_variance(
-    variances: "torch.Tensor",
-    feature_names: list[str],
-) -> dict[str, float]:
-    """Sum of first-layer edge output variances per input feature."""
-    per_input = variances.sum(dim=0)  # (in_features,)
-    return {
-        feature_names[i]: float(per_input[i].item())
-        for i in range(min(len(feature_names), per_input.shape[0]))
-    }
 
 
 def _glm_importance(coef_path: Path) -> pd.Series:
@@ -73,31 +61,26 @@ def _shap_importance_by_risk(
     return result
 
 
-def _kan_importance_by_risk(
+def _kan_importance_global(
     symbolic_path: Path,
     feature_names: list[str],
     kan_layer,
-) -> dict[int, pd.Series]:
-    """Feature importance from KAN first-layer edge variances (global, replicated per risk)."""
-    importance_series: pd.Series
-
+) -> pd.Series:
+    """Global KAN feature importance from layer-0 coefficient magnitudes."""
     if kan_layer is not None:
         try:
-            import torch
-            from src.interpretability.kan_pruning import _compute_edge_l1
-            variances = _compute_edge_l1(kan_layer)
-            imp_dict = _kan_importance_from_variance(variances, feature_names)
-            importance_series = pd.Series(imp_dict)
-        except Exception:
-            importance_series = _fallback_edge_count(symbolic_path)
-    else:
-        importance_series = _fallback_edge_count(symbolic_path)
+            from src.interpretability.utils.kan_coefficients import coefficient_importance_from_layer
 
-    return {risk: importance_series for risk in range(1, 9)}
+            frame = coefficient_importance_from_layer(kan_layer, feature_names)
+            if not frame.empty:
+                return frame.set_index("feature")["importance"].sort_values(ascending=False)
+        except Exception:
+            pass
+    return _fallback_edge_count(symbolic_path).sort_values(ascending=False)
 
 
 def _fallback_edge_count(symbolic_path: Path) -> pd.Series:
-    """Fallback: count active edges per input feature."""
+    """Fallback: count active first-layer edges per input feature."""
     if not symbolic_path.exists():
         return pd.Series(dtype=float)
     sym_df = pd.read_csv(symbolic_path)
@@ -114,8 +97,8 @@ def _fallback_edge_count(symbolic_path: Path) -> pd.Series:
 def _plot_panel(
     glm_imp: pd.Series,
     shap_by_risk: dict[int, pd.Series],
-    chebykan_by_risk: dict[int, pd.Series],
-    fourierkan_by_risk: dict[int, pd.Series],
+    chebykan_global: pd.Series,
+    fourierkan_global: pd.Series,
     output_dir: Path,
     top_n: int = 10,
     fig_dir: Path | None = None,
@@ -127,7 +110,7 @@ def _plot_panel(
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from scipy.stats import kendalltau
-    from src.interpretability.style import apply_paper_style, savefig_pdf, MODEL_COLORS, feature_type_label
+    from src.interpretability.utils.style import apply_paper_style, savefig_pdf, MODEL_COLORS, feature_type_label
 
     apply_paper_style()
     feat_types = feat_types or {}
@@ -137,26 +120,36 @@ def _plot_panel(
 
     for risk in range(1, 9):
         ax = axes[risk - 1]
-        ref = shap_by_risk.get(risk, glm_imp)
-        if ref.empty:
-            ref = glm_imp
-        top_feats = ref.nlargest(top_n).index.tolist()
+        shap_risk = shap_by_risk.get(risk, pd.Series(dtype=float))
+        rank_frame = pd.DataFrame(
+            {
+                "glm": glm_imp,
+                "shap": shap_risk,
+                "cheby_global": chebykan_global,
+                "fourier_global": fourierkan_global,
+            }
+        ).fillna(0.0)
+        for col in rank_frame.columns:
+            col_max = float(rank_frame[col].max())
+            if col_max > 0:
+                rank_frame[col] = rank_frame[col] / col_max
+        top_feats = rank_frame.sum(axis=1).sort_values(ascending=False).head(top_n).index.tolist()
         labels = [feature_type_label(f, feat_types) for f in top_feats]
 
         y = np.arange(len(top_feats))
         width = 0.2
         sources = [
             ("GLM", glm_imp),
-            ("XGB SHAP", shap_by_risk.get(risk, pd.Series())),
-            ("ChebyKAN", chebykan_by_risk.get(risk, pd.Series())),
-            ("FourierKAN", fourierkan_by_risk.get(risk, pd.Series())),
+            ("XGB SHAP", shap_risk),
+            ("ChebyKAN (global)", chebykan_global),
+            ("FourierKAN (global)", fourierkan_global),
         ]
 
         color_map = {
             "GLM": colors["GLM"],
             "XGB SHAP": colors["XGBoost"],
-            "ChebyKAN": colors["ChebyKAN"],
-            "FourierKAN": colors["FourierKAN"],
+            "ChebyKAN (global)": colors["ChebyKAN"],
+            "FourierKAN (global)": colors["FourierKAN"],
         }
 
         for offset, (name, series) in enumerate(sources):
@@ -175,26 +168,28 @@ def _plot_panel(
         if risk == 1:
             ax.legend(fontsize=7, loc="upper right")
 
-        # Kendall's τ: GLM↔SHAP, GLM↔ChebyKAN, SHAP↔ChebyKAN
+        # Kendall's τ: SHAP is risk-conditional; KAN is global-by-paper.
         glm_ranks = [float(glm_imp.get(f, 0)) for f in top_feats]
-        shap_ranks = [float(shap_by_risk.get(risk, pd.Series()).get(f, 0)
-                      if not shap_by_risk.get(risk, pd.Series()).empty else 0)
-                      for f in top_feats]
-        cheby_ranks = [float(chebykan_by_risk.get(risk, pd.Series()).get(f, 0)
-                       if not chebykan_by_risk.get(risk, pd.Series()).empty else 0)
-                       for f in top_feats]
+        shap_ranks = [float(shap_risk.get(f, 0)) if not shap_risk.empty else 0.0 for f in top_feats]
+        cheby_ranks = [float(chebykan_global.get(f, 0)) if not chebykan_global.empty else 0.0 for f in top_feats]
 
         tau_gs, _ = kendalltau(glm_ranks, shap_ranks)
         tau_gc, _ = kendalltau(glm_ranks, cheby_ranks)
         tau_sc, _ = kendalltau(shap_ranks, cheby_ranks)
-        tau_text = f"τ GLM↔SHAP={tau_gs:.2f}\nτ GLM↔Cheby={tau_gc:.2f}\nτ SHAP↔Cheby={tau_sc:.2f}"
+        tau_text = (
+            f"τ GLM↔SHAP={tau_gs:.2f}\n"
+            f"τ GLM↔Cheby(global)={tau_gc:.2f}\n"
+            f"τ SHAP↔Cheby(global)={tau_sc:.2f}"
+        )
         ax.text(0.98, 0.02, tau_text, transform=ax.transAxes, ha="right", va="bottom",
                 fontsize=5, color="gray")
 
-    caption = ("FourierKAN importance is global (not per-risk-level); its τ equals ChebyKAN in "
-               "all panels and is therefore omitted.")
+    caption = (
+        "KAN bars use paper-native global coefficient importance from the first layer. "
+        "They are repeated in each risk panel for reference only; only SHAP is risk-conditional."
+    )
     fig.text(0.5, -0.01, caption, ha="center", fontsize=6, color="gray", style="italic")
-    fig.suptitle("Feature Importance by Risk Level — GLM vs XGB SHAP vs KAN Symbolic",
+    fig.suptitle("Feature Importance by Risk Level — GLM vs XGB SHAP vs KAN Coefficients",
                  fontsize=12, fontweight="bold")
     plt.tight_layout()
     out_path = fig_dir / "per_risk_level_comparison.pdf"
@@ -214,29 +209,46 @@ def run(
     output_dir: Path = Path("outputs"),
     chebykan_checkpoint_path: Path | None = None,
     chebykan_config_path: Path | None = None,
+    fourierkan_checkpoint_path: Path | None = None,
+    fourierkan_config_path: Path | None = None,
 ) -> None:
-    from src.interpretability.paths import figures as fig_dir, data as data_dir, reports as rep_dir
+    from src.interpretability.utils.paths import figures as fig_dir, data as data_dir, reports as rep_dir
 
     X_eval = pd.read_parquet(eval_features_path)
     feature_names = list(X_eval.columns)
 
-    # Load ChebyKAN layer for edge-variance importance
+    # Load KAN layers for paper-native coefficient importance
     chebykan_layer = None
-    if chebykan_checkpoint_path and chebykan_checkpoint_path.exists() and chebykan_config_path and chebykan_config_path.exists():
+    fourierkan_layer = None
+
+    def _load_layer(ckpt: Path | None, cfg_path: Path | None, flavor: str):
+        if not (ckpt and ckpt.exists() and cfg_path and cfg_path.exists()):
+            return None
         try:
             import torch
             from src.configs import load_experiment_config
             from src.models.tabkan import TabKAN
-            from src.models.kan_layers import ChebyKANLayer
-            cfg = load_experiment_config(chebykan_config_path)
-            module = TabKAN(in_features=X_eval.shape[1],
-                            widths=[cfg.model.width] * cfg.model.depth,
-                            kan_type="chebykan", degree=cfg.model.degree or 3)
-            module.load_state_dict(torch.load(chebykan_checkpoint_path, map_location="cpu"))
+            from src.models.kan_layers import ChebyKANLayer, FourierKANLayer
+
+            cfg = load_experiment_config(cfg_path)
+            module = TabKAN(
+                in_features=X_eval.shape[1],
+                widths=[cfg.model.width] * cfg.model.depth,
+                kan_type=flavor,
+                degree=cfg.model.degree or 3,
+            )
+            module.load_state_dict(torch.load(ckpt, map_location="cpu"))
             module.eval()
-            chebykan_layer = next((l for l in module.kan_layers if isinstance(l, ChebyKANLayer)), None)
+            return next(
+                (l for l in module.kan_layers if isinstance(l, (ChebyKANLayer, FourierKANLayer))),
+                None,
+            )
         except Exception as e:
-            print(f"Warning: could not load ChebyKAN model: {e}")
+            print(f"Warning: could not load {flavor} model: {e}")
+            return None
+
+    chebykan_layer = _load_layer(chebykan_checkpoint_path, chebykan_config_path, "chebykan")
+    fourierkan_layer = _load_layer(fourierkan_checkpoint_path, fourierkan_config_path, "fourierkan")
 
     feat_types: dict = {}
     ft_path = rep_dir(output_dir) / "feature_types.json"
@@ -246,10 +258,10 @@ def run(
 
     glm_imp = _glm_importance(glm_coef_path)
     shap_by_risk = _shap_importance_by_risk(shap_path, eval_features_path, xgb_checkpoint_path)
-    chebykan_by_risk = _kan_importance_by_risk(chebykan_symbolic_path, feature_names, chebykan_layer)
-    fourierkan_by_risk = _kan_importance_by_risk(fourierkan_symbolic_path, feature_names, None)
+    chebykan_global = _kan_importance_global(chebykan_symbolic_path, feature_names, chebykan_layer)
+    fourierkan_global = _kan_importance_global(fourierkan_symbolic_path, feature_names, fourierkan_layer)
 
-    _plot_panel(glm_imp, shap_by_risk, chebykan_by_risk, fourierkan_by_risk,
+    _plot_panel(glm_imp, shap_by_risk, chebykan_global, fourierkan_global,
                 output_dir, fig_dir=fig_dir(output_dir), feat_types=feat_types)
 
     # ── Export underlying data ────────────────────────────────────────────────
@@ -261,8 +273,8 @@ def run(
                 "feature": feat,
                 "glm_importance": glm_imp.get(feat, 0.0),
                 "xgb_shap": shap_by_risk.get(risk, pd.Series()).get(feat, 0.0),
-                "chebykan": chebykan_by_risk.get(risk, pd.Series()).get(feat, 0.0),
-                "fourierkan": fourierkan_by_risk.get(risk, pd.Series()).get(feat, 0.0),
+                "chebykan_global": chebykan_global.get(feat, 0.0),
+                "fourierkan_global": fourierkan_global.get(feat, 0.0),
             })
     out_csv = data_dir(output_dir) / "per_risk_level_data.csv"
     pd.DataFrame(rows).to_csv(out_csv, index=False)
@@ -277,6 +289,8 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--fourierkan-symbolic", type=Path, default=Path("outputs/data/fourierkan_symbolic_fits.csv"))
     p.add_argument("--chebykan-checkpoint", type=Path, default=None)
     p.add_argument("--chebykan-config", type=Path, default=None)
+    p.add_argument("--fourierkan-checkpoint", type=Path, default=None)
+    p.add_argument("--fourierkan-config", type=Path, default=None)
     p.add_argument("--xgb-checkpoint", type=Path, required=True)
     p.add_argument("--eval-features", type=Path, default=Path("outputs/data/X_eval.parquet"))
     p.add_argument("--eval-labels", type=Path, default=Path("outputs/data/y_eval.parquet"))
@@ -297,4 +311,6 @@ if __name__ == "__main__":
         output_dir=args.output_dir,
         chebykan_checkpoint_path=args.chebykan_checkpoint,
         chebykan_config_path=args.chebykan_config,
+        fourierkan_checkpoint_path=args.fourierkan_checkpoint,
+        fourierkan_config_path=args.fourierkan_config,
     )

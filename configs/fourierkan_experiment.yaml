@@ -15,4 +15,7 @@ model:
   depth: 2
   width: 128
   degree: null
-  params: {}
+  params:
+    sparsity_lambda: 0.001
+    l1_weight: 1.0
+    entropy_weight: 1.0

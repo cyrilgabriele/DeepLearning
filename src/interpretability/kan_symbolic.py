@@ -246,8 +246,8 @@ def _plot_activation_grid(
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from src.models.kan_layers import ChebyKANLayer, FourierKANLayer
-    from src.interpretability.kan_pruning import _compute_edge_l1
-    from src.interpretability.style import (
+    from src.interpretability.utils.kan_coefficients import top_features_by_coefficients
+    from src.interpretability.utils.style import (
         apply_paper_style, savefig_pdf, MODEL_COLORS,
         encode_to_raw_lookup, FEATURE_TYPE_MARKERS,
     )
@@ -260,8 +260,7 @@ def _plot_activation_grid(
         return
 
     feature_names = list(X_eval.columns) if X_eval is not None else []
-    l1_scores = _compute_edge_l1(first_layer)
-    top_feats = _top_features_by_l1(l1_scores, feature_names, top_n=10)
+    top_feats = top_features_by_coefficients(module, feature_names, top_n=10)
 
     model_color = MODEL_COLORS.get("ChebyKAN" if flavor == "chebykan" else "FourierKAN", "steelblue")
     fig, axes = plt.subplots(2, 5, figsize=(18, 7))
@@ -314,10 +313,11 @@ def _plot_activation_grid(
     for ax in axes_flat[len(top_feats):]:
         ax.set_visible(False)
 
-    plt.suptitle(f"{flavor.title()} — Learned Activation Functions (Top-10 Features)",
+    plt.suptitle(
+        f"{flavor.title()} — Learned Activation Functions (Top-10 Coefficient-Ranked Features)",
                  fontsize=12, fontweight="bold")
     plt.tight_layout()
-    from src.interpretability.paths import figures as fig_dir
+    from src.interpretability.utils.paths import figures as fig_dir
     out = fig_dir(output_dir) / f"{flavor}_activations.pdf"
     savefig_pdf(fig, out)
     print(f"Saved → {out}")
@@ -331,14 +331,14 @@ def _plot_feature_ranking(
     feature_names: list[str],
     feat_types: dict,
 ) -> None:
-    """Horizontal bar chart of all features ranked by edge variance sum."""
+    """Horizontal bar chart of all features ranked by basis-coefficient magnitude."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from matplotlib.patches import Patch
+    from src.interpretability.utils.kan_coefficients import coefficient_importance_from_layer
     from src.models.kan_layers import ChebyKANLayer, FourierKANLayer
-    from src.interpretability.kan_pruning import _compute_edge_l1
-    from src.interpretability.style import (
+    from src.interpretability.utils.style import (
         apply_paper_style, savefig_pdf, FEATURE_TYPE_COLORS,
         FEATURE_TYPE_MARKERS, feature_type_label,
     )
@@ -350,15 +350,14 @@ def _plot_feature_ranking(
     if first_layer is None:
         return
 
-    l1_scores = _compute_edge_l1(first_layer)
-    per_input = l1_scores.sum(dim=0)
-    n_feats = min(len(feature_names), per_input.shape[0])
-    importances = {feature_names[i]: float(per_input[i]) for i in range(n_feats)}
-    sorted_feats = sorted(importances, key=importances.get, reverse=True)
+    coeff_df = coefficient_importance_from_layer(first_layer, feature_names)
+    if coeff_df.empty:
+        return
+    sorted_feats = coeff_df["feature"].tolist()
 
     colors = [FEATURE_TYPE_COLORS.get(feat_types.get(f, "unknown"), "#AAAAAA") for f in sorted_feats]
     labels = [feature_type_label(f, feat_types) for f in sorted_feats]
-    values = [importances[f] for f in sorted_feats]
+    values = coeff_df["importance"].tolist()
 
     fig_height = max(6, len(sorted_feats) * 0.25)
     fig, ax = plt.subplots(figsize=(10, fig_height))
@@ -366,8 +365,8 @@ def _plot_feature_ranking(
     ax.set_yticks(range(len(sorted_feats)))
     ax.set_yticklabels(labels, fontsize=7)
     ax.invert_yaxis()
-    ax.set_xlabel("Edge output variance (sum over all outputs)", fontsize=9)
-    ax.set_title(f"{flavor.title()} — Feature Importance (Edge Variance)",
+    ax.set_xlabel("Coefficient magnitude (sum |coeff| across layer-0 outputs and basis terms)", fontsize=9)
+    ax.set_title(f"{flavor.title()} — Feature Importance (Paper-Native Coefficients)",
                  fontsize=11, fontweight="bold")
 
     present_types = sorted(set(feat_types.get(f, "unknown") for f in sorted_feats))
@@ -379,7 +378,7 @@ def _plot_feature_ranking(
     ax.legend(handles=legend_elements, fontsize=7, loc="lower right")
     plt.tight_layout()
 
-    from src.interpretability.paths import figures as fig_dir
+    from src.interpretability.utils.paths import figures as fig_dir
     out = fig_dir(output_dir) / f"{flavor}_feature_ranking.pdf"
     savefig_pdf(fig, out)
     print(f"Saved → {out}")
@@ -425,6 +424,10 @@ def run(
     module.eval()
 
     feature_names = list(X_eval.columns)
+    from src.interpretability.utils.kan_coefficients import (
+        coefficient_importance_from_layer,
+        get_first_kan_layer,
+    )
     records = []
     layer_idx = 0
 
@@ -460,14 +463,20 @@ def run(
         layer_idx += 1
 
     df = pd.DataFrame(records)
-    from src.interpretability.paths import data as data_dir, figures as fig_dir
+    from src.interpretability.utils.paths import data as data_dir, figures as fig_dir
     out_path = data_dir(output_dir) / f"{flavor}_symbolic_fits.csv"
     df.to_csv(out_path, index=False)
+
+    first_layer = get_first_kan_layer(module)
+    coeff_frame = coefficient_importance_from_layer(first_layer, feature_names)
+    coeff_out_path = data_dir(output_dir) / f"{flavor}_coefficient_importance.csv"
+    coeff_frame.to_csv(coeff_out_path, index=False)
 
     n_flagged = int(df["flagged"].sum())
     print(f"\n{flavor}: {len(df)} active edges, {n_flagged} flagged (R² < 0.90)")
     print(f"Mean R²: {df['r_squared'].mean():.4f}  Median: {df['r_squared'].median():.4f}")
     print(f"Saved → {out_path}")
+    print(f"Saved coefficient ranking → {coeff_out_path}")
 
     # ── Load feat_types and X_raw if not provided ─────────────────────────────
     if not feat_types:
@@ -549,7 +558,7 @@ def _plot_example(module, df: pd.DataFrame, flavor: str, output_dir: Path, thres
     ax.set_title(f"{flavor} — Layer {layer_idx}, edge ({in_i}→{out_i})\nInput: {best_row['input_feature']}")
     ax.legend(fontsize=8)
     plt.tight_layout()
-    from src.interpretability import paths as _paths
+    from src.interpretability.utils import paths as _paths
     fig_path = _paths.figures(output_dir) / f"{flavor}_symbolic_example.png"
     plt.savefig(fig_path, dpi=150)
     plt.close()

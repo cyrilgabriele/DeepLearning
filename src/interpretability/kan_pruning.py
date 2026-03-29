@@ -1,8 +1,8 @@
 """Issues 04 & 05 — Edge pruning for ChebyKAN and FourierKAN.
 
-Removes mathematically insignificant edges (those whose output variance
-over the input domain is below a threshold) and verifies the QWK drop
-stays within tolerance.
+Removes mathematically insignificant edges (those whose mean absolute
+activation over the input domain is below a threshold) and verifies the
+QWK drop stays within tolerance.
 
 Usage:
     uv run python -m src.interpretability.kan_pruning \
@@ -94,7 +94,7 @@ class PruningStats(NamedTuple):
 
 
 def prune_kan(model, threshold: float = 0.01) -> tuple:
-    """Zero out edges whose output variance is below *threshold*.
+    """Zero out edges whose activation L1 norm is below *threshold*.
 
     Returns (pruned_model, stats, edge_masks).
     edge_masks is a list of boolean tensors (out, in) — True = edge is active.
@@ -111,8 +111,8 @@ def prune_kan(model, threshold: float = 0.01) -> tuple:
             masks.append(None)
             continue
 
-        variances = _compute_edge_l1(layer)  # (out, in) — L1 norm per edge
-        mask = variances >= threshold  # True = keep
+        l1_scores = _compute_edge_l1(layer)  # (out, in) — L1 norm per edge
+        mask = l1_scores >= threshold  # True = keep
 
         total_before += mask.numel()
         total_after += int(mask.sum().item())
@@ -227,7 +227,7 @@ def run(
         "qwk_drop": round(qwk_drop, 6),
     }
 
-    from src.interpretability.paths import reports as rep_dir, models as mod_dir
+    from src.interpretability.utils.paths import reports as rep_dir, models as mod_dir
 
     out_path = rep_dir(output_dir) / f"{flavor}_pruning_summary.json"
     out_path.write_text(json.dumps(result, indent=2))

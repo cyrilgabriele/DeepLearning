@@ -17,6 +17,27 @@ Track what was changed, why it was changed, and any important notes.
 - Optional notes, issues, or future work
 ```
 
+### [2026-03-29] - Cyril Gabriele
+
+#### What
+- Aligned the interpretability pipeline with the KAN and TabKAN papers in `docs/interpretability/papers/2404.19756v5.pdf` and `docs/interpretability/papers/2504.06559v3.pdf`, cross-checking against the TabKAN reference notebooks in `https://github.com/aseslamian/TAbKAN/tree/main/Interpretability`.
+- Added `src/interpretability/kan_coefficients.py` to compute paper-native layer-0 feature importance from Chebyshev/Fourier coefficient magnitudes and to reconstruct aggregated first-layer feature functions.
+- Updated `kan_symbolic.py` to rank features by coefficient magnitude, export `*_coefficient_importance.csv`, and relabel the KAN feature-importance plot accordingly.
+- Updated `comparison_side_by_side.py` and `feature_risk_influence.py` so KAN curves are drawn from aggregated first-layer feature functions and feature selection is driven by KAN-native coefficient ranking instead of SHAP-only or edge-count heuristics.
+- Updated `comparison_per_risk.py` so KAN importance is treated as global, paper-native coefficient importance rather than falsely duplicated as if it were per-risk; also added optional Fourier checkpoint/config loading so both KAN variants can use the same coefficient-based path.
+- Updated `final_comparison.py` to use coefficient-based KAN feature rankings and fixed the KAN retention-curve prediction path so it rounds the single regression output correctly instead of treating it like multiclass logits.
+- Clarified the pruning/R² documentation (`kan_pruning.py`, `r2_pipeline.py`) to refer to activation L1 magnitude instead of variance, matching the implemented criterion.
+- Enabled sparsity regularization in `configs/chebykan_experiment.yaml` and `configs/fourierkan_experiment.yaml` via `sparsity_lambda`, `l1_weight`, and `entropy_weight` so future retraining follows the simplification scheme described in the original KAN paper.
+
+#### Why
+- The existing KAN interpretability code was only partially paper-faithful: it relied too heavily on L1/edge-count proxies, selected features through SHAP-first framing, and presented KAN values in the per-risk plots as if they were conditional when the TabKAN paper defines feature importance globally from first-layer basis coefficients.
+- The goal was to make the framework scientifically defensible and consistent with the papers' stated methodology, while preserving SHAP as the XGBoost explanation mechanism and ensuring we can extract the most important risk-prediction features from the KAN models themselves.
+
+#### Remarks
+- none
+
+---
+
 ### [2026-03-26] - Gian Seifert
 
 #### What

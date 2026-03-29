@@ -40,7 +40,7 @@ def evaluate_symbolic_fit(
     feature_names : list[str]
         Ordered list of input feature names (used for layer-0 edge labelling).
     threshold : float
-        Minimum output variance for an edge to be considered active.
+        Minimum activation L1 norm for an edge to be considered active.
     candidate_library : "scipy" | "pysr"
         Which symbolic regression backend to use.
     n_samples : int
@@ -69,7 +69,7 @@ def evaluate_symbolic_fit(
         if not isinstance(layer, (ChebyKANLayer, FourierKANLayer)):
             continue
 
-        # Precompute all edge variances once per layer
+        # Precompute all edge L1 scores once per layer
         l1_scores = _compute_edge_l1(layer)
         total_before += l1_scores.numel()
 
@@ -169,7 +169,7 @@ def run(
     print(f"  Accept (0.90–0.99): {agg['edges_acceptable']}")
     print(f"  Flagged (<0.90): {agg['edges_flagged']}")
 
-    from src.interpretability.paths import reports as rep_dir
+    from src.interpretability.utils.paths import reports as rep_dir
     out_path = rep_dir(output_dir) / f"{flavor}_r2_report.json"
     out_path.write_text(json.dumps(report, indent=2))
     print(f"Saved → {out_path}")

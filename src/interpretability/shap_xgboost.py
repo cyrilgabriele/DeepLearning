@@ -55,7 +55,7 @@ def run(
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    from src.interpretability.paths import figures as fig_dir, data as data_dir, reports as rep_dir
+    from src.interpretability.utils.paths import figures as fig_dir, data as data_dir, reports as rep_dir
 
     xgb_model = _load_model(checkpoint_path)
     X_eval = pd.read_parquet(eval_features_path)

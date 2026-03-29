@@ -62,9 +62,9 @@ def _plot_continuous(
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from src.interpretability.style import apply_paper_style, savefig_pdf, MODEL_COLORS, encode_to_raw_lookup
-    from src.interpretability.paths import figures as fig_dir
-    from src.interpretability.kan_symbolic import sample_edge
+    from src.interpretability.utils.style import apply_paper_style, savefig_pdf, MODEL_COLORS, encode_to_raw_lookup
+    from src.interpretability.utils.paths import figures as fig_dir
+    from src.interpretability.utils.kan_coefficients import sample_feature_function
 
     apply_paper_style()
     n = len(feats)
@@ -139,17 +139,16 @@ def _plot_continuous(
                     pass
 
             # ChebyKAN and FourierKAN
-            for sym_df_k, layer, model_name in [
-                (chebykan_sym, chebykan_layer, "ChebyKAN"),
-                (fourierkan_sym, fourierkan_layer, "FourierKAN"),
+            for layer, model_name in [
+                (chebykan_layer, "ChebyKAN"),
+                (fourierkan_layer, "FourierKAN"),
             ]:
-                if layer is None or sym_df_k is None:
+                if layer is None:
                     continue
-                cands = sym_df_k[(sym_df_k["layer"] == 0) & (sym_df_k["input_feature"] == feat)]
-                if cands.empty:
+                feat_idx = X_eval.columns.get_loc(feat) if feat in X_eval.columns else -1
+                if feat_idx < 0:
                     continue
-                best = cands.loc[cands["r_squared"].idxmax()]
-                x_norm_edge, y_edge = sample_edge(layer, int(best["edge_out"]), int(best["edge_in"]), n=300)
+                x_norm_edge, y_edge, _ = sample_feature_function(layer, feat_idx, n=300, reduction="mean")
                 x_plot = (encode_to_raw_lookup(feat, X_eval, X_raw, x_norm_edge)
                           if has_raw else x_norm_edge)
                 ax3.plot(x_plot, y_edge, color=MODEL_COLORS[model_name], lw=1.5, label=model_name)
@@ -180,8 +179,8 @@ def _plot_categorical(
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from src.interpretability.style import apply_paper_style, savefig_pdf
-    from src.interpretability.paths import figures as fig_dir
+    from src.interpretability.utils.style import apply_paper_style, savefig_pdf
+    from src.interpretability.utils.paths import figures as fig_dir
 
     apply_paper_style()
     n = len(feats)
@@ -251,9 +250,9 @@ def _plot_binary(
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from src.interpretability.style import apply_paper_style, savefig_pdf, MODEL_COLORS
-    from src.interpretability.paths import figures as fig_dir
-    from src.interpretability.kan_symbolic import sample_edge
+    from src.interpretability.utils.style import apply_paper_style, savefig_pdf, MODEL_COLORS
+    from src.interpretability.utils.paths import figures as fig_dir
+    from src.interpretability.utils.kan_coefficients import sample_feature_function
 
     apply_paper_style()
 
@@ -266,6 +265,13 @@ def _plot_binary(
         if not shap_df.empty and feat in shap_df.columns and enc is not None:
             n_val, p_val = _binary_dot_values_shap(shap_df[feat], enc)
             effects.append(abs(p_val - n_val))
+        feat_idx = X_eval.columns.get_loc(feat) if feat in X_eval.columns else -1
+        if feat_idx >= 0:
+            for layer in (chebykan_layer, fourierkan_layer):
+                if layer is None:
+                    continue
+                x_norm, y_vals, _ = sample_feature_function(layer, feat_idx, n=200, reduction="mean")
+                effects.append(abs(float(np.interp(1.0, x_norm, y_vals)) - float(np.interp(-1.0, x_norm, y_vals))))
         return max(effects) if effects else 0.0
 
     feats = sorted(feats, key=max_effect, reverse=True)
@@ -298,17 +304,14 @@ def _plot_binary(
             neg_v, pos_v = _binary_dot_values_shap(shap_df[feat], enc)
             models_dots["XGBoost"] = (neg_v, pos_v)
 
-        for sym_df_k, layer, model_name in [
-            (chebykan_sym, chebykan_layer, "ChebyKAN"),
-            (fourierkan_sym, fourierkan_layer, "FourierKAN"),
+        feat_idx = X_eval.columns.get_loc(feat) if feat in X_eval.columns else -1
+        for layer, model_name in [
+            (chebykan_layer, "ChebyKAN"),
+            (fourierkan_layer, "FourierKAN"),
         ]:
-            if layer is None or sym_df_k is None:
+            if layer is None or feat_idx < 0:
                 continue
-            cand = sym_df_k[(sym_df_k["layer"] == 0) & (sym_df_k["input_feature"] == feat)]
-            if cand.empty:
-                continue
-            best = cand.loc[cand["r_squared"].idxmax()]
-            x_norm, y_v = sample_edge(layer, int(best["edge_out"]), int(best["edge_in"]), n=200)
+            x_norm, y_v, _ = sample_feature_function(layer, feat_idx, n=200, reduction="mean")
             neg_v = float(np.interp(-1.0, x_norm, y_v))
             pos_v = float(np.interp(1.0, x_norm, y_v))
             models_dots[model_name] = (neg_v, pos_v)
@@ -357,7 +360,8 @@ def run(
     fourierkan_pruning_summary_path: Path | None = None,
 ) -> None:
     import torch
-    from src.interpretability.paths import data as data_dir, reports as rep_dir
+    from src.interpretability.utils.paths import data as data_dir, reports as rep_dir
+    from src.interpretability.utils.kan_coefficients import coefficient_importance_from_layer
     from src.models.tabkan import TabKAN
     from src.models.kan_layers import ChebyKANLayer, FourierKANLayer
     from src.configs import load_experiment_config
@@ -409,9 +413,17 @@ def run(
     chebykan_layer = _load_kan_layer(chebykan_checkpoint_path, chebykan_config_path, "chebykan")
     fourierkan_layer = _load_kan_layer(fourierkan_checkpoint_path, fourierkan_config_path, "fourierkan")
 
-    cont_feats = _top_by_type(shap_rank, feat_types, "continuous", n_continuous)
-    cat_feats = _top_by_type(shap_rank, feat_types, "categorical", n_categorical)
-    bin_feats = _top_by_type(shap_rank, feat_types, "binary", n_binary)
+    kan_rank = pd.Series(dtype=float)
+    for layer in (chebykan_layer, fourierkan_layer):
+        if layer is None:
+            continue
+        layer_rank = coefficient_importance_from_layer(layer, list(X_eval.columns)).set_index("feature")["importance"]
+        kan_rank = kan_rank.add(layer_rank, fill_value=0.0)
+    primary_rank = kan_rank.sort_values(ascending=False) if not kan_rank.empty else shap_rank
+
+    cont_feats = _top_by_type(primary_rank, feat_types, "continuous", n_continuous)
+    cat_feats = _top_by_type(primary_rank, feat_types, "categorical", n_categorical)
+    bin_feats = _top_by_type(primary_rank, feat_types, "binary", n_binary)
     cont_feats = [f for f in cont_feats if f in X_raw.columns]
     cat_feats = [f for f in cat_feats if f in X_raw.columns]
     bin_feats = [f for f in bin_feats if f in X_raw.columns]

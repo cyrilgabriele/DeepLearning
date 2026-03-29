@@ -35,7 +35,7 @@ def extract_coefficients(model, feature_names: list[str]) -> pd.DataFrame:
 
 def run(checkpoint_path: Path, features_path: Path, output_dir: Path = Path("outputs")) -> Path:
     import joblib
-    from src.interpretability.paths import data as data_dir
+    from src.interpretability.utils.paths import data as data_dir
 
     model = joblib.load(checkpoint_path)
     feature_names = json.loads(features_path.read_text())

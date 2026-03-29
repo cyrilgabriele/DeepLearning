@@ -21,7 +21,7 @@ import pandas as pd
 def _select_top_features(
     glm_coef: pd.DataFrame,
     shap_df: pd.DataFrame,
-    symbolic_df: pd.DataFrame,
+    kan_rank: pd.Series,
     feat_types: dict,
     n: int = 5,
     min_continuous: int = 2,
@@ -30,8 +30,7 @@ def _select_top_features(
     """Union-vote top features ensuring >=min_continuous and >=min_binary."""
     glm_top = set(glm_coef.nlargest(n, "abs_magnitude")["feature"].tolist())
     shap_top = set(shap_df.abs().mean().nlargest(n).index.tolist())
-    layer0 = symbolic_df[symbolic_df["layer"] == 0]
-    kan_top = set(layer0.groupby("input_feature").size().nlargest(n).index.tolist())
+    kan_top = set(kan_rank.head(n).index.tolist()) if not kan_rank.empty else set()
 
     counter: dict[str, int] = {}
     for s in (glm_top, shap_top, kan_top):
@@ -64,20 +63,14 @@ def _select_top_features(
     return selected
 
 
-def _get_kan_edge(sym_df: pd.DataFrame, feat: str):
-    candidates = sym_df[(sym_df["layer"] == 0) & (sym_df["input_feature"] == feat)]
-    if candidates.empty:
-        return None
-    return candidates.loc[candidates["r_squared"].idxmax()]
-
-
 def _plot_continuous(axes_row, feat, glm_indexed, shap_df, X_eval, X_raw, sym_df, kan_layer, flavor):
-    """Continuous: GLM linear effect | SHAP scatter+LOWESS | KAN spline — all on original scale."""
-    from src.interpretability.style import encode_to_raw_lookup, MODEL_COLORS
-    from src.interpretability.kan_symbolic import sample_edge
+    """Continuous: GLM linear effect | SHAP scatter+LOWESS | KAN feature function."""
+    from src.interpretability.utils.style import encode_to_raw_lookup, MODEL_COLORS
+    from src.interpretability.utils.kan_coefficients import sample_feature_function
 
     enc = X_eval[feat].values if feat in X_eval.columns else np.linspace(-1, 1, 200)
     has_raw = X_raw is not None and feat in X_raw.columns
+    feat_idx = X_eval.columns.get_loc(feat) if feat in X_eval.columns else -1
 
     # ── Col 0: GLM ──
     ax0 = axes_row[0]
@@ -118,27 +111,11 @@ def _plot_continuous(axes_row, feat, glm_indexed, shap_df, X_eval, X_raw, sym_df
 
     # ── Col 2: KAN spline + symbolic overlay ──
     ax2 = axes_row[2]
-    edge = _get_kan_edge(sym_df, feat)
-    if edge is not None and kan_layer is not None:
-        out_i, in_i = int(edge["edge_out"]), int(edge["edge_in"])
-        x_norm, y_vals = sample_edge(kan_layer, out_i, in_i, n=500)
-        # x_norm is already tanh(linspace(-3,3)) ≈ [-0.995, +0.995]
+    if kan_layer is not None and feat_idx >= 0:
+        x_norm, y_vals, _ = sample_feature_function(kan_layer, feat_idx, n=500, reduction="mean")
         x_plot = encode_to_raw_lookup(feat, X_eval, X_raw, x_norm) if has_raw else x_norm
         kan_color = MODEL_COLORS["ChebyKAN"] if flavor == "chebykan" else MODEL_COLORS["FourierKAN"]
-        ax2.plot(x_plot, y_vals, color=kan_color, lw=2, label="Learned")
-        formula, r2 = str(edge["formula"]), float(edge["r_squared"])
-        try:
-            x = x_norm
-            y_sym = eval(  # noqa: S307
-                formula.replace("^", "**").replace("sqrt", "np.sqrt")
-                       .replace("log", "np.log").replace("exp", "np.exp")
-                       .replace("sin", "np.sin").replace("cos", "np.cos")
-                       .replace("abs", "np.abs")
-            )
-            ax2.plot(x_plot, y_sym, lw=1.5, ls="--", color="tomato",
-                     label=f"{formula[:25]}\nR²={r2:.3f}")
-        except Exception:
-            pass
+        ax2.plot(x_plot, y_vals, color=kan_color, lw=2, label="Layer-0 aggregated")
         ax2.legend(fontsize=6)
         ax2.set_xlabel(f"{feat} ({'original scale' if has_raw else 'encoded'})", fontsize=8)
     else:
@@ -148,12 +125,13 @@ def _plot_continuous(axes_row, feat, glm_indexed, shap_df, X_eval, X_raw, sym_df
 
 
 def _plot_binary(axes_row, feat, glm_indexed, shap_df, X_eval, X_raw, sym_df, kan_layer, flavor):
-    """Binary: GLM bars | SHAP violin | KAN full curve with ±1 markers."""
-    from src.interpretability.style import MODEL_COLORS
-    from src.interpretability.kan_symbolic import sample_edge
+    """Binary: GLM bars | SHAP violin | KAN aggregated feature function."""
+    from src.interpretability.utils.style import MODEL_COLORS
+    from src.interpretability.utils.kan_coefficients import sample_feature_function
 
     enc = X_eval[feat] if feat in X_eval.columns else None
     raw = X_raw[feat].reset_index(drop=True) if (X_raw is not None and feat in X_raw.columns) else None
+    feat_idx = X_eval.columns.get_loc(feat) if feat in X_eval.columns else -1
 
     if raw is not None and enc is not None:
         label_neg = str(raw[enc < -0.5].mode().iloc[0]) if (enc < -0.5).any() else "0"
@@ -189,12 +167,10 @@ def _plot_binary(axes_row, feat, glm_indexed, shap_df, X_eval, X_raw, sym_df, ka
 
     # ── Col 2: KAN full curve on encoded domain with ±1 markers ──
     ax2 = axes_row[2]
-    edge = _get_kan_edge(sym_df, feat)
-    if edge is not None and kan_layer is not None:
-        out_i, in_i = int(edge["edge_out"]), int(edge["edge_in"])
-        x_norm, y_vals = sample_edge(kan_layer, out_i, in_i, n=500)
+    if kan_layer is not None and feat_idx >= 0:
+        x_norm, y_vals, _ = sample_feature_function(kan_layer, feat_idx, n=500, reduction="mean")
         kan_color = MODEL_COLORS["ChebyKAN"] if flavor == "chebykan" else MODEL_COLORS["FourierKAN"]
-        ax2.plot(x_norm, y_vals, color=kan_color, lw=2, label="Learned")
+        ax2.plot(x_norm, y_vals, color=kan_color, lw=2, label="Layer-0 aggregated")
         for x_mark, label in [(-1.0, label_neg), (1.0, label_pos)]:
             y_mark = float(np.interp(x_mark, x_norm, y_vals))
             ax2.axvline(x_mark, color="gray", lw=1, ls="--", alpha=0.7)
@@ -214,11 +190,12 @@ def _plot_binary(axes_row, feat, glm_indexed, shap_df, X_eval, X_raw, sym_df, ka
 
 
 def _plot_categorical(axes_row, feat, glm_indexed, shap_df, X_eval, sym_df, kan_layer, flavor):
-    from src.interpretability.style import MODEL_COLORS
-    from src.interpretability.kan_symbolic import sample_edge
+    from src.interpretability.utils.style import MODEL_COLORS
+    from src.interpretability.utils.kan_coefficients import sample_feature_function
 
     coef = float(glm_indexed.loc[feat, "coefficient"]) if feat in glm_indexed.index else 0.0
     enc = X_eval[feat] if feat in X_eval.columns else None
+    feat_idx = X_eval.columns.get_loc(feat) if feat in X_eval.columns else -1
 
     ax0 = axes_row[0]
     if enc is not None:
@@ -238,10 +215,8 @@ def _plot_categorical(axes_row, feat, glm_indexed, shap_df, X_eval, sym_df, kan_
     ax1.set_ylabel("SHAP value", fontsize=8)
 
     ax2 = axes_row[2]
-    edge = _get_kan_edge(sym_df, feat)
-    if edge is not None and kan_layer is not None:
-        out_i, in_i = int(edge["edge_out"]), int(edge["edge_in"])
-        x_norm, y_vals = sample_edge(kan_layer, out_i, in_i, n=500)
+    if kan_layer is not None and feat_idx >= 0:
+        x_norm, y_vals, _ = sample_feature_function(kan_layer, feat_idx, n=500, reduction="mean")
         kan_color = MODEL_COLORS["ChebyKAN"] if flavor == "chebykan" else MODEL_COLORS["FourierKAN"]
         ax2.plot(x_norm, y_vals, color=kan_color, lw=2)
         ax2.set_xlabel("CatBoost-encoded scale", fontsize=8)
@@ -268,8 +243,9 @@ def run(
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from src.interpretability.style import apply_paper_style, savefig_pdf, feature_type_label
-    from src.interpretability.paths import figures as fig_dir, data as data_dir, reports as rep_dir
+    from src.interpretability.utils.style import apply_paper_style, savefig_pdf, feature_type_label
+    from src.interpretability.utils.paths import figures as fig_dir, data as data_dir, reports as rep_dir
+    from src.interpretability.utils.kan_coefficients import coefficient_importance_from_module
     from src.configs import load_experiment_config
     from src.models.tabkan import TabKAN
     from src.models.kan_layers import ChebyKANLayer, FourierKANLayer
@@ -291,9 +267,6 @@ def run(
     if feat_types_path.exists():
         feat_types = json.loads(feat_types_path.read_text())
 
-    top_features = _select_top_features(glm_coef, shap_df, sym_df, feat_types, n=n_features)
-    print(f"[{flavor}] Top features: {top_features}")
-
     cfg = load_experiment_config(kan_config_path)
     in_features = X_eval.shape[1]
     widths = [cfg.model.width] * cfg.model.depth
@@ -306,6 +279,9 @@ def run(
     kan_layer = next(
         (l for l in module.kan_layers if isinstance(l, (ChebyKANLayer, FourierKANLayer))), None
     )
+    kan_rank = coefficient_importance_from_module(module, list(X_eval.columns))
+    top_features = _select_top_features(glm_coef, shap_df, kan_rank, feat_types, n=n_features)
+    print(f"[{flavor}] Top features: {top_features}")
 
     glm_indexed = glm_coef.set_index("feature")
     n = len(top_features)
@@ -313,7 +289,7 @@ def run(
     if n == 1:
         axes = axes.reshape(1, 3)
 
-    for c, title in enumerate(["GLM (coefficient)", "XGBoost SHAP", f"{flavor.title()} symbolic"]):
+    for c, title in enumerate(["GLM (coefficient)", "XGBoost SHAP", f"{flavor.title()} feature function"]):
         axes[0, c].set_title(title, fontsize=11, fontweight="bold", pad=10)
 
     for row, feat in enumerate(top_features):
@@ -327,7 +303,7 @@ def run(
             _plot_categorical(axes[row], feat, glm_indexed, shap_df, X_eval, sym_df, kan_layer, flavor)
 
     plt.suptitle(
-        f"Side-by-Side Interpretability: GLM | XGBoost SHAP | {flavor.title()} Symbolic",
+        f"Side-by-Side Interpretability: GLM | XGBoost SHAP | {flavor.title()} Feature Function",
         fontsize=12, fontweight="bold", y=1.01,
     )
     plt.tight_layout()

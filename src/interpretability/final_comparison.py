@@ -137,7 +137,7 @@ def _compute_qwk_retention_curve(
     import torch
     import joblib
     from sklearn.metrics import cohen_kappa_score
-    from src.interpretability.kan_pruning import _compute_edge_l1
+    from src.interpretability.utils.kan_coefficients import coefficient_importance_from_module
     from src.models.kan_layers import ChebyKANLayer, FourierKANLayer
     from src.configs import load_experiment_config
     from src.models.tabkan import TabKAN
@@ -167,16 +167,10 @@ def _compute_qwk_retention_curve(
         )
         module.load_state_dict(torch.load(ckpt, map_location="cpu"))
         module.eval()
-        first_layer = next(
-            (l for l in module.kan_layers if isinstance(l, (ChebyKANLayer, FourierKANLayer))), None
-        )
-        if first_layer is None:
+        ranking = coefficient_importance_from_module(module, feature_names)
+        if ranking.empty:
             return feature_names, module
-        variances = _compute_edge_l1(first_layer)
-        per_input = variances.sum(dim=0)
-        order = per_input.argsort(descending=True)
-        ranked = [feature_names[int(i)] for i in order if int(i) < n_feats]
-        return ranked, module
+        return ranking.index.tolist(), module
 
     cheby_ranked, cheby_module = _kan_feature_ranking(chebykan_ckpt, chebykan_cfg, "chebykan")
     fourier_ranked, fourier_module = _kan_feature_ranking(fourierkan_ckpt, fourierkan_cfg, "fourierkan")
@@ -198,8 +192,8 @@ def _compute_qwk_retention_curve(
     def _kan_predict(module, X_df):
         X_t = torch.tensor(X_df.values, dtype=torch.float32)
         with torch.no_grad():
-            logits = module(X_t)
-        return logits.argmax(dim=1).numpy() + 1  # 1-indexed risk levels
+            preds = module(X_t).cpu().numpy().flatten()
+        return np.clip(np.round(preds), 1, 8).astype(int)
 
     model_predict = {
         "GLM": lambda X: glm_wrapper.predict(X),
@@ -231,8 +225,8 @@ def _plot_qwk_retention(qwk_curves: dict[str, list[float]], output_dir: Path) ->
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from src.interpretability.style import apply_paper_style, savefig_pdf, MODEL_COLORS
-    from src.interpretability.paths import figures as fig_dir
+    from src.interpretability.utils.style import apply_paper_style, savefig_pdf, MODEL_COLORS
+    from src.interpretability.utils.paths import figures as fig_dir
 
     apply_paper_style()
     retention_pcts = list(range(10, 110, 10))
@@ -263,8 +257,8 @@ def _render_table_pdf(rows, models, dimensions, output_dir: Path) -> None:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from src.interpretability.style import apply_paper_style, savefig_pdf
-    from src.interpretability.paths import figures as fig_dir
+    from src.interpretability.utils.style import apply_paper_style, savefig_pdf
+    from src.interpretability.utils.paths import figures as fig_dir
 
     apply_paper_style()
     cell_text = [[rows[m].get(d, "N/A") for m in models] for d in dimensions]
@@ -344,7 +338,7 @@ def run(
     eval_features: Path | None = None,
     eval_labels: Path | None = None,
 ) -> None:
-    from src.interpretability.paths import figures as fig_dir, data as data_dir, reports as rep_dir
+    from src.interpretability.utils.paths import figures as fig_dir, data as data_dir, reports as rep_dir
 
     glm_coef_path = data_dir(outputs_dir) / "glm_coefficients.csv"
     shap_path = data_dir(outputs_dir) / "shap_xgb_values.parquet"
