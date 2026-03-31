@@ -177,25 +177,28 @@ def log_preprocessing(log: logging.Logger, jl: JSONLLogger, dm, run_dir: str) ->
     prep = dm.preprocessor
     fl = prep.feature_lists
 
-    # Re-load to get column names and raw data
+    # Re-load raw data for the report
     df = pd.read_csv(dm.data_path)
     y = df["Response"]
     X_raw = df.drop(columns=["Response"])
-    X_processed = prep.fit_transform(X_raw, y)
-    col_names = list(X_processed.columns)
 
+    # Use already-preprocessed data from the data module
     X_all = np.concatenate([dm.X_train, dm.X_val], axis=0)
-    y_all = np.concatenate([
-        dm.y_train,
-        dm.y_val,
-    ])
+    y_all = np.concatenate([dm.y_train, dm.y_val])
+    processed_shape = X_all.shape
+
+    col_names = (
+        list(dm.feature_names)
+        if dm.feature_names is not None
+        else [f"f{i}" for i in range(processed_shape[1])]
+    )
 
     # ── Save raw sample CSV ──
     raw_sample = df.head(50)
     raw_sample.to_csv(os.path.join(run_dir, "data", "raw_sample.csv"), index=False)
 
     # ── Save processed sample CSV ──
-    proc_sample = pd.DataFrame(X_processed.values[:50], columns=col_names)
+    proc_sample = pd.DataFrame(X_all[:50], columns=col_names)
     proc_sample.insert(0, "Response", y.values[:50])
     proc_sample.to_csv(os.path.join(run_dir, "data", "processed_sample.csv"), index=False)
 
@@ -250,7 +253,7 @@ def log_preprocessing(log: logging.Logger, jl: JSONLLogger, dm, run_dir: str) ->
         "",
         f"Dataset:     {dm.data_path}",
         f"Raw shape:   {X_raw.shape}",
-        f"Processed:   {X_processed.shape}",
+        f"Processed:   {processed_shape}",
         f"Train:       {len(dm.X_train)} samples",
         f"Val:         {len(dm.X_val)} samples",
         f"",
@@ -298,7 +301,7 @@ def log_preprocessing(log: logging.Logger, jl: JSONLLogger, dm, run_dir: str) ->
     log.info("=" * 70)
     log.info("PREPROCESSING REPORT")
     log.info("=" * 70)
-    log.info(f"Raw: {X_raw.shape} -> Processed: {X_processed.shape}")
+    log.info(f"Raw: {X_raw.shape} -> Processed: {processed_shape}")
     log.info(f"Train: {len(dm.X_train)} | Val: {len(dm.X_val)} | Features: {dm.num_features}")
     log.info(f"Dropped: {prep.dropped_features}")
     log.info("")
@@ -330,7 +333,7 @@ def log_preprocessing(log: logging.Logger, jl: JSONLLogger, dm, run_dir: str) ->
 
     # JSONL
     jl.log("preprocessing", "summary",
-           raw_shape=list(X_raw.shape), processed_shape=list(X_processed.shape),
+           raw_shape=list(X_raw.shape), processed_shape=list(processed_shape),
            n_train=len(dm.X_train), n_val=len(dm.X_val), n_features=dm.num_features,
            dropped=prep.dropped_features, nan_count=int(np.isnan(X_all).sum()),
            type_stats=type_stats)

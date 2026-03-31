@@ -1,9 +1,7 @@
 name: chebykan
 kan_type: chebykan
-widths:
-- 128
-- 64
+widths: [128, 64]
 degree: 6
 grid_size: null
-lr: 0.00546972
-weight_decay: 0.000542592
+lr: 0.005469718211738354
+weight_decay: 0.0005425921367964894

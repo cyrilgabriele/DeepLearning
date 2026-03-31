@@ -1,10 +1,7 @@
 name: fourierkan
 kan_type: fourierkan
-widths:
-- 64
-- 256
-- 64
+widths: [64, 256, 64]
 degree: null
 grid_size: 8
-lr: 0.00318872
-weight_decay: 2.39388e-05
+lr: 0.0031887242971171403
+weight_decay: 2.393884747850709e-05

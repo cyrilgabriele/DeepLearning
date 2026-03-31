@@ -7,6 +7,7 @@ _PROJECT_ROOT = str(Path(__file__).resolve().parent.parent)
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
+import joblib
 import hydra
 from omegaconf import DictConfig, OmegaConf
 import lightning as L
@@ -23,6 +24,8 @@ from src.models.mlp import MLPBaseline
 from src.models.xgb_baseline import XGBBaseline
 from src.metrics.qwk import optimize_thresholds, _apply_thresholds
 from lightning.pytorch.callbacks import Callback
+
+from hydra.core.hydra_config import HydraConfig
 
 from src.utils import (
     make_run_dir, setup_logger, JSONLLogger, EpochMetricsCSV,
@@ -68,6 +71,12 @@ def build_model(cfg: DictConfig, num_features: int):
             n_estimators=cfg.model.n_estimators,
             max_depth=cfg.model.max_depth,
             learning_rate=cfg.model.learning_rate,
+            subsample=cfg.model.get("subsample", 1.0),
+            colsample_bytree=cfg.model.get("colsample_bytree", 1.0),
+            min_child_weight=cfg.model.get("min_child_weight", 1),
+            reg_alpha=cfg.model.get("reg_alpha", 0.0),
+            reg_lambda=cfg.model.get("reg_lambda", 1.0),
+            gamma=cfg.model.get("gamma", 0.0),
         )
     elif cfg.model.name == "mlp":
         return MLPBaseline(
@@ -109,6 +118,10 @@ def generate_submission(model, thresholds, dm, cfg, model_name):
     test_path = orig_cwd / cfg.data.path.replace("train.csv", "test.csv")
     if not test_path.exists():
         print(f"No test.csv found at {test_path}, skipping submission.")
+        return
+
+    if not hasattr(dm.preprocessor, "transform"):
+        print("Preprocessor does not support transform; use src.submit for submissions.")
         return
 
     test_df = pd.read_csv(test_path)
@@ -192,6 +205,12 @@ def train_xgb(cfg: DictConfig, dm: PrudentialDataModule):
         n_estimators=cfg.model.n_estimators,
         max_depth=cfg.model.max_depth,
         learning_rate=cfg.model.learning_rate,
+        subsample=cfg.model.get("subsample", 1.0),
+        colsample_bytree=cfg.model.get("colsample_bytree", 1.0),
+        min_child_weight=cfg.model.get("min_child_weight", 1),
+        reg_alpha=cfg.model.get("reg_alpha", 0.0),
+        reg_lambda=cfg.model.get("reg_lambda", 1.0),
+        gamma=cfg.model.get("gamma", 0.0),
     )
     model.fit(dm.X_train, dm.y_train, eval_set=[(dm.X_val, dm.y_val)])
     duration = time.time() - t0
@@ -207,6 +226,15 @@ def train_xgb(cfg: DictConfig, dm: PrudentialDataModule):
     # Output report
     log_output(log, jl, y_cont, dm.y_val, thresholds, val_qwk, run_dir)
     log_training_complete(log, jl, "xgb", cfg.model.n_estimators, duration, val_qwk, 0, run_dir)
+
+    # Save model
+    orig_cwd = hydra.utils.get_original_cwd()
+    model_config_name = HydraConfig.get().runtime.choices.get("model", "xgb")
+    ckpt_dir = Path(orig_cwd) / "checkpoints"
+    ckpt_dir.mkdir(exist_ok=True)
+    ckpt_path = ckpt_dir / f"{model_config_name}.joblib"
+    joblib.dump({"model": model, "thresholds": thresholds}, ckpt_path)
+    log.info(f"Saved: {ckpt_path}")
 
     jl.close()
     _save_result("xgb", val_qwk, params=0, duration=duration, epochs=cfg.model.n_estimators, cfg=cfg)
@@ -250,12 +278,13 @@ def train_neural(cfg: DictConfig, dm: PrudentialDataModule):
         pass
     loggers.append(CSVLogger(log_dir, name=cfg.model.name))
 
+    model_config_name = HydraConfig.get().runtime.choices.get("model", cfg.model.name)
     callbacks = [
         epoch_logger_cb,
         EarlyStopping(monitor="val/loss", patience=cfg.train.early_stopping_patience, mode="min"),
         ModelCheckpoint(monitor="val/loss", mode="min", save_top_k=1,
                         dirpath=str(Path(orig_cwd) / "checkpoints"),
-                        filename=f"{cfg.model.name}-{{epoch}}-{{val/loss:.4f}}"),
+                        filename=f"{model_config_name}-{{epoch}}-{{val/loss:.4f}}"),
     ]
 
     trainer = L.Trainer(
