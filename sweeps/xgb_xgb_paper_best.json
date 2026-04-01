@@ -1,0 +1,22 @@
+{
+  "model": "xgb",
+  "preprocessing": "xgb_paper",
+  "best_qwk": 0.6546,
+  "best_params": {
+    "n_estimators": 765,
+    "max_depth": 11,
+    "learning_rate": 0.012836785304264764,
+    "subsample": 0.620710169201981,
+    "colsample_bytree": 0.5071615942406114,
+    "min_child_weight": 8,
+    "reg_alpha": 0.12670481458419444,
+    "reg_lambda": 1.246619007860089,
+    "gamma": 3.895752493463711
+  },
+  "total_trials": 100,
+  "best_trial_number": 88,
+  "best_trial_attrs": {
+    "duration": 13.3,
+    "n_estimators": 765
+  }
+}

@@ -1,0 +1,6 @@
+name: mlp
+widths:
+- 256
+dropout: 0.068
+lr: 0.00158557
+weight_decay: 2.31788e-06

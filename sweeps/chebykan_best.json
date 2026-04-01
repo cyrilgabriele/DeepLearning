@@ -11,7 +11,7 @@
     "weight_decay": 0.0005425921367964894,
     "batch_size": 2048
   },
-  "total_trials": 100,
+  "total_trials": 151,
   "best_trial_number": 94,
   "best_trial_attrs": {
     "duration": 27.1,

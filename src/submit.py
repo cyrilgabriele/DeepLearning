@@ -123,7 +123,7 @@ def make_submission(model_name: str, preprocessing: str):
         trainer = L.Trainer(
             max_epochs=100,
             accelerator="auto",
-            callbacks=[EarlyStopping(monitor="val/loss", patience=10, mode="min")],
+            callbacks=[EarlyStopping(monitor="val/qwk", patience=10, mode="max")],
             logger=False,
             enable_checkpointing=False,
             enable_progress_bar=True,

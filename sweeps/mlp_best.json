@@ -1,21 +1,20 @@
 {
   "model": "mlp",
-  "best_qwk": 0.5992,
+  "preprocessing": "kan_paper",
+  "best_qwk": 0.6129,
   "best_params": {
-    "n_layers": 3,
-    "width_0": 64,
-    "width_1": 128,
-    "width_2": 512,
-    "dropout": 0.03486672785187006,
-    "lr": 0.005756470639990483,
-    "weight_decay": 1.535875518037987e-06,
-    "batch_size": 512
+    "n_layers": 1,
+    "width_0": 256,
+    "dropout": 0.06804529719979258,
+    "lr": 0.0015855667878062198,
+    "weight_decay": 2.317876749884363e-06,
+    "batch_size": 1024
   },
-  "total_trials": 50,
-  "best_trial_number": 4,
+  "total_trials": 100,
+  "best_trial_number": 69,
   "best_trial_attrs": {
-    "duration": 223.8,
-    "epochs": 43,
-    "num_params": 84481
+    "duration": 65.0,
+    "epochs": 90,
+    "num_params": 36865
   }
 }

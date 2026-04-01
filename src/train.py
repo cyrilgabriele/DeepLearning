@@ -252,10 +252,10 @@ def train_neural(cfg: DictConfig, dm: PrudentialDataModule):
 
     callbacks = [
         epoch_logger_cb,
-        EarlyStopping(monitor="val/loss", patience=cfg.train.early_stopping_patience, mode="min"),
-        ModelCheckpoint(monitor="val/loss", mode="min", save_top_k=1,
+        EarlyStopping(monitor="val/qwk", patience=cfg.train.early_stopping_patience, mode="max"),
+        ModelCheckpoint(monitor="val/qwk", mode="max", save_top_k=1,
                         dirpath=str(Path(orig_cwd) / "checkpoints"),
-                        filename=f"{cfg.model.name}-{{epoch}}-{{val/loss:.4f}}"),
+                        filename=f"{cfg.model.name}-{{epoch}}-{{val/qwk:.4f}}"),
     ]
 
     trainer = L.Trainer(

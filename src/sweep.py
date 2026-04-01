@@ -194,7 +194,7 @@ def objective_mlp(trial: Trial, dm: PrudentialDataModule) -> float:
     trainer = L.Trainer(
         max_epochs=100,
         accelerator="auto",
-        callbacks=[EarlyStopping(monitor="val/loss", patience=10, mode="min")],
+        callbacks=[EarlyStopping(monitor="val/qwk", patience=10, mode="max")],
         logger=False,
         enable_checkpointing=False,
         enable_progress_bar=False,
@@ -270,7 +270,7 @@ def objective_kan(trial: Trial, dm: PrudentialDataModule, kan_type: str) -> floa
     trainer = L.Trainer(
         max_epochs=100,
         accelerator="auto",
-        callbacks=[EarlyStopping(monitor="val/loss", patience=10, mode="min")],
+        callbacks=[EarlyStopping(monitor="val/qwk", patience=10, mode="max")],
         logger=False,
         enable_checkpointing=False,
         enable_progress_bar=False,
