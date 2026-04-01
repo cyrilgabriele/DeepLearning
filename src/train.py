@@ -281,10 +281,10 @@ def train_neural(cfg: DictConfig, dm: PrudentialDataModule):
     model_config_name = HydraConfig.get().runtime.choices.get("model", cfg.model.name)
     callbacks = [
         epoch_logger_cb,
-        EarlyStopping(monitor="val/loss", patience=cfg.train.early_stopping_patience, mode="min"),
-        ModelCheckpoint(monitor="val/loss", mode="min", save_top_k=1,
+        EarlyStopping(monitor="val/qwk", patience=cfg.train.early_stopping_patience, mode="max"),
+        ModelCheckpoint(monitor="val/qwk", mode="max", save_top_k=1,
                         dirpath=str(Path(orig_cwd) / "checkpoints"),
-                        filename=f"{model_config_name}-{{epoch}}-{{val/loss:.4f}}"),
+                        filename=f"{model_config_name}-{{epoch}}-{{val/qwk:.4f}}"),
     ]
 
     trainer = L.Trainer(

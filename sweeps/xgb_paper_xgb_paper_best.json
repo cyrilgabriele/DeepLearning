@@ -1,15 +1,15 @@
 {
   "model": "xgb_paper",
-  "preprocessing": "kan_paper",
-  "best_qwk": 0.5721,
+  "preprocessing": "xgb_paper",
+  "best_qwk": 0.5725,
   "best_params": {
-    "max_depth": 5,
-    "min_child_weight": 1,
+    "max_depth": 10,
+    "min_child_weight": 15,
     "learning_rate": 0.1,
-    "subsample": 0.7,
+    "subsample": 1.0,
     "colsample_bytree": 1.0,
     "reg_alpha": 1.0,
     "reg_lambda": 1.0
   },
-  "duration": 367.6
+  "duration": 1647.4
 }
