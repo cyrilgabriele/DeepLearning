@@ -34,12 +34,60 @@ from src.metrics.qwk import optimize_thresholds
 DATA_PATH = Path(_PROJECT_ROOT) / "data" / "prudential-life-insurance-assessment"
 SUBMIT_DIR = Path(_PROJECT_ROOT) / "submissions"
 SWEEP_DIR = Path(_PROJECT_ROOT) / "sweeps"
+ARTIFACTS_DIR = Path(_PROJECT_ROOT) / "artifacts"
+CHECKPOINTS_DIR = Path(_PROJECT_ROOT) / "checkpoints"
 
 ALL_MODELS = ["xgb_paper", "xgb", "bsplinekan", "chebykan", "fourierkan", "mlp"]
 
 
+def _save_artifacts(
+    model_name: str,
+    preprocessing: str,
+    timestamp: str,
+    val_qwk: float,
+    duration: float,
+    params: dict,
+    thresholds,
+    model,
+    training_attrs: dict | None = None,
+) -> None:
+    ARTIFACTS_DIR.mkdir(exist_ok=True)
+    CHECKPOINTS_DIR.mkdir(exist_ok=True)
+
+    stem = f"{model_name}_{preprocessing}_{timestamp}"
+
+    # Save checkpoint
+    if model_name in ("bsplinekan", "chebykan", "fourierkan", "mlp"):
+        ckpt_path = CHECKPOINTS_DIR / f"{stem}.pt"
+        torch.save(model.state_dict(), ckpt_path)
+    elif model_name == "xgb":
+        ckpt_path = CHECKPOINTS_DIR / f"{stem}.json"
+        model.model.save_model(str(ckpt_path))
+    elif model_name == "xgb_paper":
+        ckpt_path = CHECKPOINTS_DIR / f"{stem}.json"
+        model._estimator.save_model(str(ckpt_path))
+
+    # Save artifact metadata
+    artifact = {
+        "model": model_name,
+        "preprocessing": preprocessing,
+        "timestamp": timestamp,
+        "val_qwk": round(val_qwk, 6),
+        "duration_s": round(duration, 1),
+        "params": params,
+        "thresholds": thresholds.tolist() if hasattr(thresholds, "tolist") else list(thresholds),
+        "checkpoint": str(ckpt_path),
+        "training_attrs": training_attrs or {},
+    }
+    artifact_path = ARTIFACTS_DIR / f"{stem}.json"
+    artifact_path.write_text(json.dumps(artifact, indent=2))
+    print(f"Checkpoint saved to {ckpt_path}")
+    print(f"Artifact saved to  {artifact_path}")
+
+
 def make_submission(model_name: str, preprocessing: str):
     SUBMIT_DIR.mkdir(exist_ok=True)
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
 
     # Load data
     print(f"Loading data (preprocessing: {preprocessing})...")
@@ -52,6 +100,8 @@ def make_submission(model_name: str, preprocessing: str):
     )
     dm.setup()
     print(f"Features: {dm.num_features} | Train: {dm.X_train.shape} | Val: {dm.X_val.shape}")
+
+    from src.metrics.qwk import _apply_thresholds
 
     # Train model
     if model_name == "xgb_paper":
@@ -69,6 +119,9 @@ def make_submission(model_name: str, preprocessing: str):
         val_qwk = cohen_kappa_score(dm.y_val.astype(int), preds_val, weights="quadratic")
         print(f"Val QWK: {val_qwk:.4f} | Time: {duration:.1f}s")
         print(f"Best params: {model.best_params_}")
+        _save_artifacts(model_name, preprocessing, timestamp, val_qwk, duration,
+                        model.best_params_, np.array([]), model,
+                        training_attrs={"best_params": model.best_params_, "duration_s": round(duration, 1)})
 
     elif model_name in ("bsplinekan", "chebykan", "fourierkan", "mlp"):
         # Load best params from sweep
@@ -77,7 +130,8 @@ def make_submission(model_name: str, preprocessing: str):
         if not sweep_path.exists():
             sweep_path = SWEEP_DIR / f"{model_name}_best.json"
         print(f"Loading best params from {sweep_path}...")
-        bp = json.loads(sweep_path.read_text())["best_params"]
+        sweep_data = json.loads(sweep_path.read_text())
+        bp = sweep_data["best_params"]
         n_layers = bp["n_layers"]
         widths = [bp[f"width_{i}"] for i in range(n_layers)]
         print(f"Best params: widths={widths}, {bp}")
@@ -145,8 +199,13 @@ def make_submission(model_name: str, preprocessing: str):
 
         preds = np.concatenate(val_preds).flatten()
         targets = np.concatenate(val_targets).flatten()
-        _, val_qwk = optimize_thresholds(targets, preds)
-        print(f"Val QWK: {val_qwk:.4f} | Epochs: {trainer.current_epoch + 1} | Time: {duration:.1f}s")
+        thresholds, val_qwk = optimize_thresholds(targets, preds)
+        epochs_trained = trainer.current_epoch + 1
+        num_params = sum(p.numel() for p in model.parameters())
+        print(f"Val QWK: {val_qwk:.4f} | Epochs: {epochs_trained} | Params: {num_params:,} | Time: {duration:.1f}s")
+        _save_artifacts(model_name, preprocessing, timestamp, val_qwk, duration,
+                        {**bp, "widths": widths}, thresholds, model,
+                        training_attrs={"epochs": epochs_trained, "num_params": num_params, "duration_s": round(duration, 1)})
 
     elif model_name == "xgb":
         # Load best params from sweep
@@ -160,7 +219,8 @@ def make_submission(model_name: str, preprocessing: str):
                     break
 
         print(f"Loading best params from {sweep_path}...")
-        bp = json.loads(sweep_path.read_text())["best_params"]
+        sweep_data = json.loads(sweep_path.read_text())
+        bp = sweep_data["best_params"]
         print(f"Best params: {bp}")
 
         print("\nTraining XGBBaseline with Optuna-tuned params...")
@@ -184,8 +244,12 @@ def make_submission(model_name: str, preprocessing: str):
 
         # Evaluate on val for reporting
         y_cont_val = model.predict(dm.X_val)
-        _, val_qwk = optimize_thresholds(dm.y_val, y_cont_val)
-        print(f"Val QWK: {val_qwk:.4f} | Time: {duration:.1f}s")
+        thresholds, val_qwk = optimize_thresholds(dm.y_val, y_cont_val)
+        n_estimators_actual = model.model.n_estimators
+        print(f"Val QWK: {val_qwk:.4f} | Trees: {n_estimators_actual} | Time: {duration:.1f}s")
+        _save_artifacts(model_name, preprocessing, timestamp, val_qwk, duration,
+                        bp, model.thresholds, model,
+                        training_attrs={"n_estimators": n_estimators_actual, "duration_s": round(duration, 1)})
 
     # Predict on test.csv using fitted preprocessor states from training
     print("\nPredicting on test.csv...")
@@ -229,20 +293,15 @@ def make_submission(model_name: str, preprocessing: str):
             if next(model.parameters()).is_cuda:
                 X_tensor = X_tensor.cuda()
             y_cont_test = model(X_tensor).cpu().numpy().flatten()
-        thresholds, _ = optimize_thresholds(dm.y_val, preds)  # preds from val
-        from src.metrics.qwk import _apply_thresholds
         preds_test = np.clip(_apply_thresholds(y_cont_test, thresholds), 1, 8).astype(int)
     else:
         y_cont_test = model.predict(X_test_np)
-        thresholds, _ = optimize_thresholds(dm.y_val, model.predict(dm.X_val))
-        from src.metrics.qwk import _apply_thresholds
         preds_test = np.clip(_apply_thresholds(y_cont_test, thresholds), 1, 8).astype(int)
 
     preds_test = np.clip(preds_test, 1, 8).astype(int)
     print(f"Predictions: classes {np.unique(preds_test)}")
 
-    # Save
-    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    # Save submission
     sub = pd.DataFrame({"Id": ids, "Response": preds_test})
     sub_path = SUBMIT_DIR / f"submission_{model_name}_{preprocessing}_{timestamp}.csv"
     sub.to_csv(sub_path, index=False)

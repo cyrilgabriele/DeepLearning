@@ -6,3 +6,4 @@ grid_size: 10
 spline_order: 3
 lr: 0.0081762870169237
 weight_decay: 6.954504546935677e-06
+batch_size: 256

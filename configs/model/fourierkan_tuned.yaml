@@ -5,3 +5,4 @@ degree: null
 grid_size: 8
 lr: 0.0031887242971171403
 weight_decay: 2.393884747850709e-05
+batch_size: 256
