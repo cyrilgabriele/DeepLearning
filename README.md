@@ -23,34 +23,29 @@ uv sync
 
 ## Running Experiments
 
-### Via Hydra (TabKAN models)
+- `main.py` is the single entrypoint for both training and tuning.
+- Every run is driven from one YAML experiment config that contains trainer, preprocessing, and model settings.
+- Start from `configs/smoke_experiment.yaml`, `configs/experiments/kan_cheby_single.yaml`, or `configs/experiments/xgboost_paper_experiment.yaml` and adjust `trainer.train_csv` / `trainer.test_csv` for your machine.
+
+### Train
 
 ```bash
-# Train individual models
-uv run python src/train.py model=chebykan
-uv run python src/train.py model=fourierkan
-uv run python src/train.py model=bsplinekan
-uv run python src/train.py model=mlp
-uv run python src/train.py model=xgb
-
-# Train all models and print comparison table
-uv run python src/train.py model=chebykan,fourierkan,bsplinekan,mlp,xgb train.max_epochs=5 -m
-
-# Override hyperparameters from CLI
-uv run python src/train.py model=chebykan model.degree=5 model.widths=[128,64] train.max_epochs=50
-uv run python src/train.py model=fourierkan model.grid_size=8 model.lr=5e-4
-uv run python src/train.py model=bsplinekan model.grid_size=10 model.spline_order=4
-
-# Lightweight test run (5 epochs)
-uv run python src/train.py model=chebykan train.max_epochs=5
+uv run python main.py --stage train --config configs/smoke_experiment.yaml
+uv run python main.py --stage train --config configs/experiments/kan_cheby_single.yaml
+uv run python main.py --stage train --config configs/experiments/xgboost_paper_experiment.yaml
 ```
 
-### Via YAML config (Trainer pipeline)
-- `main.py` accepts a required YAML config that captures **all** trainer, preprocessing, and model parameters.
-- Start from `configs/smoke_experiment.yaml` (TabKAN) or `configs/xgboost_paper_experiment.yaml` (paper-faithful XGBoost), adjust every field (especially `trainer.train_csv`/`trainer.test_csv`) to match your environment, and launch via `python main.py --config <path>.yaml`.
-- To average over multiple random seeds with the paper model, set `model.params.seed_trials` in your config (or `seed_trials` in the Hydra preset) to a list of integers; the best-QWK run will be kept.
-- A fixed global random seed (`42`) is applied automatically to numpy/scikit-learn (and PyTorch if installed), so every run is deterministic.
-- The CLI instantiates `Trainer`, which fits the chosen preprocessor on the training subset, builds the requested model, and prints MAE/accuracy/F1 on the evaluation slice.
+### Tune
+
+```bash
+uv run python main.py --stage tune --config configs/smoke_experiment.yaml --n-trials 20
+uv run python main.py --stage tune --config configs/experiments/xgboost_paper_experiment.yaml --n-trials 25 --timeout-tune 3600
+```
+
+- Tune runs use the same `Trainer` pipeline as train runs.
+- The tuned config is written to `sweeps/*_best.yaml`; train it with `python main.py --stage train --config <that-file>.yaml`.
+- For the paper XGBoost model, tune stage searches parameters externally with Optuna and writes the winning fixed params back into the generated YAML.
+- A fixed global random seed from the config is applied automatically to numpy/scikit-learn and PyTorch when available.
 
 ## Evaluate a Saved Checkpoint
 

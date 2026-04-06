@@ -17,6 +17,24 @@ Track what was changed, why it was changed, and any important notes.
 - Optional notes, issues, or future work
 ```
 
+### [2026-04-06] - Cyril Gabriele
+
+#### What
+- Fixed the regression in `src/training/trainer.py` where `Trainer.run()` called `self._export_eval_data(splits)` with an undefined variable, causing the run to crash after fitting and checkpointing.
+- Completed the eval-export path in `Trainer` by aligning it with the actual `PreparedDataset` contract, adding raw evaluation feature reconstruction (`X_eval_raw`) and exporting the feature-type metadata needed by the interpretability scripts.
+- Added a shared `run_train()` helper in `src/training/trainer.py` so training can be invoked through one code path from both the CLI and the tuning workflow.
+- Reworked `main.py` into a stage-based entrypoint with `--stage {train,tune}`, following the same pattern used in the other project.
+- Replaced the old `src/sweep.py` implementation with a trainer-backed Optuna runner that materializes `ExperimentConfig` trial variants and evaluates them via `Trainer.run()` instead of the legacy Lightning/Hydra training path.
+- Removed the obsolete `src/train.py` entrypoint and updated `README.md` so the documented workflow uses `main.py --stage train` and `main.py --stage tune`.
+
+#### Why
+- The broken `splits` call meant the current trainer could fit a model but still fail before returning artifacts, which made the main experiment path unreliable.
+- The repository had drifted into two incompatible training systems: the modern registry-backed `Trainer` path and the older Hydra/Lightning `src/train.py` path. Consolidating around `Trainer.run()` removes duplicated logic and keeps training and tuning behavior consistent.
+- Stage-based dispatch in `main.py` keeps the CLI surface explicit and makes the entrypoint match the project structure used elsewhere.
+
+#### Remarks
+- The new sweep only targets model families that the current registry-backed trainer actually supports (`glm`, `xgboost-paper`, and TabKAN flavors); the old MLP / legacy XGBoost regression sweep path was intentionally removed with `src/train.py`.
+
 ### [2026-03-29] - Cyril Gabriele
 
 #### What

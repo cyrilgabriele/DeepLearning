@@ -11,7 +11,7 @@ from typing import Dict, Optional
 import pandas as pd
 from sklearn.metrics import accuracy_score, cohen_kappa_score, f1_score, mean_absolute_error
 
-from src.configs import ExperimentConfig
+from src.configs import ExperimentConfig, set_global_seed
 from src.data import preprocess_xgboost_paper as paper_prep
 from src.data import preprocess_kan_paper as kan_prep
 from src.data import preprocess_kan_sota as kan_sota_prep
@@ -26,6 +26,7 @@ class PreparedDataset:
     y_eval: Optional[pd.Series]
     recipe: str
     preprocess_artifacts: Dict[str, object]
+    X_eval_raw: Optional[pd.DataFrame] = None
     feature_names: Optional[list[str]] = None
     X_train_inner: Optional[pd.DataFrame] = None
     y_train_inner: Optional[pd.Series] = None
@@ -71,7 +72,7 @@ class Trainer:
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
         summary_path = self._persist_run_summary(metrics, timestamp)
         checkpoint_path = self._persist_checkpoint(model, timestamp)
-        self._export_eval_data(splits)
+        self._export_eval_data(dataset)
         test_predictions_path = self._generate_test_predictions(
             model=model,
             dataset=dataset,
@@ -110,6 +111,7 @@ class Trainer:
                 y_train=outputs["y_train_outer"],
                 X_eval=outputs["X_test_outer"],
                 y_eval=outputs["y_test_outer"],
+                X_eval_raw=self._load_raw_eval_features(outputs["X_test_outer"].index),
                 recipe=recipe,
                 preprocess_artifacts=artifacts,
                 feature_names=list(outputs["X_train_outer"].columns),
@@ -205,52 +207,50 @@ class Trainer:
             print(f"Warning: joblib.dump failed at {checkpoint_path}: {exc}")
         return None
 
-    def _export_eval_data(self, splits) -> None:
+    def _export_eval_data(self, dataset: "PreparedDataset") -> None:
         """Persist the preprocessed eval split for downstream interpretability scripts."""
-        if splits.X_eval is None or splits.y_eval is None:
+        if dataset.X_eval is None or dataset.y_eval is None:
             return
         try:
-            import json
             from src.data.prudential_features import get_feature_lists
 
             data_dir = Path("outputs") / "data"
             reports_dir = Path("outputs") / "reports"
             data_dir.mkdir(parents=True, exist_ok=True)
             reports_dir.mkdir(parents=True, exist_ok=True)
-            splits.X_eval.to_parquet(data_dir / "X_eval.parquet", index=False)
-            splits.y_eval.to_frame(name="Response").to_parquet(
+            dataset.X_eval.to_parquet(data_dir / "X_eval.parquet", index=False)
+            dataset.y_eval.to_frame(name="Response").to_parquet(
                 data_dir / "y_eval.parquet", index=False
             )
-            feature_names = list(splits.X_eval.columns)
+            feature_names = list(dataset.X_eval.columns)
             (reports_dir / "feature_names.json").write_text(
                 json.dumps(feature_names, indent=2)
             )
             # Export raw (pre-preprocessing) eval features for interpretable x-axes
-            if splits.X_eval_raw is not None:
-                splits.X_eval_raw.reset_index(drop=True).to_parquet(
+            if dataset.X_eval_raw is not None:
+                dataset.X_eval_raw.reset_index(drop=True).to_parquet(
                     data_dir / "X_eval_raw.parquet", index=False
                 )
             # Export feature type taxonomy so plots can annotate axes correctly
-            if splits.X_eval_raw is not None:
-                feat_lists = get_feature_lists(splits.X_eval_raw)
-                feature_type_map: dict = {}
-                for feat in feature_names:
-                    base = feat.replace("missing_", "") if feat.startswith("missing_") else feat
-                    if feat.startswith("missing_"):
-                        feature_type_map[feat] = "missing_indicator"
-                    elif feat in feat_lists["categorical"]:
-                        feature_type_map[feat] = "categorical"
-                    elif feat in feat_lists["binary"]:
-                        feature_type_map[feat] = "binary"
-                    elif feat in feat_lists["continuous"]:
-                        feature_type_map[feat] = "continuous"
-                    elif feat in feat_lists["ordinal"]:
-                        feature_type_map[feat] = "ordinal"
-                    else:
-                        feature_type_map[feat] = "unknown"
-                (reports_dir / "feature_types.json").write_text(
-                    json.dumps(feature_type_map, indent=2, sort_keys=True)
-                )
+            taxonomy_source = dataset.X_eval_raw if dataset.X_eval_raw is not None else dataset.X_eval
+            feat_lists = get_feature_lists(taxonomy_source)
+            feature_type_map: dict[str, str] = {}
+            for feat in feature_names:
+                if feat.startswith("missing_"):
+                    feature_type_map[feat] = "missing_indicator"
+                elif feat in feat_lists["categorical"]:
+                    feature_type_map[feat] = "categorical"
+                elif feat in feat_lists["binary"]:
+                    feature_type_map[feat] = "binary"
+                elif feat in feat_lists["continuous"]:
+                    feature_type_map[feat] = "continuous"
+                elif feat in feat_lists["ordinal"]:
+                    feature_type_map[feat] = "ordinal"
+                else:
+                    feature_type_map[feat] = "unknown"
+            (reports_dir / "feature_types.json").write_text(
+                json.dumps(feature_type_map, indent=2, sort_keys=True)
+            )
         except Exception as exc:  # pragma: no cover
             print(f"Warning: failed to export eval data: {exc}")
 
@@ -379,6 +379,7 @@ class Trainer:
             y_train=y_train,
             X_eval=X_eval,
             y_eval=y_eval,
+            X_eval_raw=self._load_raw_eval_features(test_index),
             recipe=recipe,
             preprocess_artifacts=artifacts,
             feature_names=feature_names,
@@ -387,3 +388,38 @@ class Trainer:
             X_val_inner=inner_val,
             y_val_inner=inner_val_y,
         )
+
+    def _load_raw_eval_features(self, row_index) -> Optional[pd.DataFrame]:
+        """Reconstruct raw eval rows using the original training CSV indices."""
+
+        if row_index is None:
+            return None
+
+        try:
+            raw_df = pd.read_csv(self.config.trainer.train_csv)
+        except OSError as exc:
+            print(f"Warning: failed to load raw eval rows from {self.config.trainer.train_csv}: {exc}")
+            return None
+
+        try:
+            raw_eval = raw_df.loc[row_index].copy()
+        except KeyError as exc:
+            print(f"Warning: eval row indices were not found in the raw training CSV: {exc}")
+            return None
+
+        if "Response" in raw_eval.columns:
+            raw_eval = raw_eval.drop(columns=["Response"])
+        return raw_eval
+
+
+def run_train(
+    config: ExperimentConfig,
+    *,
+    device: str,
+    random_seed: int | None = None,
+) -> TrainingArtifacts:
+    """Resolve the random seed, run the trainer, and return the artifacts."""
+
+    resolved_seed = random_seed if random_seed is not None else set_global_seed(config.trainer.seed)
+    trainer = Trainer(config=config, device=device, random_seed=resolved_seed)
+    return trainer.run()

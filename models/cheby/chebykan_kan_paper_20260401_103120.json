@@ -1,0 +1,35 @@
+{
+  "model": "chebykan",
+  "preprocessing": "kan_paper",
+  "timestamp": "20260401_103120",
+  "val_qwk": 0.610746,
+  "duration_s": 13.6,
+  "params": {
+    "n_layers": 2,
+    "width_0": 128,
+    "width_1": 64,
+    "degree": 6,
+    "lr": 0.005469718211738354,
+    "weight_decay": 0.0005425921367964894,
+    "batch_size": 2048,
+    "widths": [
+      128,
+      64
+    ]
+  },
+  "thresholds": [
+    0.4258937794721671,
+    3.261968956294266,
+    4.645158865127639,
+    5.488665686296937,
+    6.233862968293106,
+    6.71993742803815,
+    7.140264685437939
+  ],
+  "checkpoint": "/Users/gian1/CODE/HSG/FS26/DeepLearning/DeepLearning/checkpoints/chebykan_kan_paper_20260401_103120.pt",
+  "training_attrs": {
+    "epochs": 26,
+    "num_params": 209345,
+    "duration_s": 13.6
+  }
+}

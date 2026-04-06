@@ -1,0 +1,32 @@
+{
+  "model": "xgb",
+  "preprocessing": "xgb_paper",
+  "timestamp": "20260401_105856",
+  "val_qwk": 0.807927,
+  "duration_s": 28.0,
+  "params": {
+    "n_estimators": 765,
+    "max_depth": 11,
+    "learning_rate": 0.012836785304264764,
+    "subsample": 0.620710169201981,
+    "colsample_bytree": 0.5071615942406114,
+    "min_child_weight": 8,
+    "reg_alpha": 0.12670481458419444,
+    "reg_lambda": 1.246619007860089,
+    "gamma": 3.895752493463711
+  },
+  "thresholds": [
+    1.5175343842852191,
+    3.780308473275768,
+    4.436029344689969,
+    4.822578157238868,
+    5.500175928234924,
+    6.11330365000006,
+    6.893580700791296
+  ],
+  "checkpoint": "/Users/gian1/CODE/HSG/FS26/DeepLearning/DeepLearning/checkpoints/xgb_xgb_paper_20260401_105856.json",
+  "training_attrs": {
+    "n_estimators": 765,
+    "duration_s": 28.0
+  }
+}
