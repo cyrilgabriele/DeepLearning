@@ -1,15 +1,54 @@
-"""Canonical output sub-directory layout for the interpretability pipeline.
+"""Canonical output layout for eval artifacts and interpretability results.
 
     outputs/
-    ├── figures/   PNG + PDF visualisations
-    ├── data/      CSV + Parquet tables
-    ├── reports/   JSON summaries + Markdown reports
-    └── models/    Pruned .pt weight files
+    ├── eval/
+    │   └── <recipe>/<experiment>/
+    │       ├── X_eval.parquet
+    │       ├── y_eval.parquet
+    │       ├── X_eval_raw.parquet
+    │       ├── feature_names.json
+    │       └── feature_types.json
+    └── interpretability/
+        └── <recipe>/<experiment>/
+            ├── figures/   PNG + PDF visualisations
+            ├── data/      CSV + Parquet tables
+            ├── reports/   JSON summaries + Markdown reports
+            └── models/    Pruned .pt weight files
 """
 
 from __future__ import annotations
 
 from pathlib import Path
+
+
+def eval_run_dir(
+    output_root: Path,
+    recipe: str,
+    experiment_name: str,
+    *,
+    create: bool = True,
+) -> Path:
+    """Return the recipe-scoped evaluation artifact directory."""
+
+    p = output_root / "eval" / recipe / experiment_name
+    if create:
+        p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def interpret_run_dir(
+    output_root: Path,
+    recipe: str,
+    experiment_name: str,
+    *,
+    create: bool = True,
+) -> Path:
+    """Return the recipe-scoped interpretability output directory."""
+
+    p = output_root / "interpretability" / recipe / experiment_name
+    if create:
+        p.mkdir(parents=True, exist_ok=True)
+    return p
 
 
 def figures(output_dir: Path) -> Path:

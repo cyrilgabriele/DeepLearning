@@ -23,6 +23,8 @@ import numpy as np
 import pandas as pd
 import torch
 
+from src.configs import ExperimentConfig
+
 
 # ── Edge magnitude ────────────────────────────────────────────────────────────
 
@@ -150,7 +152,7 @@ def _evaluate_qwk(model_wrapper, X_eval: pd.DataFrame, y_eval: pd.Series) -> flo
 
 def run(
     checkpoint_path: Path,
-    config_path: Path,
+    config: ExperimentConfig,
     flavor: str,
     eval_features_path: Path = Path("outputs/X_eval.parquet"),
     eval_labels_path: Path = Path("outputs/y_eval.parquet"),
@@ -158,21 +160,19 @@ def run(
     qwk_tolerance: float = 0.01,
     output_dir: Path = Path("outputs"),
 ) -> dict:
-    from src.configs import load_experiment_config
     from src.models.tabkan import TabKANClassifier, TabKAN
 
-    cfg = load_experiment_config(config_path)
     X_eval = pd.read_parquet(eval_features_path)
     y_eval = pd.read_parquet(eval_labels_path)["Response"]
 
     # Reconstruct the wrapper and load weights
     in_features = X_eval.shape[1]
     wrapper = TabKANClassifier(
-        preset=cfg.model.name,
+        preset=config.model.name,
         flavor=flavor,
-        depth=cfg.model.depth,
-        width=cfg.model.width,
-        degree=cfg.model.degree or 3,
+        depth=config.model.depth,
+        width=config.model.width,
+        degree=config.model.degree or 3,
     )
     widths = wrapper.widths
     wrapper.module = TabKAN(
@@ -255,9 +255,11 @@ def _parse_args() -> argparse.Namespace:
 
 if __name__ == "__main__":
     args = _parse_args()
+    from src.configs import load_experiment_config
+
     run(
         args.checkpoint,
-        args.config,
+        load_experiment_config(args.config),
         args.flavor,
         args.eval_features,
         args.eval_labels,

@@ -27,6 +27,7 @@ class PrudentialModel(ABC):
         y: pd.Series,
         *,
         validation_data: Optional[Tuple[pd.DataFrame, pd.Series]] = None,
+        **fit_kwargs: Any,
     ) -> None:  # pragma: no cover - interface
         """Fit the estimator using processed features."""
 

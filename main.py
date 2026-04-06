@@ -13,28 +13,58 @@ if TYPE_CHECKING:
 def run(argv: Sequence[str] | None = None) -> None:
     """Parse CLI arguments and dispatch the requested experiment stage."""
 
-    args = _build_parser().parse_args(list(argv) if argv is not None else None)
-    from src.configs import detect_device, load_experiment_config
+    parser = _build_parser()
+    args = parser.parse_args(list(argv) if argv is not None else None)
 
-    config = load_experiment_config(args.config)
-    device = detect_device()
+    if args.stage in {"train", "tune"} and args.config is None:
+        parser.error("--config is required for stages 'train' and 'tune'.")
+
+    if args.stage == "interpret" and args.config is None and args.checkpoint is None:
+        parser.error("stage 'interpret' requires --checkpoint when --config is omitted.")
 
     if args.stage == "train":
+        from src.configs import load_experiment_config
+        from src.configs import detect_device
         from src.training.trainer import run_train
 
+        config = load_experiment_config(args.config)
+        device = detect_device()
         artifacts = run_train(config, device=device)
         _print_training_summary(artifacts)
         return
 
     if args.stage == "tune":
+        from src.configs import load_experiment_config
+        from src.configs import detect_device
         from src.tune.sweep import run_tune
 
+        config = load_experiment_config(args.config)
+        device = detect_device()
         run_tune(
             config,
             device=device,
             n_trials_override=args.n_trials,
             timeout_override=args.timeout_tune,
         )
+        return
+
+    if args.stage == "interpret":
+        from src.interpretability.pipeline import resolve_interpret_config, run_interpret
+
+        config = resolve_interpret_config(
+            config_path=args.config,
+            checkpoint_path=args.checkpoint,
+        )
+
+        result = run_interpret(
+            config,
+            checkpoint_path=args.checkpoint,
+            output_root=args.output_root,
+            pruning_threshold=args.pruning_threshold,
+            qwk_tolerance=args.qwk_tolerance,
+            candidate_library=args.candidate_library,
+        )
+        _print_interpret_summary(result)
         return
 
     raise ValueError(f"Unsupported stage: {args.stage}")
@@ -45,14 +75,14 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--stage",
         required=True,
-        choices=["train", "tune"],
+        choices=["train", "tune", "interpret"],
         help="Experiment stage to run.",
     )
     parser.add_argument(
         "--config",
         type=Path,
-        required=True,
-        help="Path to the YAML experiment configuration file.",
+        default=None,
+        help="Path to the YAML experiment configuration file. Required for 'train' and 'tune'.",
     )
     parser.add_argument(
         "--n-trials",
@@ -65,6 +95,39 @@ def _build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         help="Override Optuna timeout in seconds for stage 'tune'.",
+    )
+    parser.add_argument(
+        "--checkpoint",
+        type=Path,
+        default=None,
+        help=(
+            "Override checkpoint path for stage 'interpret'. "
+            "Required when omitting --config; otherwise defaults to the latest run checkpoint."
+        ),
+    )
+    parser.add_argument(
+        "--output-root",
+        type=Path,
+        default=Path("outputs"),
+        help="Root directory for eval and interpretability outputs.",
+    )
+    parser.add_argument(
+        "--pruning-threshold",
+        type=float,
+        default=0.01,
+        help="Initial pruning threshold for stage 'interpret' on supported KAN models.",
+    )
+    parser.add_argument(
+        "--qwk-tolerance",
+        type=float,
+        default=0.01,
+        help="Maximum allowed QWK drop during KAN pruning for stage 'interpret'.",
+    )
+    parser.add_argument(
+        "--candidate-library",
+        choices=["scipy", "pysr"],
+        default="scipy",
+        help="Symbolic fitting backend for KAN interpretability.",
     )
     return parser
 
@@ -84,6 +147,19 @@ def _print_training_summary(artifacts: "TrainingArtifacts") -> None:
         print(f"Checkpoint saved to {artifacts.checkpoint_path}")
     if artifacts.test_predictions_path is not None:
         print(f"Test predictions saved to {artifacts.test_predictions_path}")
+
+
+def _print_interpret_summary(result: dict[str, object]) -> None:
+    print(f"\nInterpretability run finished for '{result['experiment_name']}'.")
+    print(f"Model: {result['model']}")
+    print(f"Recipe: {result['recipe']}")
+    print(f"Checkpoint: {result['checkpoint_path']}")
+    print(f"Eval artifacts: {result['eval_dir']}")
+    print(f"Interpret outputs: {result['output_dir']}")
+    artifacts = result.get("artifacts")
+    if isinstance(artifacts, dict):
+        for label, path in artifacts.items():
+            print(f"  {label}: {path}")
 
 
 def main() -> None:

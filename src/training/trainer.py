@@ -213,23 +213,25 @@ class Trainer:
             return
         try:
             from src.data.prudential_features import get_feature_lists
+            from src.interpretability.utils.paths import eval_run_dir
 
-            data_dir = Path("outputs") / "data"
-            reports_dir = Path("outputs") / "reports"
-            data_dir.mkdir(parents=True, exist_ok=True)
-            reports_dir.mkdir(parents=True, exist_ok=True)
-            dataset.X_eval.to_parquet(data_dir / "X_eval.parquet", index=False)
+            eval_dir = eval_run_dir(
+                Path("outputs"),
+                self.config.preprocessing.recipe,
+                self.config.trainer.experiment_name,
+            )
+            dataset.X_eval.to_parquet(eval_dir / "X_eval.parquet", index=False)
             dataset.y_eval.to_frame(name="Response").to_parquet(
-                data_dir / "y_eval.parquet", index=False
+                eval_dir / "y_eval.parquet", index=False
             )
             feature_names = list(dataset.X_eval.columns)
-            (reports_dir / "feature_names.json").write_text(
+            (eval_dir / "feature_names.json").write_text(
                 json.dumps(feature_names, indent=2)
             )
             # Export raw (pre-preprocessing) eval features for interpretable x-axes
             if dataset.X_eval_raw is not None:
                 dataset.X_eval_raw.reset_index(drop=True).to_parquet(
-                    data_dir / "X_eval_raw.parquet", index=False
+                    eval_dir / "X_eval_raw.parquet", index=False
                 )
             # Export feature type taxonomy so plots can annotate axes correctly
             taxonomy_source = dataset.X_eval_raw if dataset.X_eval_raw is not None else dataset.X_eval
@@ -248,7 +250,7 @@ class Trainer:
                     feature_type_map[feat] = "ordinal"
                 else:
                     feature_type_map[feat] = "unknown"
-            (reports_dir / "feature_types.json").write_text(
+            (eval_dir / "feature_types.json").write_text(
                 json.dumps(feature_type_map, indent=2, sort_keys=True)
             )
         except Exception as exc:  # pragma: no cover

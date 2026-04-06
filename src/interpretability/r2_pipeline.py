@@ -23,6 +23,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from src.configs import ExperimentConfig
+
 
 def evaluate_symbolic_fit(
     module,
@@ -125,30 +127,28 @@ def evaluate_symbolic_fit(
 def run(
     pruned_checkpoint_path: Path,
     pruning_summary_path: Path,
-    config_path: Path,
+    config: ExperimentConfig,
     eval_features_path: Path,
     flavor: str,
     candidate_library: str = "scipy",
     output_dir: Path = Path("outputs"),
 ) -> dict:
     import torch
-    from src.configs import load_experiment_config
     from src.models.tabkan import TabKAN
 
     pruning_summary = json.loads(pruning_summary_path.read_text())
     threshold = pruning_summary["threshold"]
 
-    cfg = load_experiment_config(config_path)
     X_eval = pd.read_parquet(eval_features_path)
     feature_names = list(X_eval.columns)
     in_features = X_eval.shape[1]
-    widths = [cfg.model.width] * cfg.model.depth
+    widths = [config.model.width] * config.model.depth
 
     module = TabKAN(
         in_features=in_features,
         widths=widths,
         kan_type=flavor,
-        degree=cfg.model.degree or 3,
+        degree=config.model.degree or 3,
     )
     module.load_state_dict(torch.load(pruned_checkpoint_path, map_location="cpu"))
     module.eval()
@@ -190,10 +190,12 @@ def _parse_args() -> argparse.Namespace:
 
 if __name__ == "__main__":
     args = _parse_args()
+    from src.configs import load_experiment_config
+
     run(
         args.pruned_checkpoint,
         args.pruning_summary,
-        args.config,
+        load_experiment_config(args.config),
         args.eval_features,
         args.flavor,
         args.candidate_library,

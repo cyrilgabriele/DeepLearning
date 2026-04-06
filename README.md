@@ -24,6 +24,7 @@ uv sync
 ## Running Experiments
 
 - `main.py` is the single entrypoint for both training and tuning.
+- `main.py` is the single entrypoint for training, tuning, and interpretability.
 - Every run is driven from one YAML experiment config that contains trainer, preprocessing, and model settings.
 - Start from `configs/smoke_experiment.yaml`, `configs/experiments/kan_cheby_single.yaml`, or `configs/experiments/xgboost_paper_experiment.yaml` and adjust `trainer.train_csv` / `trainer.test_csv` for your machine.
 
@@ -41,6 +42,18 @@ uv run python main.py --stage train --config configs/experiments/xgboost_paper_e
 uv run python main.py --stage tune --config configs/smoke_experiment.yaml --n-trials 20
 uv run python main.py --stage tune --config configs/experiments/xgboost_paper_experiment.yaml --n-trials 25 --timeout-tune 3600
 ```
+
+### Interpret
+
+```bash
+uv run python main.py --stage interpret --config configs/glm_experiment.yaml
+uv run python main.py --stage interpret --config configs/experiments/xgboost_paper_experiment.yaml
+uv run python main.py --stage interpret --config configs/experiments/kan_cheby_single.yaml
+```
+
+- Train runs now export eval artifacts under `outputs/eval/<preprocessing_recipe>/<experiment_name>/`.
+- Interpret runs write derived outputs under `outputs/interpretability/<preprocessing_recipe>/<experiment_name>/`.
+- If you need a specific checkpoint, pass `--checkpoint path/to/checkpoints/<experiment_name>/model-....{joblib,pt}`.
 
 - Tune runs use the same `Trainer` pipeline as train runs.
 - The tuned config is written to `sweeps/*_best.yaml`; train it with `python main.py --stage train --config <that-file>.yaml`.

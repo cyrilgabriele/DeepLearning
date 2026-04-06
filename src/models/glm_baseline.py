@@ -22,7 +22,14 @@ class GLMBaseline(PrudentialModel):
         self.model = Ridge(alpha=alpha, random_state=random_state)
         self.thresholds: np.ndarray | None = None
 
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> None:
+    def fit(
+        self,
+        X: pd.DataFrame,
+        y: pd.Series,
+        *,
+        validation_data=None,
+        **_fit_kwargs,
+    ) -> None:
         self.model.fit(X, y)
         y_cont = self.model.predict(X)
         self.thresholds, _ = optimize_thresholds(y.to_numpy(), y_cont)

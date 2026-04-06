@@ -118,6 +118,47 @@ def test_trainer_runs_xgboost_paper_model(tmp_path):
     assert artifacts.test_predictions_path.exists()
 
 
+def test_trainer_exports_eval_artifacts_under_recipe_namespace(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    train_csv = _write_mock_training_csv(tmp_path)
+    test_csv = _write_mock_test_csv(tmp_path)
+    config = ExperimentConfig(
+        trainer=TrainerConfig(
+            experiment_name="xgb-paper",
+            train_csv=train_csv,
+            test_csv=test_csv,
+            seed=21,
+        ),
+        preprocessing=PreprocessingConfig(
+            recipe="xgboost_paper",
+        ),
+        model=ModelConfig(
+            name="xgboost-paper",
+            flavor=None,
+            depth=1,
+            width=1,
+            degree=1,
+            params={
+                "auto_tune": False,
+                "n_estimators": 3,
+                "max_depth": 3,
+                "learning_rate": 0.3,
+            },
+        ),
+    )
+
+    seed = set_global_seed(config.trainer.seed)
+    trainer = Trainer(config, device="cpu", random_seed=seed)
+    trainer.run()
+
+    eval_dir = tmp_path / "outputs" / "eval" / "xgboost_paper" / "xgb-paper"
+    assert (eval_dir / "X_eval.parquet").exists()
+    assert (eval_dir / "y_eval.parquet").exists()
+    assert (eval_dir / "X_eval_raw.parquet").exists()
+    assert (eval_dir / "feature_names.json").exists()
+    assert (eval_dir / "feature_types.json").exists()
+
+
 def test_config_loader_reads_yaml(tmp_path):
     cfg_text = """
 trainer:

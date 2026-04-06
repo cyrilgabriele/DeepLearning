@@ -221,6 +221,7 @@ class TabKANClassifier(PrudentialModel):
         y: pd.Series,
         *,
         validation_data: Tuple[pd.DataFrame, pd.Series] | None = None,
+        **_fit_kwargs,
     ) -> None:
         L.seed_everything(self.random_state)
 

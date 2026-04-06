@@ -20,6 +20,42 @@ Track what was changed, why it was changed, and any important notes.
 ### [2026-04-06] - Cyril Gabriele
 
 #### What
+- Updated `main.py --stage interpret` so `--config` is no longer required when a checkpoint is provided and the experiment config can be recovered automatically.
+- Added config resolution in `src/interpretability/pipeline.py` that loads the saved experiment config from the checkpoint-linked `artifacts/<experiment_name>/run-summary-<timestamp>.json` file and rejects mismatches when both `--config` and `--checkpoint` are passed.
+- Refactored the KAN interpretability path (`kan_pruning.py`, `kan_symbolic.py`, `r2_pipeline.py`) to consume the resolved `ExperimentConfig` directly instead of reloading the YAML path again.
+- Added regression coverage for checkpoint-only interpret dispatch and automatic config recovery.
+
+#### Why
+- The interpret stage was redundantly asking for a YAML config even though the run artifacts already preserved the effective experiment configuration for that checkpoint.
+- Recovering the config from the saved run summary keeps the interpret workflow aligned with the trained artifact, reduces CLI friction, and prevents accidental drift between a checkpoint and a manually re-supplied config file.
+
+#### Remarks
+- The current auto-recovery source is the run summary paired to the checkpoint timestamp; the raw checkpoint payload itself still does not embed the full config.
+
+### [2026-04-06] - Cyril Gabriele
+
+#### What
+- Namespaced eval artifact export by preprocessing recipe and experiment name, so training now writes `X_eval.parquet`, `y_eval.parquet`, `X_eval_raw.parquet`, `feature_names.json`, and `feature_types.json` under `outputs/eval/<recipe>/<experiment_name>/` instead of the previous global `outputs/data/` and `outputs/reports/` locations.
+- Added shared path helpers in `src/interpretability/utils/paths.py` for both eval artifacts and interpretability outputs.
+- Added a new `interpret` stage to `main.py` and implemented a dedicated orchestration module in `src/interpretability/pipeline.py`.
+- Made the interpret stage model-aware: `glm` runs coefficient extraction, `xgboost-paper` runs the SHAP pipeline, and supported TabKAN flavors (`chebykan`, `fourierkan`) run pruning, symbolic fitting, and the R² report.
+- Namespaced interpretability outputs under `outputs/interpretability/<recipe>/<experiment_name>/` so derived figures, reports, tables, and pruned checkpoints do not collide across preprocessing spaces.
+- Extended `src/interpretability/shap_xgboost.py` so it can load the trainer-saved XGBoost wrapper objects cleanly and collapse multiclass SHAP outputs into the predicted-class view expected by the downstream plots.
+- Relaxed the common model `fit()` interface so trainer-forwarded kwargs such as validation splits do not break models that do not use them.
+- Restored the missing `_kan_importance_from_variance()` compatibility helper in `comparison_per_risk.py` so the interpretability test suite is green again.
+- Added regression coverage for the new export namespace and `main.py --stage interpret`, and updated `README.md` to document the new stage and directory layout.
+
+#### Why
+- One global `outputs/data/X_eval.parquet` was no longer a valid abstraction because different model families in this repository were trained on different preprocessing spaces. Namespacing the eval artifacts by recipe removes that ambiguity and gives each interpretability run the correct feature space.
+- Adding `main.py --stage interpret` keeps interpretability inside the same CLI contract as training and tuning, which makes the workflow reproducible and easier to run end to end from config.
+- The SHAP loader and model-interface fixes were required so the new stage actually works with the artifacts the current trainer persists, instead of only with older or narrower assumptions.
+
+#### Remarks
+- The new interpret stage currently supports `glm`, `xgboost-paper`, and TabKAN flavors `chebykan` / `fourierkan`; `bsplinekan` is still not wired into this stage yet.
+
+### [2026-04-06] - Cyril Gabriele
+
+#### What
 - Fixed the regression in `src/training/trainer.py` where `Trainer.run()` called `self._export_eval_data(splits)` with an undefined variable, causing the run to crash after fitting and checkpointing.
 - Completed the eval-export path in `Trainer` by aligning it with the actual `PreparedDataset` contract, adding raw evaluation feature reconstruction (`X_eval_raw`) and exporting the feature-type metadata needed by the interpretability scripts.
 - Added a shared `run_train()` helper in `src/training/trainer.py` so training can be invoked through one code path from both the CLI and the tuning workflow.

@@ -92,6 +92,19 @@ def _fallback_edge_count(symbolic_path: Path) -> pd.Series:
     return pd.Series(feat_importance)
 
 
+def _kan_importance_from_variance(edge_scores, feature_names: list[str]) -> pd.Series:
+    """Backwards-compatible helper: sum per-edge scores over outputs by feature."""
+
+    scores = np.asarray(edge_scores, dtype=float)
+    if scores.ndim != 2:
+        raise ValueError(f"Expected a 2D edge score matrix, got shape {scores.shape}")
+    summed = scores.sum(axis=0)
+    n_features = min(len(feature_names), summed.shape[0])
+    return pd.Series(
+        {feature_names[idx]: float(summed[idx]) for idx in range(n_features)}
+    ).sort_values(ascending=False)
+
+
 # ── Plot ─────────────────────────────────────────────────────────────────────
 
 def _plot_panel(
