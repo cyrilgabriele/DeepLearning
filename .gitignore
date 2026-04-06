@@ -229,3 +229,6 @@ sweeps/*.db
 # Kaggle data
 *.zip
 src/data/prudential-life-insurance-assessment/
+
+# Custom 
+models/
