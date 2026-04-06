@@ -23,8 +23,8 @@ def run(argv: Sequence[str] | None = None) -> None:
         parser.error("stage 'interpret' requires --checkpoint when --config is omitted.")
 
     if args.stage == "train":
-        from src.configs import load_experiment_config
-        from src.configs import detect_device
+        from configs import detect_device
+        from configs import load_experiment_config
         from src.training.trainer import run_train
 
         config = load_experiment_config(args.config)
@@ -34,8 +34,8 @@ def run(argv: Sequence[str] | None = None) -> None:
         return
 
     if args.stage == "tune":
-        from src.configs import load_experiment_config
-        from src.configs import detect_device
+        from configs import detect_device
+        from configs import load_experiment_config
         from src.tune.sweep import run_tune
 
         config = load_experiment_config(args.config)

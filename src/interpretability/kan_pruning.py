@@ -23,7 +23,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from src.configs import ExperimentConfig
+from configs import ExperimentConfig
 
 
 # ── Edge magnitude ────────────────────────────────────────────────────────────
@@ -255,7 +255,7 @@ def _parse_args() -> argparse.Namespace:
 
 if __name__ == "__main__":
     args = _parse_args()
-    from src.configs import load_experiment_config
+    from configs import load_experiment_config
 
     run(
         args.checkpoint,

@@ -1,7 +1,0 @@
-name: chebykan
-kan_type: chebykan
-widths: [64, 32]
-degree: 3
-grid_size: null
-lr: 1e-3
-weight_decay: 1e-5

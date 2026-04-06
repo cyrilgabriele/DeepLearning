@@ -22,7 +22,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from src.configs import ExperimentConfig
+from configs import ExperimentConfig
 
 
 # ── Edge activation sampler ───────────────────────────────────────────────────
@@ -582,7 +582,7 @@ def _parse_args() -> argparse.Namespace:
 
 if __name__ == "__main__":
     args = _parse_args()
-    from src.configs import load_experiment_config
+    from configs import load_experiment_config
 
     X_raw_arg = pd.read_parquet(args.eval_features_raw) if args.eval_features_raw else None
     run(

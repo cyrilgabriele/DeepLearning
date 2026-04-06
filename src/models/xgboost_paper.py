@@ -1,18 +1,8 @@
-"""Prudential XGBoost model mirroring the ICSITech 2019 case study pipeline.
-
-The paper *Analysis Accuracy of XGBoost Model for Multiclass Classification -
-A Case Study of Applicant Level Risk Prediction for Life Insurance* tuned
-`max_depth`, `min_child_weight`, `learning_rate`, `subsample`,
-`colsample_bytree`, `alpha`, and `lambda` sequentially using Quadratic
-Weighted Kappa (QWK) on a held-out validation split before refitting on the
-combined train+val fold. This module reproduces that estimator inside the
-PrudentialModel registry so the modern Trainer pipeline can call it directly.
-"""
+"""Prudential XGBoost classifier exposed through the registry-backed Trainer."""
 
 from __future__ import annotations
 
-from collections import OrderedDict
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
@@ -24,19 +14,7 @@ from .base import PrudentialModel
 
 
 class XGBoostPaperModel(PrudentialModel):
-    """Paper-faithful XGBoost classifier with sequential hyperparameter tuning."""
-
-    DEFAULT_TUNING_GRID: "OrderedDict[str, Tuple[float, ...]]" = OrderedDict(
-        [
-            ("max_depth", (5, 10, 15, 20, 25, 30, 35)),
-            ("min_child_weight", (1, 5, 10, 15)),
-            ("learning_rate", (0.001, 0.01, 0.1, 1.0, 1.5)),
-            ("subsample", (0.5, 0.6, 0.7, 0.8, 0.9, 1.0)),
-            ("colsample_bytree", (0.5, 0.6, 0.7, 0.8, 0.9, 1.0)),
-            ("reg_alpha", (0.0, 0.25, 0.5, 0.75, 1.0)),
-            ("reg_lambda", (0.0, 0.25, 0.5, 0.75, 1.0)),
-        ]
-    )
+    """XGBoost classifier with optional refit on the train+validation fold."""
 
     def __init__(
         self,
@@ -53,11 +31,8 @@ class XGBoostPaperModel(PrudentialModel):
         num_classes: int = 8,
         tree_method: str = "hist",
         eval_metric: str = "mlogloss",
-        auto_tune: bool = True,
         refit_full_training: bool = True,
-        tuning_grid: Mapping[str, Sequence[float]] | None = None,
         n_jobs: Optional[int] = None,
-        seed_trials: Sequence[int] | None = None,
     ) -> None:
         params = {
             "random_state": random_state,
@@ -72,7 +47,6 @@ class XGBoostPaperModel(PrudentialModel):
             "num_classes": num_classes,
             "tree_method": tree_method,
             "eval_metric": eval_metric,
-            "auto_tune": auto_tune,
             "refit_full_training": refit_full_training,
         }
         super().__init__(**params)
@@ -82,10 +56,8 @@ class XGBoostPaperModel(PrudentialModel):
         self.num_classes = num_classes
         self.tree_method = tree_method
         self.eval_metric = eval_metric
-        self.auto_tune = auto_tune
         self.refit_full_training = refit_full_training
         self.n_jobs = n_jobs
-        self.seed_trials = [int(s) for s in seed_trials] if seed_trials else None
 
         self._base_params = {
             "max_depth": max_depth,
@@ -96,7 +68,6 @@ class XGBoostPaperModel(PrudentialModel):
             "reg_alpha": reg_alpha,
             "reg_lambda": reg_lambda,
         }
-        self.tuning_grid = self._build_tuning_grid(tuning_grid)
 
         self._estimator: Optional[xgb.XGBClassifier] = None
         self._classes_: Optional[np.ndarray] = None
@@ -160,35 +131,25 @@ class XGBoostPaperModel(PrudentialModel):
         elif X_val is not None and y_val is not None and y_val_raw is not None:
             tuning_splits.append((X_train, y_train, X_val, y_val, y_val_raw))
 
-        seeds = self.seed_trials or [self.random_state]
-        best_result: Optional[Tuple[xgb.XGBClassifier, Dict[str, float], Optional[float], int]] = None
-        best_score = float("-inf")
-
-        for seed in seeds:
-            estimator, tuned_params, seed_score = self._fit_single_seed(
-                X_train=X_train,
-                y_train=y_train,
-                X_val=X_val,
-                y_val=y_val,
-                tuning_splits=tuning_splits,
-                seed=seed,
+        validation_score = None
+        if tuning_splits:
+            validation_score = self._evaluate_candidate(
+                dict(self._base_params),
+                tuning_splits,
+                self.random_state,
             )
 
-            if best_result is None:
-                best_result = (estimator, tuned_params, seed_score, seed)
-                best_score = seed_score if seed_score is not None else best_score
-                continue
+        final_X = X_train
+        final_y = y_train
+        if self.refit_full_training and X_val is not None and y_val is not None:
+            final_X = np.concatenate([X_train, X_val], axis=0)
+            final_y = np.concatenate([y_train, y_val], axis=0)
 
-            if seed_score is not None and (best_result[2] is None or seed_score > best_score):
-                best_result = (estimator, tuned_params, seed_score, seed)
-                best_score = seed_score
-
-        if best_result is None:
-            raise RuntimeError("XGBoostPaperModel failed to fit any seed trial.")
-
-        self._estimator, self.best_params_, self.best_kappa_, selected_seed = best_result
-        if selected_seed is not None:
-            self.random_state = selected_seed
+        estimator = self._build_estimator(self._base_params, self.random_state)
+        estimator.fit(final_X, final_y)
+        self._estimator = estimator
+        self.best_params_ = dict(self._base_params)
+        self.best_kappa_ = validation_score
 
     def predict(self, X: pd.DataFrame | np.ndarray) -> np.ndarray:
         if self._estimator is None or self._classes_ is None:
@@ -198,15 +159,6 @@ class XGBoostPaperModel(PrudentialModel):
         encoded = self._estimator.predict(X_np)
         decoded = self._decode_labels(encoded)
         return decoded.astype(int)
-
-    # ------------------------------------------------------------------
-    def _build_tuning_grid(
-        self,
-        override: Mapping[str, Sequence[float]] | None,
-    ) -> "OrderedDict[str, Tuple[float, ...]]":
-        if override is None:
-            return OrderedDict((k, tuple(v)) for k, v in self.DEFAULT_TUNING_GRID.items())
-        return OrderedDict((key, tuple(values)) for key, values in override.items())
 
     def _fit_label_encoder(
         self,
@@ -233,56 +185,6 @@ class XGBoostPaperModel(PrudentialModel):
         encoded = np.asarray(encoded, dtype=int)
         encoded = np.clip(encoded, 0, len(self._classes_) - 1)
         return self._classes_[encoded]
-
-    def _fit_single_seed(
-        self,
-        *,
-        X_train: np.ndarray,
-        y_train: np.ndarray,
-        X_val: Optional[np.ndarray],
-        y_val: Optional[np.ndarray],
-        tuning_splits: Sequence[Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]],
-        seed: int,
-    ) -> Tuple[xgb.XGBClassifier, Dict[str, float], Optional[float]]:
-        tuned_params = dict(self._base_params)
-        seed_score: Optional[float] = None
-        if self.auto_tune and tuning_splits:
-            tuned_params, seed_score = self._tune_hyperparameters(tuning_splits, seed)
-        elif tuning_splits:
-            seed_score = self._evaluate_candidate(tuned_params, tuning_splits, seed)
-
-        final_X = X_train
-        final_y = y_train
-        if self.refit_full_training and X_val is not None and y_val is not None:
-            final_X = np.concatenate([X_train, X_val], axis=0)
-            final_y = np.concatenate([y_train, y_val], axis=0)
-
-        estimator = self._build_estimator(tuned_params, seed)
-        estimator.fit(final_X, final_y)
-        return estimator, tuned_params, seed_score
-
-    def _tune_hyperparameters(
-        self,
-        splits: Sequence[Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]],
-        seed: int,
-    ) -> Tuple[Dict[str, float], Optional[float]]:
-        tuned = dict(self._base_params)
-        best_overall = None
-        for param_name, candidates in self.tuning_grid.items():
-            if not candidates:
-                continue
-            best_value = tuned.get(param_name)
-            best_score = -np.inf
-            for candidate in candidates:
-                trial_params = dict(tuned)
-                trial_params[param_name] = candidate
-                score = self._evaluate_candidate(trial_params, splits, seed)
-                if score > best_score:
-                    best_score = score
-                    best_value = candidate
-            tuned[param_name] = best_value
-            best_overall = best_score
-        return tuned, best_overall
 
     def _evaluate_candidate(
         self,

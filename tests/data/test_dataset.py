@@ -4,7 +4,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from src.configs import set_global_seed
+from configs import set_global_seed
 from src.data.dataset import PrudentialDataModule
 
 

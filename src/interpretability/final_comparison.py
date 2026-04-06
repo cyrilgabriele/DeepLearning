@@ -139,7 +139,7 @@ def _compute_qwk_retention_curve(
     from sklearn.metrics import cohen_kappa_score
     from src.interpretability.utils.kan_coefficients import coefficient_importance_from_module
     from src.models.kan_layers import ChebyKANLayer, FourierKANLayer
-    from src.configs import load_experiment_config
+    from configs import load_experiment_config
     from src.models.tabkan import TabKAN
 
     X_eval = pd.read_parquet(eval_features_path)

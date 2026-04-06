@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from src.configs import set_global_seed
+from configs import set_global_seed
 from src.data.dataset import PrudentialDataModule
 from src.models.tabkan import TabKAN
 from src.models.mlp import MLPBaseline

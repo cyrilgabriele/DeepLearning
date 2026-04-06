@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.configs import ExperimentConfig, load_experiment_config
+from configs import ExperimentConfig, load_experiment_config
 from src.interpretability.utils.paths import (
     data as data_dir,
     eval_run_dir,

@@ -1,5 +1,0 @@
-name: mlp
-widths: [128, 64]
-dropout: 0.1
-lr: 1e-3
-weight_decay: 1e-5

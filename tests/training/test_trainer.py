@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from src.configs import (
+from configs import (
     ExperimentConfig,
     ModelConfig,
     PreprocessingConfig,
@@ -102,7 +102,6 @@ def test_trainer_runs_xgboost_paper_model(tmp_path):
             width=1,
             degree=1,
             params={
-                "auto_tune": False,
                 "n_estimators": 3,
                 "max_depth": 3,
                 "learning_rate": 0.3,
@@ -139,7 +138,6 @@ def test_trainer_exports_eval_artifacts_under_recipe_namespace(tmp_path, monkeyp
             width=1,
             degree=1,
             params={
-                "auto_tune": False,
                 "n_estimators": 3,
                 "max_depth": 3,
                 "learning_rate": 0.3,
@@ -174,6 +172,17 @@ model:
   width: 64
   degree: 3
   params: {}
+tune:
+  name: smoke-study
+  storage: sweeps/smoke-study.db
+  n_trials: 7
+  timeout: 120
+  sampler: random
+  search_space:
+    degree:
+      type: int
+      low: 2
+      high: 6
 """
     config_path = tmp_path / "config.yaml"
     config_path.write_text(cfg_text)
@@ -184,3 +193,6 @@ model:
     assert params["flavor"] == "chebykan"
     assert params["depth"] == 2
     assert params["width"] == 64
+    assert config.tune is not None
+    assert config.tune.n_trials == 7
+    assert config.tune.search_space["degree"].type == "int"

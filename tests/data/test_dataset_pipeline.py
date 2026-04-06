@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from src.configs import set_global_seed
+from configs import set_global_seed
 from src.data import preprocess_xgboost_paper as paper_prep
 from src.data import preprocess_kan_paper as kan_prep
 from src.data import preprocess_kan_sota as kan_sota_prep

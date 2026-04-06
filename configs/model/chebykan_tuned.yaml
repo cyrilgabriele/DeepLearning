@@ -1,8 +1,0 @@
-name: chebykan
-kan_type: chebykan
-widths: [128, 64]
-degree: 6
-grid_size: null
-lr: 0.005469718211738354
-weight_decay: 0.0005425921367964894
-batch_size: 2048

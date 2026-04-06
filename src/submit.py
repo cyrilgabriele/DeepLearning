@@ -105,9 +105,14 @@ def make_submission(model_name: str, preprocessing: str):
 
     # Train model
     if model_name == "xgb_paper":
-        print("\nTraining XGBoostPaperModel (auto_tune=True, refit_full=True)...")
+        sweep_path = SWEEP_DIR / "xgboost-paper-tune_best.json"
+        print(f"Loading best params from {sweep_path}...")
+        sweep_data = json.loads(sweep_path.read_text())
+        best_params = sweep_data["best_params"]
+
+        print("\nTraining XGBoostPaperModel with Optuna-tuned params...")
         t0 = time.time()
-        model = XGBoostPaperModel(auto_tune=True, refit_full_training=True, n_estimators=500)
+        model = XGBoostPaperModel(refit_full_training=True, **best_params)
         model.fit(
             dm.X_train,
             dm.y_train.astype(int),
@@ -118,10 +123,10 @@ def make_submission(model_name: str, preprocessing: str):
         preds_val = model.predict(dm.X_val)
         val_qwk = cohen_kappa_score(dm.y_val.astype(int), preds_val, weights="quadratic")
         print(f"Val QWK: {val_qwk:.4f} | Time: {duration:.1f}s")
-        print(f"Best params: {model.best_params_}")
+        print(f"Best params: {best_params}")
         _save_artifacts(model_name, preprocessing, timestamp, val_qwk, duration,
-                        model.best_params_, np.array([]), model,
-                        training_attrs={"best_params": model.best_params_, "duration_s": round(duration, 1)})
+                        best_params, np.array([]), model,
+                        training_attrs={"best_params": best_params, "duration_s": round(duration, 1)})
 
     elif model_name in ("bsplinekan", "chebykan", "fourierkan", "mlp"):
         # Load best params from sweep

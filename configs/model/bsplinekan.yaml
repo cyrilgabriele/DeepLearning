@@ -1,8 +1,0 @@
-name: bsplinekan
-kan_type: bsplinekan
-widths: [64, 32]
-degree: null
-grid_size: 5
-spline_order: 3
-lr: 1e-3
-weight_decay: 1e-5

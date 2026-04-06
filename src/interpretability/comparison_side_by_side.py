@@ -246,7 +246,7 @@ def run(
     from src.interpretability.utils.style import apply_paper_style, savefig_pdf, feature_type_label
     from src.interpretability.utils.paths import figures as fig_dir, data as data_dir, reports as rep_dir
     from src.interpretability.utils.kan_coefficients import coefficient_importance_from_module
-    from src.configs import load_experiment_config
+    from configs import load_experiment_config
     from src.models.tabkan import TabKAN
     from src.models.kan_layers import ChebyKANLayer, FourierKANLayer
 

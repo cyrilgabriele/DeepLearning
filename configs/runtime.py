@@ -37,7 +37,7 @@ def detect_device() -> str:
         return "cuda"
     if torch is not None and hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
         return "mps"
-    else:   
+    else:
         return "cpu"
 
 

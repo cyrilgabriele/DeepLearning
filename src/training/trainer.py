@@ -11,7 +11,7 @@ from typing import Dict, Optional
 import pandas as pd
 from sklearn.metrics import accuracy_score, cohen_kappa_score, f1_score, mean_absolute_error
 
-from src.configs import ExperimentConfig, set_global_seed
+from configs import ExperimentConfig, set_global_seed
 from src.data import preprocess_xgboost_paper as paper_prep
 from src.data import preprocess_kan_paper as kan_prep
 from src.data import preprocess_kan_sota as kan_sota_prep

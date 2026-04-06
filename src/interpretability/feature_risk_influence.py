@@ -364,7 +364,7 @@ def run(
     from src.interpretability.utils.kan_coefficients import coefficient_importance_from_layer
     from src.models.tabkan import TabKAN
     from src.models.kan_layers import ChebyKANLayer, FourierKANLayer
-    from src.configs import load_experiment_config
+    from configs import load_experiment_config
 
     _data = data_dir(output_dir)
     _rep = rep_dir(output_dir)

@@ -56,8 +56,9 @@ uv run python main.py --stage interpret --config configs/experiments/kan_cheby_s
 - If you need a specific checkpoint, pass `--checkpoint path/to/checkpoints/<experiment_name>/model-....{joblib,pt}`.
 
 - Tune runs use the same `Trainer` pipeline as train runs.
+- The Optuna study settings and hyperparameter intervals now live under the config file's top-level `tune:` block, especially `tune.search_space`.
 - The tuned config is written to `sweeps/*_best.yaml`; train it with `python main.py --stage train --config <that-file>.yaml`.
-- For the paper XGBoost model, tune stage searches parameters externally with Optuna and writes the winning fixed params back into the generated YAML.
+- For the paper XGBoost model, all tuning now happens externally through `main.py --stage tune`; the model itself no longer runs its own sequential tuner.
 - A fixed global random seed from the config is applied automatically to numpy/scikit-learn and PyTorch when available.
 
 ## Evaluate a Saved Checkpoint

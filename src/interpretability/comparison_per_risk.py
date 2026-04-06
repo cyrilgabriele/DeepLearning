@@ -239,7 +239,7 @@ def run(
             return None
         try:
             import torch
-            from src.configs import load_experiment_config
+            from configs import load_experiment_config
             from src.models.tabkan import TabKAN
             from src.models.kan_layers import ChebyKANLayer, FourierKANLayer
 

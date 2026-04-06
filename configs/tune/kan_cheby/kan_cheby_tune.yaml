@@ -1,0 +1,44 @@
+trainer:
+  experiment_name: kan-cheby-single
+  train_csv: data/prudential-life-insurance-assessment/train.csv
+  test_csv: data/prudential-life-insurance-assessment/test.csv
+  seed: 42
+
+preprocessing:
+  recipe: kan_paper
+
+model:
+  name: tabkan-base
+  flavor: chebykan
+  depth: 3
+  width: 256
+  degree: 6
+  params:
+    max_epochs: 150
+
+tune:
+  name: kan-cheby-single-tune
+  storage: sweeps/kan-cheby-single-tune.db
+  n_trials: 50
+  timeout: null
+  sampler: tpe
+  search_space:
+    depth:
+      type: int
+      low: 1
+      high: 4
+    width:
+      type: categorical
+      choices: [32, 64, 128, 256]
+    max_epochs:
+      type: int
+      low: 50
+      high: 200
+      step: 25
+    sparsity_lambda:
+      type: categorical
+      choices: [0.0, 0.00001, 0.0001, 0.001, 0.01]
+    degree:
+      type: int
+      low: 2
+      high: 8

@@ -1,6 +1,0 @@
-name: mlp
-widths: [256]
-dropout: 0.06804529719979258
-lr: 0.0015855667878062198
-weight_decay: 2.317876749884363e-06
-batch_size: 1024

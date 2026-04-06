@@ -20,6 +20,25 @@ Track what was changed, why it was changed, and any important notes.
 ### [2026-04-06] - Cyril Gabriele
 
 #### What
+- Added a typed `tune:` config surface (`configs/tune_config.py`) so Optuna study settings and hyperparameter intervals are declared in the experiment YAML instead of being hardcoded in `src/tune/sweep.py`.
+- Refactored `src/tune/sweep.py` to sample exclusively from `config.tune.search_space`, honor `tune.name`, `tune.storage`, `tune.n_trials`, `tune.timeout`, and `tune.sampler`, and fail fast when `--stage tune` is run without a `tune:` block.
+- Removed the internal sequential tuning path from `src/models/xgboost_paper.py`; the model now trains fixed parameters only, with tuning handled externally through `main.py --stage tune`.
+- Migrated the active sweep configs (`configs/smoke_experiment.yaml`, `configs/experiments/kan_cheby_single.yaml`, `configs/xgboost_paper_experiment.yaml`, `configs/experiments/xgboost_paper_experiment.yaml`) so their search intervals live under `tune.search_space`.
+- Added `optuna` to `pyproject.toml` so the config-driven tune stage is installable in the repo environment.
+- Removed the obsolete Hydra-era config fragments under `configs/model/`, `configs/data/`, `configs/train/`, plus the unsupported `configs/xgb_experiment.yaml`, because they no longer match the current `ExperimentConfig`/registry-backed workflow.
+- Updated `src/submit.py`, `README.md`, and the regression tests to follow the new config-driven sweep flow and the fixed-parameter XGBoost paper model.
+
+#### Why
+- The previous sweep runner hardcoded all Optuna intervals in Python, which made the search space opaque, harder to audit, and inconsistent with the config-driven tuning structure already used in the `ParrotLLM` project.
+- Keeping XGBoost's paper-inspired sequential tuner inside the model created two competing tuning systems in the repository. Removing the internal tuner makes `main.py --stage tune` the single source of truth for hyperparameter search.
+- Explicit YAML search spaces make sweep intent reviewable, reproducible, and easy to adjust without changing code.
+
+#### Remarks
+- Existing experiment YAMLs that still rely on legacy XGBoost self-tuning flags such as `auto_tune` or `seed_trials` need to be updated before they can be used with the current `xgboost-paper` model.
+
+### [2026-04-06] - Cyril Gabriele
+
+#### What
 - Updated `main.py --stage interpret` so `--config` is no longer required when a checkpoint is provided and the experiment config can be recovered automatically.
 - Added config resolution in `src/interpretability/pipeline.py` that loads the saved experiment config from the checkpoint-linked `artifacts/<experiment_name>/run-summary-<timestamp>.json` file and rejects mismatches when both `--config` and `--checkpoint` are passed.
 - Refactored the KAN interpretability path (`kan_pruning.py`, `kan_symbolic.py`, `r2_pipeline.py`) to consume the resolved `ExperimentConfig` directly instead of reloading the YAML path again.

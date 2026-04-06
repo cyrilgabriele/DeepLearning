@@ -8,9 +8,10 @@ from typing import Any, Dict, MutableMapping
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
-from .model_config import ModelConfig
-from .preprocessing_config import PreprocessingConfig
-from .trainer_config import TrainerConfig
+from .model.model_config import ModelConfig
+from .preprocessing.preprocessing_config import PreprocessingConfig
+from .train.trainer_config import TrainerConfig
+from .tune.tune_config import TuneConfig
 
 
 class ExperimentConfig(BaseModel):
@@ -19,6 +20,10 @@ class ExperimentConfig(BaseModel):
     trainer: TrainerConfig = Field(..., description="Trainer-level configuration values.")
     preprocessing: PreprocessingConfig = Field(..., description="Preprocessing recipe parameters.")
     model: ModelConfig = Field(..., description="Model preset and architecture knobs.")
+    tune: TuneConfig | None = Field(
+        default=None,
+        description="Optional Optuna sweep configuration for stage 'tune'.",
+    )
 
     model_config = ConfigDict(frozen=True)
 
