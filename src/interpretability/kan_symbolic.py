@@ -175,14 +175,15 @@ def fit_symbolic_edge(
     x: np.ndarray,
     y: np.ndarray,
     use_pysr: bool = False,
-    pysr_fallback_threshold: float = 0.90,
+    pysr_fallback_threshold: float = 0.95,
 ) -> tuple[str, float]:
     """Fit a symbolic formula to edge samples, returning (formula, r²).
 
     When use_pysr=True, runs scipy first and only invokes PySR on edges where
-    scipy achieves R² < pysr_fallback_threshold. This two-stage approach follows
-    Cranmer (2023) arXiv:2305.01582: fixed libraries are cost-efficient when the
-    functional form is anticipated; PySR is reserved for genuinely complex edges.
+    scipy achieves R² < pysr_fallback_threshold (default 0.95). This two-stage
+    approach follows Cranmer (2023) arXiv:2305.01582: fixed libraries are
+    cost-efficient when the functional form is anticipated; PySR is reserved for
+    genuinely complex edges.
     """
     formula, r2 = _fit_scipy_candidates(x, y)
     if use_pysr and r2 < pysr_fallback_threshold:
