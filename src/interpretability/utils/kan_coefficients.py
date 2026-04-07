@@ -209,7 +209,7 @@ def sample_feature_function(
         raise TypeError(f"Unsupported layer type: {type(layer)}")
 
     # Keep the actual learned linear residual path in the plotted attribution.
-    base = layer.base_weight[:, feature_idx].detach().unsqueeze(0) * x_norm.unsqueeze(-1)
+    base = layer.base_weight[:, feature_idx].detach().unsqueeze(0) * x.unsqueeze(-1)
     y_all = y_all + base
 
     if reduction == "sum":

@@ -46,7 +46,7 @@ def _sample_chebykan_edge(layer, out_idx: int, in_idx: int, n: int = 1000) -> tu
         cheby.append(2 * x_norm * cheby[-1] - cheby[-2])
     basis = torch.stack(cheby, dim=-1)  # (n, degree+1)
 
-    y = (basis * coeffs).sum(dim=-1) + base_w * x_norm
+    y = (basis * coeffs).sum(dim=-1) + base_w * x
     return x_norm.numpy(), y.detach().numpy()   # ← return x_norm, not x
 
 
@@ -68,7 +68,7 @@ def _sample_fourierkan_edge(layer, out_idx: int, in_idx: int, n: int = 1000) -> 
     base_w = layer.base_weight[out_idx, in_idx].detach()
 
     x_k = x_scaled.unsqueeze(-1) * k
-    y = (torch.cos(x_k) * a + torch.sin(x_k) * b).sum(dim=-1) + base_w * x_norm
+    y = (torch.cos(x_k) * a + torch.sin(x_k) * b).sum(dim=-1) + base_w * x
     return x_norm.numpy(), y.detach().numpy()   # ← return x_norm, not x
 
 
