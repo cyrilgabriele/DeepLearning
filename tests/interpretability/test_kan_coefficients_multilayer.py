@@ -105,3 +105,34 @@ def test_layer1_features_labelled_as_hidden(two_layer_cheby_module, monkeypatch)
     assert all(f.startswith("h") for f in layer1_feats)
     assert "h0" in layer1_feats
     assert "h7" in layer1_feats
+
+
+def test_draw_pruned_network_graph_handles_fewer_features_than_top_n(tmp_path, monkeypatch):
+    """draw_pruned_network_graph must not crash when top_n_inputs > actual feature count."""
+    import torch
+    import torch.nn as nn
+    from src.interpretability.final_comparison import draw_pruned_network_graph
+    from src.models.kan_layers import ChebyKANLayer
+
+    layer0 = ChebyKANLayer(in_features=3, out_features=4, degree=2)
+    layer1 = ChebyKANLayer(in_features=4, out_features=2, degree=2)
+
+    class _Module(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.kan_layers = nn.ModuleList([layer0, layer1])
+
+    module = _Module()
+    feature_names = ["feat_a", "feat_b", "feat_c"]
+
+    import src.interpretability.kan_pruning as kp
+    def fake_edge_l1(layer):
+        if layer is layer0:
+            return torch.ones(4, 3) * 0.5
+        return torch.ones(2, 4) * 0.3
+    monkeypatch.setattr(kp, "_compute_edge_l1", fake_edge_l1)
+
+    import src.interpretability.utils.style as style_mod
+    monkeypatch.setattr(style_mod, "savefig_pdf", lambda fig, path: None)
+
+    draw_pruned_network_graph(module, feature_names, "ChebyKAN", tmp_path, top_n_inputs=15)

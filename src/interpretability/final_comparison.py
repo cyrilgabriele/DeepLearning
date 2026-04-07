@@ -496,6 +496,16 @@ def run(
     eval_feat_path = eval_features or (data_dir(outputs_dir) / "X_eval.parquet")
     eval_lbl_path = eval_labels or (data_dir(outputs_dir) / "y_eval.parquet")
 
+    # Read feature names once; reused by pruned-graph blocks below.
+    if eval_feat_path.exists():
+        _X_eval_cols = pd.read_parquet(eval_feat_path)
+        feature_names: list[str] = list(_X_eval_cols.columns)
+        n_feats: int = len(feature_names)
+        del _X_eval_cols
+    else:
+        feature_names = []
+        n_feats = 0
+
     # ── SHAP global feature importance for τ calculation ─────────────────────
     xgb_importance = None
     if shap_path.exists():
@@ -674,21 +684,18 @@ def run(
             from src.models.tabkan import TabKAN
             from src.interpretability.utils.paths import figures as fig_dir
 
-            X_eval_tmp = pd.read_parquet(eval_feat_path)
-            n_feats_tmp = len(X_eval_tmp.columns)
-            feature_names_tmp = list(X_eval_tmp.columns)
-
             cheby_cfg_loaded = load_experiment_config(cheby_cfg)
+            _cheby_degree = cheby_cfg_loaded.model.degree
             cheby_module_pg = TabKAN(
-                in_features=n_feats_tmp,
+                in_features=n_feats,
                 widths=[cheby_cfg_loaded.model.width] * cheby_cfg_loaded.model.depth,
                 kan_type="chebykan",
-                degree=cheby_cfg_loaded.model.degree or 3,
+                degree=_cheby_degree if _cheby_degree is not None else 3,
             )
             cheby_module_pg.load_state_dict(torch.load(cheby_ckpt, map_location="cpu"))
             cheby_module_pg.eval()
             draw_pruned_network_graph(
-                cheby_module_pg, feature_names_tmp, "ChebyKAN", fig_dir(outputs_dir)
+                cheby_module_pg, feature_names, "ChebyKAN", fig_dir(outputs_dir)
             )
         except Exception as e:
             print(f"Warning: ChebyKAN pruned network graph failed: {e}")
@@ -700,21 +707,18 @@ def run(
             from src.models.tabkan import TabKAN
             from src.interpretability.utils.paths import figures as fig_dir
 
-            X_eval_tmp = pd.read_parquet(eval_feat_path)
-            n_feats_tmp = len(X_eval_tmp.columns)
-            feature_names_tmp = list(X_eval_tmp.columns)
-
             fourier_cfg_loaded = load_experiment_config(fourier_cfg)
+            _fourier_degree = fourier_cfg_loaded.model.degree
             fourier_module_pg = TabKAN(
-                in_features=n_feats_tmp,
+                in_features=n_feats,
                 widths=[fourier_cfg_loaded.model.width] * fourier_cfg_loaded.model.depth,
                 kan_type="fourierkan",
-                degree=fourier_cfg_loaded.model.degree or 3,
+                degree=_fourier_degree if _fourier_degree is not None else 3,
             )
             fourier_module_pg.load_state_dict(torch.load(fourier_ckpt, map_location="cpu"))
             fourier_module_pg.eval()
             draw_pruned_network_graph(
-                fourier_module_pg, feature_names_tmp, "FourierKAN", fig_dir(outputs_dir)
+                fourier_module_pg, feature_names, "FourierKAN", fig_dir(outputs_dir)
             )
         except Exception as e:
             print(f"Warning: FourierKAN pruned network graph failed: {e}")
