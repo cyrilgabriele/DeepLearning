@@ -322,6 +322,141 @@ _NARRATIVES = {
 }
 
 
+# ── Pruned network graph ──────────────────────────────────────────────────────
+
+def draw_pruned_network_graph(
+    module,
+    feature_names: list[str],
+    flavor: str,
+    fig_dir: Path,
+    *,
+    top_n_inputs: int = 15,
+    top_n_hidden: int = 12,
+) -> None:
+    """Draw a 3-column pruned-network diagram for a depth-2 KAN.
+
+    Columns: top input features -> top active hidden nodes -> output classes.
+    Edge width is proportional to the edge's L1 magnitude.
+    Saves to fig_dir / f"{flavor}_pruned_network.pdf".
+    """
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import numpy as np
+    from src.interpretability.kan_pruning import _compute_edge_l1
+    from src.models.kan_layers import ChebyKANLayer, FourierKANLayer
+    from src.interpretability.utils.style import apply_paper_style, savefig_pdf
+
+    apply_paper_style()
+
+    kan_layers = [l for l in module.kan_layers if isinstance(l, (ChebyKANLayer, FourierKANLayer))]
+    if len(kan_layers) < 2:
+        print(f"draw_pruned_network_graph: need >= 2 KAN layers, got {len(kan_layers)}. Skipping.")
+        return
+
+    l0, l1 = kan_layers[0], kan_layers[1]
+    l0_scores = _compute_edge_l1(l0).numpy()   # (hidden, inputs)
+    l1_scores = _compute_edge_l1(l1).numpy()   # (outputs, hidden)
+
+    # Select top input features by total L1 entering hidden layer
+    input_total = l0_scores.sum(axis=0)        # (n_inputs,)
+    n_in = min(top_n_inputs, len(feature_names), input_total.shape[0])
+    top_in_idx = np.argsort(input_total)[::-1][:n_in]
+    top_in_labels = [feature_names[i] if i < len(feature_names) else f"f{i}" for i in top_in_idx]
+
+    # Select top hidden nodes by total L1 (incoming + outgoing)
+    hidden_total = l0_scores.sum(axis=1) + l1_scores.sum(axis=0)  # (n_hidden,)
+    n_hid = min(top_n_hidden, hidden_total.shape[0])
+    top_hid_idx = np.argsort(hidden_total)[::-1][:n_hid]
+
+    n_out = l1_scores.shape[0]   # output classes
+
+    # Layout
+    fig_h = max(8, max(n_in, n_hid, n_out) * 0.55)
+    fig, ax = plt.subplots(figsize=(12, fig_h))
+    ax.axis("off")
+
+    x_cols = [0.0, 0.5, 1.0]
+
+    def _ys(n):
+        return np.linspace(0.95, 0.05, n)
+
+    in_ys  = _ys(n_in)
+    hid_ys = _ys(n_hid)
+    out_ys = _ys(n_out)
+
+    # Edges: input -> hidden
+    max_l0 = l0_scores.max() + 1e-12
+    for ii, i_idx in enumerate(top_in_idx):
+        for hi, h_idx in enumerate(top_hid_idx):
+            w = float(l0_scores[h_idx, i_idx]) / max_l0
+            if w < 0.02:
+                continue
+            ax.plot(
+                [x_cols[0], x_cols[1]],
+                [in_ys[ii], hid_ys[hi]],
+                color="#2980B9",
+                alpha=min(w * 2, 0.8),
+                lw=w * 3.0,
+                zorder=1,
+            )
+
+    # Edges: hidden -> output
+    max_l1 = l1_scores.max() + 1e-12
+    for hi, h_idx in enumerate(top_hid_idx):
+        for oi in range(n_out):
+            w = float(l1_scores[oi, h_idx]) / max_l1
+            if w < 0.02:
+                continue
+            ax.plot(
+                [x_cols[1], x_cols[2]],
+                [hid_ys[hi], out_ys[oi]],
+                color="#27AE60",
+                alpha=min(w * 2, 0.8),
+                lw=w * 3.0,
+                zorder=1,
+            )
+
+    # Nodes
+    node_kw = dict(transform=ax.transData, zorder=3, clip_on=False)
+
+    for ii, label in enumerate(top_in_labels):
+        ax.scatter(x_cols[0], in_ys[ii], s=80, color="#2980B9", **node_kw)
+        ax.text(x_cols[0] - 0.02, in_ys[ii], label, ha="right", va="center",
+                fontsize=5.5, transform=ax.transData)
+
+    for hi, h_idx in enumerate(top_hid_idx):
+        ax.scatter(x_cols[1], hid_ys[hi], s=60, color="#8E44AD", **node_kw)
+        ax.text(x_cols[1], hid_ys[hi] + 0.015, f"h{h_idx}", ha="center",
+                va="bottom", fontsize=5, transform=ax.transData)
+
+    for oi in range(n_out):
+        ax.scatter(x_cols[2], out_ys[oi], s=80, color="#E74C3C", **node_kw)
+        ax.text(x_cols[2] + 0.02, out_ys[oi], f"risk {oi+1}", ha="left",
+                va="center", fontsize=6, transform=ax.transData)
+
+    # Column labels
+    for xc, lbl, col in zip(x_cols, ["Input features", "Hidden nodes", "Output classes"],
+                             ["#2980B9", "#8E44AD", "#E74C3C"]):
+        ax.text(xc, 1.01, lbl, ha="center", va="bottom", fontsize=8,
+                fontweight="bold", color=col, transform=ax.transData)
+
+    ax.set_xlim(-0.25, 1.25)
+    ax.set_ylim(-0.05, 1.08)
+    ax.set_title(
+        f"{flavor} — Pruned Network Graph\n"
+        f"(top {n_in} inputs x top {n_hid} hidden nodes x {n_out} outputs; "
+        f"edge width proportional to L1 magnitude)",
+        fontsize=9,
+        fontweight="bold",
+    )
+    plt.tight_layout()
+    out_path = fig_dir / f"{flavor}_pruned_network.pdf"
+    savefig_pdf(fig, out_path)
+    print(f"Saved pruned network graph -> {out_path}")
+    plt.close()
+
+
 # ── Table assembly ────────────────────────────────────────────────────────────
 
 def run(
@@ -531,6 +666,58 @@ def run(
     # ── PDF table (replaces PNG) ───────────────────────────────────────────────
     _render_table_pdf(rows, models, dimensions, outputs_dir)
 
+    # ── Pruned network graphs ─────────────────────────────────────────────────
+    if cheby_ckpt.exists() and cheby_cfg.exists() and eval_feat_path.exists():
+        try:
+            import torch
+            from configs import load_experiment_config
+            from src.models.tabkan import TabKAN
+            from src.interpretability.utils.paths import figures as fig_dir
+
+            X_eval_tmp = pd.read_parquet(eval_feat_path)
+            n_feats_tmp = len(X_eval_tmp.columns)
+            feature_names_tmp = list(X_eval_tmp.columns)
+
+            cheby_cfg_loaded = load_experiment_config(cheby_cfg)
+            cheby_module_pg = TabKAN(
+                in_features=n_feats_tmp,
+                widths=[cheby_cfg_loaded.model.width] * cheby_cfg_loaded.model.depth,
+                kan_type="chebykan",
+                degree=cheby_cfg_loaded.model.degree or 3,
+            )
+            cheby_module_pg.load_state_dict(torch.load(cheby_ckpt, map_location="cpu"))
+            cheby_module_pg.eval()
+            draw_pruned_network_graph(
+                cheby_module_pg, feature_names_tmp, "ChebyKAN", fig_dir(outputs_dir)
+            )
+        except Exception as e:
+            print(f"Warning: ChebyKAN pruned network graph failed: {e}")
+
+    if fourier_ckpt.exists() and fourier_cfg.exists() and eval_feat_path.exists():
+        try:
+            import torch
+            from configs import load_experiment_config
+            from src.models.tabkan import TabKAN
+            from src.interpretability.utils.paths import figures as fig_dir
+
+            X_eval_tmp = pd.read_parquet(eval_feat_path)
+            n_feats_tmp = len(X_eval_tmp.columns)
+            feature_names_tmp = list(X_eval_tmp.columns)
+
+            fourier_cfg_loaded = load_experiment_config(fourier_cfg)
+            fourier_module_pg = TabKAN(
+                in_features=n_feats_tmp,
+                widths=[fourier_cfg_loaded.model.width] * fourier_cfg_loaded.model.depth,
+                kan_type="fourierkan",
+                degree=fourier_cfg_loaded.model.degree or 3,
+            )
+            fourier_module_pg.load_state_dict(torch.load(fourier_ckpt, map_location="cpu"))
+            fourier_module_pg.eval()
+            draw_pruned_network_graph(
+                fourier_module_pg, feature_names_tmp, "FourierKAN", fig_dir(outputs_dir)
+            )
+        except Exception as e:
+            print(f"Warning: FourierKAN pruned network graph failed: {e}")
 
 
 def _parse_args() -> argparse.Namespace:

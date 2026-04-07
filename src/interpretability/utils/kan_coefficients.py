@@ -13,14 +13,29 @@ import math
 import pandas as pd
 
 
+_KAN_LAYER_TYPES: tuple | None = None
+
+
+def _get_kan_layer_types() -> tuple:
+    global _KAN_LAYER_TYPES
+    if _KAN_LAYER_TYPES is None:
+        from src.models.kan_layers import ChebyKANLayer, FourierKANLayer
+        _KAN_LAYER_TYPES = (ChebyKANLayer, FourierKANLayer)
+    return _KAN_LAYER_TYPES
+
+
+def _is_kan_layer(layer) -> bool:
+    return isinstance(layer, _get_kan_layer_types())
+
+
 def get_first_kan_layer(module):
     """Return the first learnable KAN layer or ``None`` when unavailable."""
-    from src.models.kan_layers import ChebyKANLayer, FourierKANLayer
+    return next((l for l in module.kan_layers if _is_kan_layer(l)), None)
 
-    return next(
-        (layer for layer in module.kan_layers if isinstance(layer, (ChebyKANLayer, FourierKANLayer))),
-        None,
-    )
+
+def get_all_kan_layers(module) -> list:
+    """Return all learnable KAN layers in order."""
+    return [l for l in module.kan_layers if _is_kan_layer(l)]
 
 
 def coefficient_importance_from_layer(
@@ -91,6 +106,35 @@ def coefficient_importance_from_layer(
         }
     )
     return frame.sort_values("importance", ascending=False, ignore_index=True)
+
+
+def coefficient_importance_all_layers(
+    module,
+    feature_names: list[str],
+    *,
+    include_linear_term: bool = False,
+) -> pd.DataFrame:
+    """Return paper-native coefficient importance for every KAN layer.
+
+    Layer 0 uses the supplied feature_names as input labels.
+    Subsequent layers label their inputs as h0, h1, ... (hidden nodes
+    from the previous KAN layer).
+    """
+    layers = get_all_kan_layers(module)
+    frames = []
+    input_labels = list(feature_names)
+    for layer_idx, layer in enumerate(layers):
+        frame = coefficient_importance_from_layer(
+            layer, input_labels, include_linear_term=include_linear_term
+        )
+        frame = frame.copy()
+        frame["layer"] = layer_idx
+        frames.append(frame)
+        # Next layer's inputs are hidden nodes of this layer
+        input_labels = [f"h{i}" for i in range(layer.out_features)]
+    if not frames:
+        return pd.DataFrame()
+    return pd.concat(frames, ignore_index=True)
 
 
 def coefficient_importance_from_module(
