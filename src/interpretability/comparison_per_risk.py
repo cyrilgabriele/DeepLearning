@@ -190,19 +190,13 @@ def _plot_panel(
         if risk == 1:
             ax.legend(fontsize=7, loc="upper right")
 
-        # Kendall's τ: SHAP is risk-conditional; KAN is global-by-paper.
+        # Kendall's τ: only GLM↔SHAP is meaningful per panel.
+        # KAN ranking is global (identical in every panel); omit KAN τ per panel.
         glm_ranks = [float(glm_imp.get(f, 0)) for f in top_feats]
         shap_ranks = [float(shap_risk.get(f, 0)) if not shap_risk.empty else 0.0 for f in top_feats]
-        cheby_ranks = [float(chebykan_global.get(f, 0)) if not chebykan_global.empty else 0.0 for f in top_feats]
 
         tau_gs, _ = kendalltau(glm_ranks, shap_ranks)
-        tau_gc, _ = kendalltau(glm_ranks, cheby_ranks)
-        tau_sc, _ = kendalltau(shap_ranks, cheby_ranks)
-        tau_text = (
-            f"τ GLM↔SHAP={tau_gs:.2f}\n"
-            f"τ GLM↔Cheby(global)={tau_gc:.2f}\n"
-            f"τ SHAP↔Cheby(global)={tau_sc:.2f}"
-        )
+        tau_text = f"τ GLM↔SHAP={tau_gs:.2f}"
         ax.text(0.98, 0.02, tau_text, transform=ax.transAxes, ha="right", va="bottom",
                 fontsize=5, color="gray")
 
