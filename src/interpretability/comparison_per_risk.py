@@ -66,14 +66,23 @@ def _kan_importance_global(
     feature_names: list[str],
     kan_layer,
 ) -> pd.Series:
-    """Global KAN feature importance from layer-0 coefficient magnitudes."""
+    """Global KAN feature importance from layer-0 coefficient magnitudes.
+
+    Scores are divided by n_basis_terms × n_hidden_outputs so that
+    ChebyKAN and FourierKAN importance values are on a comparable per-parameter
+    scale (TabKAN paper, Section 5.7 cross-architecture comparison note).
+    """
     if kan_layer is not None:
         try:
             from src.interpretability.utils.kan_coefficients import coefficient_importance_from_layer
 
             frame = coefficient_importance_from_layer(kan_layer, feature_names)
             if not frame.empty:
-                return frame.set_index("feature")["importance"].sort_values(ascending=False)
+                n_basis = int(frame["n_basis_terms"].iloc[0])
+                n_hidden = int(frame["n_hidden_outputs"].iloc[0])
+                normalizer = n_basis * n_hidden
+                importance = frame.set_index("feature")["importance"] / normalizer
+                return importance.sort_values(ascending=False)
         except Exception:
             pass
     return _fallback_edge_count(symbolic_path).sort_values(ascending=False)
