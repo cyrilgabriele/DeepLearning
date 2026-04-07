@@ -387,6 +387,161 @@ def _plot_feature_ranking(
     plt.close()
 
 
+# ── Symbolic lock-in (Liu et al. 2024, Section 2.5.1) ────────────────────────
+
+_FORMULA_FUNCTIONS: dict[str, tuple] = {
+    "a*x + b":                  (lambda x, a, b: a * x + b,                                    2),
+    "a*x^2 + b*x + c":         (lambda x, a, b, c: a * x**2 + b * x + c,                      3),
+    "a*x^3 + b*x^2 + c*x + d": (lambda x, a, b, c, d: a*x**3 + b*x**2 + c*x + d,             4),
+    "a*|x| + b":                (lambda x, a, b: a * np.abs(x) + b,                            2),
+    "a*sqrt(|x|) + b":          (lambda x, a, b: a * np.sqrt(np.abs(x)) + b,                   2),
+    "a*log(|x|+1) + b":         (lambda x, a, b: a * np.log(np.abs(x) + 1) + b,                2),
+    "a*exp(x) + b":             (lambda x, a, b: a * np.exp(np.clip(x, -5, 5)) + b,            2),
+    "a*sin(x) + b":             (lambda x, a, b: a * np.sin(x) + b,                            2),
+    "a*sin(2*x) + b":           (lambda x, a, b: a * np.sin(2 * x) + b,                        2),
+    "a*cos(x) + b":             (lambda x, a, b: a * np.cos(x) + b,                            2),
+    "a (constant)":             (lambda x, a: np.full_like(x, float(a)),                        1),
+    "a*sin(x) + b*cos(x)":     (lambda x, a, b: a * np.sin(x) + b * np.cos(x),                2),
+    "a*sin(2*x) + b*cos(2*x)": (lambda x, a, b: a * np.sin(2*x) + b * np.cos(2*x),            2),
+    "a*sin(3*x) + b*cos(3*x)": (lambda x, a, b: a * np.sin(3*x) + b * np.cos(3*x),            2),
+    "a*sin(4*x) + b*cos(4*x)": (lambda x, a, b: a * np.sin(4*x) + b * np.cos(4*x),            2),
+}
+
+
+def _project_onto_chebyshev(
+    x_norm: np.ndarray,
+    y_target: np.ndarray,
+    degree: int,
+) -> np.ndarray:
+    """Least-squares projection of y_target onto Chebyshev basis.
+    Returns coefficient array of shape (degree+1,).
+    """
+    basis_cols = [np.ones_like(x_norm), x_norm]
+    for _ in range(2, degree + 1):
+        basis_cols.append(2 * x_norm * basis_cols[-1] - basis_cols[-2])
+    basis = np.stack(basis_cols, axis=-1)  # (n, degree+1)
+    coeffs, _, _, _ = np.linalg.lstsq(basis, y_target, rcond=None)
+    return coeffs
+
+
+def _project_onto_fourier(
+    x_norm: np.ndarray,
+    y_target: np.ndarray,
+    grid_size: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Least-squares projection of y_target onto Fourier cosine+sine basis.
+    Returns (a_coeffs, b_coeffs) each of shape (grid_size,).
+    """
+    import math
+    k = np.arange(1, grid_size + 1, dtype=np.float32)
+    x_scaled = (x_norm + 1.0) * math.pi
+    cos_basis = np.cos(x_scaled[:, None] * k)   # (n, grid_size)
+    sin_basis = np.sin(x_scaled[:, None] * k)   # (n, grid_size)
+    basis = np.hstack([cos_basis, sin_basis])    # (n, 2*grid_size)
+    ab, _, _, _ = np.linalg.lstsq(basis, y_target, rcond=None)
+    return ab[:grid_size], ab[grid_size:]
+
+
+def lock_in_symbolic_edges(
+    module,
+    fits_df: "pd.DataFrame",
+    *,
+    r2_threshold: float = 0.99,
+    n_samples: int = 1000,
+) -> tuple:
+    """Replace clean (R² ≥ r2_threshold) edge activations with their symbolic formula.
+
+    For each clean edge:
+    1. Re-sample the learned activation to get (x_norm, y_learned).
+    2. Re-fit scipy to recover the actual formula parameters.
+    3. Evaluate the symbolic function to get y_symbolic.
+    4. Project y_symbolic onto the Chebyshev / Fourier basis (least-squares).
+    5. Replace the edge's coefficients; zero out its base_weight.
+
+    Returns (symbolified_module, lockin_log) where lockin_log is a list of dicts
+    recording which edges were locked and their affine R².
+    """
+    import copy
+    import torch
+    from scipy.optimize import curve_fit
+    from src.models.kan_layers import ChebyKANLayer, FourierKANLayer
+
+    clean_df = fits_df[fits_df["quality_tier"] == "clean"].copy()
+    if clean_df.empty:
+        print("lock_in_symbolic_edges: no clean edges found. Skipping.")
+        return module, []
+
+    symbolified = copy.deepcopy(module)
+    lockin_log: list[dict] = []
+
+    for _, row in clean_df.iterrows():
+        layer_idx = int(row["layer"])
+        out_i = int(row["edge_out"])
+        in_i = int(row["edge_in"])
+        formula_name = str(row["formula"])
+
+        if formula_name not in _FORMULA_FUNCTIONS:
+            print(f"  lock-in: unknown formula '{formula_name}' — skipping.")
+            continue
+
+        func, n_params = _FORMULA_FUNCTIONS[formula_name]
+
+        # Get the actual KAN layer by index
+        kan_layers = [l for l in symbolified.kan_layers
+                      if isinstance(l, (ChebyKANLayer, FourierKANLayer))]
+        if layer_idx >= len(kan_layers):
+            continue
+        layer = kan_layers[layer_idx]
+
+        # Sample the learned activation
+        x_norm_arr, y_learned = sample_edge(layer, out_i, in_i, n=n_samples)
+        x_norm = x_norm_arr if isinstance(x_norm_arr, np.ndarray) else x_norm_arr
+        y_learned = y_learned if isinstance(y_learned, np.ndarray) else y_learned
+
+        # Re-fit the symbolic formula to get actual parameter values
+        p0 = [1.0] * n_params
+        try:
+            popt, _ = curve_fit(func, x_norm, y_learned, p0=p0, maxfev=3000)
+            y_symbolic = func(x_norm, *popt)
+        except Exception:
+            print(f"  lock-in: curve_fit failed for edge ({out_i},{in_i}) — skipping.")
+            continue
+
+        # Compute affine R²
+        ss_res = float(np.sum((y_learned - y_symbolic) ** 2))
+        ss_tot = float(np.sum((y_learned - np.mean(y_learned)) ** 2))
+        r2_affine = 1.0 - ss_res / ss_tot if ss_tot > 1e-12 else 1.0
+
+        # Project symbolic values onto basis and replace coefficients
+        with torch.no_grad():
+            if isinstance(layer, ChebyKANLayer):
+                new_coeffs = _project_onto_chebyshev(x_norm, y_symbolic, layer.degree)
+                layer.cheby_coeffs[out_i, in_i, :] = torch.tensor(
+                    new_coeffs, dtype=layer.cheby_coeffs.dtype
+                )
+            else:
+                a_new, b_new = _project_onto_fourier(x_norm, y_symbolic, layer.grid_size)
+                layer.fourier_a[out_i, in_i, :] = torch.tensor(
+                    a_new, dtype=layer.fourier_a.dtype
+                )
+                layer.fourier_b[out_i, in_i, :] = torch.tensor(
+                    b_new, dtype=layer.fourier_b.dtype
+                )
+            layer.base_weight[out_i, in_i] = 0.0
+
+        lockin_log.append({
+            "layer": layer_idx,
+            "edge_out": out_i,
+            "edge_in": in_i,
+            "formula": formula_name,
+            "r2_original": float(row["r_squared"]),
+            "r2_affine_refit": round(r2_affine, 6),
+        })
+
+    print(f"lock_in_symbolic_edges: locked {len(lockin_log)} / {len(clean_df)} clean edges.")
+    return symbolified, lockin_log
+
+
 # ── Main per-model runner ─────────────────────────────────────────────────────
 
 def run(
@@ -466,6 +621,18 @@ def run(
     from src.interpretability.utils.paths import data as data_dir, figures as fig_dir
     out_path = data_dir(output_dir) / f"{flavor}_symbolic_fits.csv"
     df.to_csv(out_path, index=False)
+
+    # ── Symbolic lock-in (Liu et al. 2024, Section 2.5.1) ────────────────────
+    symbolified_module, lockin_log = lock_in_symbolic_edges(module, df)
+    if lockin_log:
+        from src.interpretability.utils.paths import models as mod_dir
+        sym_ckpt = mod_dir(output_dir) / f"{flavor}_symbolified_module.pt"
+        torch.save(symbolified_module.state_dict(), sym_ckpt)
+        print(f"Saved symbolified checkpoint → {sym_ckpt}")
+        lockin_df = pd.DataFrame(lockin_log)
+        lockin_path = data_dir(output_dir) / f"{flavor}_lockin_log.csv"
+        lockin_df.to_csv(lockin_path, index=False)
+        print(f"Saved lock-in log → {lockin_path}")
 
     first_layer = get_first_kan_layer(module)
     coeff_frame = coefficient_importance_from_layer(first_layer, feature_names)
