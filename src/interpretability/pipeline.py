@@ -275,6 +275,37 @@ def run_interpret(
         symbolic_fits=fits_df if not fits_df.empty else None,
     )
 
+    # Feature subset validation (TabKAN Section 5.7)
+    from src.interpretability.feature_validation import (
+        compute_feature_validation_curves,
+        plot_feature_validation_curves,
+    )
+    from src.interpretability.utils.kan_coefficients import coefficient_importance_from_module
+
+    y_eval = pd.read_parquet(eval_labels_path).iloc[:, 0]
+    ranking = coefficient_importance_from_module(pruned_module, feature_names)
+    kan_ranked = ranking.index.tolist() if not ranking.empty else feature_names
+
+    import torch
+    import numpy as np
+
+    def _kan_predict(X_df):
+        X_t = torch.tensor(X_df.values, dtype=torch.float32)
+        with torch.no_grad():
+            preds = pruned_module(X_t).cpu().numpy().flatten()
+        return np.clip(np.round(preds), 1, 8).astype(int)
+
+    curves = compute_feature_validation_curves(
+        {flavor: kan_ranked},
+        {flavor: _kan_predict},
+        X_eval, y_eval,
+    )
+    plot_feature_validation_curves(curves, interpret_dir)
+    curves_path = data_dir(interpret_dir) / f"{flavor}_feature_validation_curves.json"
+    import json as _json
+    curves_path.write_text(_json.dumps(curves, indent=2))
+    print(f"Saved feature validation curves -> {curves_path}")
+
     result["artifacts"] = {
         "pruning_summary": pruning_summary_path,
         "pruned_checkpoint": pruned_checkpoint_path,
@@ -283,5 +314,6 @@ def run_interpret(
         "symbolic_formulas": reports_dir(interpret_dir) / f"{flavor}_symbolic_formulas.json",
         "kan_diagram": Path("figures") / f"{flavor}_kan_diagram.pdf",
         "r2_distribution": Path("figures") / f"{flavor}_r2_distribution.pdf",
+        "feature_validation": curves_path,
     }
     return result

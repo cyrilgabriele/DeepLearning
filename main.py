@@ -105,6 +105,25 @@ def run(argv: Sequence[str] | None = None) -> None:
         _print_selection_summary(result)
         return
 
+    if args.stage == "compare":
+        from src.interpretability.final_comparison import run as run_compare
+
+        run_compare(
+            artifacts_dir=Path("artifacts"),
+            outputs_dir=args.output_root,
+            glm_checkpoint=args.glm_checkpoint,
+            xgb_checkpoint=args.xgb_checkpoint,
+            chebykan_checkpoint=args.chebykan_checkpoint,
+            fourierkan_checkpoint=args.fourierkan_checkpoint,
+            chebykan_config=args.chebykan_config,
+            fourierkan_config=args.fourierkan_config,
+            chebykan_pruning_summary=args.chebykan_pruning_summary,
+            fourierkan_pruning_summary=args.fourierkan_pruning_summary,
+            eval_features=args.eval_features,
+            eval_labels=args.eval_labels,
+        )
+        return
+
     raise ValueError(f"Unsupported stage: {args.stage}")
 
 
@@ -113,7 +132,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--stage",
         required=True,
-        choices=["train", "tune", "interpret", "retrain", "select"],
+        choices=["train", "tune", "interpret", "retrain", "select", "compare"],
         help="Experiment stage to run.",
     )
     parser.add_argument(
@@ -210,6 +229,47 @@ def _build_parser() -> argparse.ArgumentParser:
         nargs="+",
         default=None,
         help="Seed list for the retrain stage.",
+    )
+    # ── compare stage arguments ──────────────────────────────────────────────
+    parser.add_argument(
+        "--glm-checkpoint", type=Path, default=None,
+        help="GLM checkpoint for the compare stage.",
+    )
+    parser.add_argument(
+        "--xgb-checkpoint", type=Path, default=None,
+        help="XGBoost checkpoint for the compare stage.",
+    )
+    parser.add_argument(
+        "--chebykan-checkpoint", type=Path, default=None,
+        help="ChebyKAN pruned checkpoint for the compare stage.",
+    )
+    parser.add_argument(
+        "--fourierkan-checkpoint", type=Path, default=None,
+        help="FourierKAN pruned checkpoint for the compare stage.",
+    )
+    parser.add_argument(
+        "--chebykan-config", type=Path, default=None,
+        help="ChebyKAN experiment config for the compare stage.",
+    )
+    parser.add_argument(
+        "--fourierkan-config", type=Path, default=None,
+        help="FourierKAN experiment config for the compare stage.",
+    )
+    parser.add_argument(
+        "--chebykan-pruning-summary", type=Path, default=None,
+        help="ChebyKAN pruning summary JSON for the compare stage.",
+    )
+    parser.add_argument(
+        "--fourierkan-pruning-summary", type=Path, default=None,
+        help="FourierKAN pruning summary JSON for the compare stage.",
+    )
+    parser.add_argument(
+        "--eval-features", type=Path, default=None,
+        help="Eval features parquet for the compare stage.",
+    )
+    parser.add_argument(
+        "--eval-labels", type=Path, default=None,
+        help="Eval labels parquet for the compare stage.",
     )
     return parser
 

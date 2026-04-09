@@ -225,10 +225,10 @@ def run(
     fig, ax = plt.subplots(figsize=(10, 8))
     shap.summary_plot(shap_values, X_for_plot, show=False, plot_size=None)
     plt.tight_layout()
-    beeswarm_path = fig_dir(output_dir) / "shap_xgb_beeswarm.png"
-    plt.savefig(beeswarm_path, dpi=150, bbox_inches="tight")
+    beeswarm_path = fig_dir(output_dir) / "shap_xgb_beeswarm.pdf"
+    plt.savefig(beeswarm_path, dpi=300, bbox_inches="tight")
     plt.close()
-    print(f"Saved beeswarm plot → {beeswarm_path}")
+    print(f"Saved beeswarm plot -> {beeswarm_path}")
 
     top5 = _top_features(shap_values, list(X_eval.columns), n=5)
     feature_idx = {f: i for i, f in enumerate(X_eval.columns)}
@@ -263,10 +263,10 @@ def run(
         fig.suptitle(f"SHAP dependence — {feat}", fontsize=12)
         plt.tight_layout()
         safe_name = feat.replace("/", "_").replace(" ", "_")
-        dep_path = fig_dir(output_dir) / f"shap_xgb_dependence_{safe_name}.png"
-        plt.savefig(dep_path, dpi=150, bbox_inches="tight")
+        dep_path = fig_dir(output_dir) / f"shap_xgb_dependence_{safe_name}.pdf"
+        plt.savefig(dep_path, dpi=300, bbox_inches="tight")
         plt.close()
-        print(f"Saved dependence plot → {dep_path}")
+        print(f"Saved dependence plot -> {dep_path}")
 
     # ── Export raw SHAP values ────────────────────────────────────────────────
     shap_df = pd.DataFrame(shap_values, columns=X_eval.columns)
