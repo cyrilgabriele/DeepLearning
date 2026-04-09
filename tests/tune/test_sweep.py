@@ -4,8 +4,8 @@ from pathlib import Path
 import optuna
 import pytest
 
-from configs import ExperimentConfig, ModelConfig, PreprocessingConfig, TrainerConfig
-from configs.tune.tune_config import SearchParamConfig, TuneConfig
+from src.config import ExperimentConfig, ModelConfig, PreprocessingConfig, TrainerConfig
+from src.config.tune.tune_config import SearchParamConfig, TuneConfig
 from src.models import TrainingArtifacts
 from src.tune.sweep import _build_trial_config, _sample_trial_params, run_tune
 

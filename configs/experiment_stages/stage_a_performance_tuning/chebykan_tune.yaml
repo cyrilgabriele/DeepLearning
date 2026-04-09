@@ -1,5 +1,5 @@
 trainer:
-  experiment_name: kan-cheby-single
+  experiment_name: stage-a-chebykan
   train_csv: data/prudential-life-insurance-assessment/train.csv
   test_csv: data/prudential-life-insurance-assessment/test.csv
   seed: 42
@@ -11,15 +11,17 @@ preprocessing:
 model:
   name: tabkan-base
   flavor: chebykan
-  depth: 3
-  width: 256
-  degree: 6
+  hidden_widths: [128, 128]
+  degree: 3
   params:
-    max_epochs: 150
+    max_epochs: 100
+    sparsity_lambda: 0.0
+    l1_weight: 1.0
+    entropy_weight: 1.0
 
 tune:
-  name: kan-cheby-single-tune
-  storage: sweeps/kan-cheby-single-tune.db
+  name: stage-a-chebykan-tune
+  storage: sweeps/stage-a-chebykan-tune.db
   n_trials: 50
   timeout: null
   sampler: tpe
@@ -28,18 +30,13 @@ tune:
     depth:
       type: int
       low: 1
-      high: 4
+      high: 3
     width:
       type: categorical
       choices: [32, 64, 128, 256]
     max_epochs:
-      type: int
-      low: 50
-      high: 200
-      step: 25
-    sparsity_lambda:
       type: categorical
-      choices: [0.0, 0.00001, 0.0001, 0.001, 0.01]
+      choices: [75, 100, 150, 200]
     degree:
       type: int
       low: 2

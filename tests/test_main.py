@@ -177,7 +177,7 @@ def test_main_dispatches_retrain_stage(tmp_path, monkeypatch):
         }
 
     import src.retrain as retrain_module
-    import configs.runtime as runtime_module
+    import src.config.runtime as runtime_module
 
     monkeypatch.setattr(retrain_module, "run_retrain", fake_run_retrain)
     monkeypatch.setattr(runtime_module, "detect_device", lambda: "cpu")

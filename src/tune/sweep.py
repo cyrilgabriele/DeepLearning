@@ -10,7 +10,7 @@ from typing import Any, Literal
 import optuna
 import yaml
 
-from configs import ExperimentConfig
+from src.config import ExperimentConfig
 from src.training.trainer import run_train
 
 

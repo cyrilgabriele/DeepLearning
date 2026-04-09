@@ -1,10 +1,13 @@
 trainer:
-  experiment_name: glm-baseline
+  experiment_name: stage-c-glm-baseline
   train_csv: data/prudential-life-insurance-assessment/train.csv
   test_csv: data/prudential-life-insurance-assessment/test.csv
+  seed: 42
+
 preprocessing:
   contract_version: 1
   recipe: kan_paper
+
 model:
   name: glm
   params:

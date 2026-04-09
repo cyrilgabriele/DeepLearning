@@ -1,5 +1,5 @@
 trainer:
-  experiment_name: xgboost-paper
+  experiment_name: stage-a-xgboost
   train_csv: data/prudential-life-insurance-assessment/train.csv
   test_csv: data/prudential-life-insurance-assessment/test.csv
   seed: 42
@@ -24,11 +24,12 @@ model:
     refit_full_training: true
 
 tune:
-  name: xgboost-paper-tune
-  storage: sweeps/xgboost-paper-tune.db
+  name: stage-a-xgboost-tune
+  storage: sweeps/stage-a-xgboost-tune.db
   n_trials: 50
   timeout: null
   sampler: tpe
+  top_k_candidates: 1
   search_space:
     n_estimators:
       type: int

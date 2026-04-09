@@ -364,7 +364,7 @@ def run(
     from src.interpretability.utils.kan_coefficients import coefficient_importance_from_layer
     from src.models.tabkan import TabKAN
     from src.models.kan_layers import ChebyKANLayer, FourierKANLayer
-    from configs import load_experiment_config
+    from src.config import load_experiment_config
 
     _data = data_dir(output_dir)
     _rep = rep_dir(output_dir)
@@ -401,7 +401,7 @@ def run(
             cfg = load_experiment_config(cfg_path)
             import torch
             module = TabKAN(in_features=X_eval.shape[1],
-                            widths=[cfg.model.width] * cfg.model.depth,
+                            widths=cfg.model.resolved_hidden_widths(),
                             kan_type=flavor, degree=cfg.model.degree or 3)
             module.load_state_dict(torch.load(ckpt, map_location="cpu"))
             module.eval()

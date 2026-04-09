@@ -1,0 +1,21 @@
+output_root: outputs
+
+stage_a_baseline_inputs:
+  xgboost_best_config: sweeps/stage-a-xgboost-tune_best.yaml
+
+stage_c_baseline_inputs:
+  glm_config: configs/experiment_stages/stage_c_explanation_package/glm_baseline.yaml
+
+stage_b_selection_inputs:
+  chebykan_selection_manifest: artifacts/selection/chebykan_selection.json
+  fourierkan_selection_manifest: artifacts/selection/fourierkan_selection.json
+
+materialized_selected_configs:
+  chebykan_best_performance: configs/experiment_stages/stage_c_explanation_package/materialized/chebykan_best_performance.yaml
+  chebykan_best_interpretable: configs/experiment_stages/stage_c_explanation_package/materialized/chebykan_best_interpretable.yaml
+  fourierkan_best_performance: configs/experiment_stages/stage_c_explanation_package/materialized/fourierkan_best_performance.yaml
+  fourierkan_best_interpretable: configs/experiment_stages/stage_c_explanation_package/materialized/fourierkan_best_interpretable.yaml
+
+final_comparison_outputs:
+  json_report: outputs/final_comparison/final_comparison.json
+  markdown_report: outputs/final_comparison/final_comparison.md

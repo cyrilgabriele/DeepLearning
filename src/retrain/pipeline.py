@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
-from configs import ExperimentConfig
+from src.config import ExperimentConfig
 from src.training.trainer import run_train
 
 

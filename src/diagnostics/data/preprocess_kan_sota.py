@@ -401,7 +401,7 @@ def run_pipeline(
 if __name__ == "__main__":
     default_path = Path("data/prudential-life-insurance-assessment/train.csv")
     if default_path.exists():
-        from configs import set_global_seed
+        from src.config import set_global_seed
 
         seed = set_global_seed(42)
         results = run_pipeline(default_path, random_seed=seed)

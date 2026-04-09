@@ -31,56 +31,28 @@ Supported stages:
 
 ## Config Entry Points
 
-Model runs:
-
-- `configs/model/chebykan_experiment.yaml`
-- `configs/model/fourierkan_experiment.yaml`
-- `configs/model/glm_experiment.yaml`
-- `configs/model/xgboost_paper_experiment.yaml`
-
-Tune runs:
-
-- `configs/tune/kan_cheby/kan_cheby_tune.yaml`
-- `configs/tune/kan_fourier/kan_fourier_tune.yaml`
-- `configs/tune/xgboost_paper/xgboost_paper_tune.yaml`
+- Stage A performance tuning:
+  - `configs/experiment_stages/stage_a_performance_tuning/chebykan_tune.yaml`
+  - `configs/experiment_stages/stage_a_performance_tuning/fourierkan_tune.yaml`
+  - `configs/experiment_stages/stage_a_performance_tuning/xgboost_tune.yaml`
+- Stage B interpretability tuning plans:
+  - `configs/experiment_stages/stage_b_interpretability_tuning/chebykan_retrain_plan.yaml`
+  - `configs/experiment_stages/stage_b_interpretability_tuning/fourierkan_retrain_plan.yaml`
+- Stage C explanation package:
+  - `configs/experiment_stages/stage_c_explanation_package/glm_baseline.yaml`
+  - `configs/experiment_stages/stage_c_explanation_package/explanation_package_plan.yaml`
 
 ## Commands
 
-Train:
+Install dependencies and verify the dataset:
 
 ```bash
-uv run python main.py --stage train --config configs/model/chebykan_experiment.yaml
-uv run python main.py --stage train --config configs/model/fourierkan_experiment.yaml
-uv run python main.py --stage train --config configs/model/xgboost_paper_experiment.yaml
+uv sync
+test -f data/prudential-life-insurance-assessment/train.csv
+test -f data/prudential-life-insurance-assessment/test.csv
 ```
 
-Tune:
-
-```bash
-uv run python main.py --stage tune --config configs/tune/kan_cheby/kan_cheby_tune.yaml
-uv run python main.py --stage tune --config configs/tune/kan_fourier/kan_fourier_tune.yaml
-uv run python main.py --stage tune --config configs/tune/xgboost_paper/xgboost_paper_tune.yaml
-```
-
-Interpret:
-
-```bash
-uv run python main.py --stage interpret --config configs/model/glm_experiment.yaml
-uv run python main.py --stage interpret --config configs/model/xgboost_paper_experiment.yaml
-uv run python main.py --stage interpret --config configs/model/chebykan_experiment.yaml
-```
-
-Retrain selected KAN candidates:
-
-```bash
-uv run python main.py --stage retrain --candidate-manifest sweeps/kan-cheby-single-tune_candidates.json --seeds 13 29 47
-```
-
-Select final KANs from retraining outputs:
-
-```bash
-uv run python main.py --stage select --retrain-manifest artifacts/retrain/chebykan/default-selection/manifest.json
-```
+Use the full stage-by-stage runbook in `docs/project_setup/experiment_stages/experiment_stages.md`.
 
 ## Artifact Layout
 

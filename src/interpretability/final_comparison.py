@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -189,3 +190,68 @@ def _fmt(value: Any) -> str:
     if isinstance(value, float):
         return f"{value:.4f}"
     return str(value)
+
+
+def _resolve_latest_summary_from_config(config_path: Path) -> Path:
+    from src.config import load_experiment_config
+
+    config = load_experiment_config(config_path)
+    summary_root = Path("artifacts") / config.trainer.experiment_name
+    candidates = sorted(summary_root.glob("run-summary-*.json"))
+    if not candidates:
+        raise FileNotFoundError(
+            f"No run summary found under {summary_root}. "
+            f"Train `{config_path}` before using it as a baseline input."
+        )
+    return candidates[-1]
+
+
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Assemble the final comparison package.")
+    parser.add_argument(
+        "--selection-manifest",
+        dest="selection_manifests",
+        type=Path,
+        action="append",
+        required=True,
+        help="Selection manifest to include. Repeat for multiple families.",
+    )
+    parser.add_argument(
+        "--baseline-summary",
+        dest="baseline_summaries",
+        type=Path,
+        action="append",
+        default=None,
+        help="Baseline run summary to include. Repeat for multiple baselines.",
+    )
+    parser.add_argument(
+        "--baseline-config",
+        dest="baseline_configs",
+        type=Path,
+        action="append",
+        default=None,
+        help=(
+            "Baseline experiment config to resolve from `artifacts/<experiment>/run-summary-*.json`. "
+            "Repeat for multiple baselines."
+        ),
+    )
+    parser.add_argument("--output-root", type=Path, default=Path("outputs"))
+    parser.add_argument("--report-path", type=Path, default=None)
+    return parser.parse_args()
+
+
+if __name__ == "__main__":
+    args = _parse_args()
+    baseline_summary_paths = list(args.baseline_summaries or [])
+    baseline_summary_paths.extend(
+        _resolve_latest_summary_from_config(config_path)
+        for config_path in (args.baseline_configs or [])
+    )
+    result = run(
+        args.selection_manifests,
+        output_root=args.output_root,
+        baseline_summary_paths=baseline_summary_paths,
+        report_path=args.report_path,
+    )
+    print(f"Saved JSON report: {result['report_path']}")
+    print(f"Saved Markdown report: {result['markdown_path']}")

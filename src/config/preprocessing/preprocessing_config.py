@@ -13,14 +13,7 @@ class PreprocessingConfig(BaseModel):
     contract_version: int = Field(
         default=1,
         ge=1,
-        description="Version of the machine-verifiable preprocessing contract.",
-    )
-    expected_feature_fingerprint: str | None = Field(
-        default=None,
-        description=(
-            "Optional SHA256 fingerprint for the expected transformed feature space. "
-            "When provided, training fails if the runtime feature space differs."
-        ),
+        description="Version of the preprocessing contract recorded in run artifacts.",
     )
 
     recipe: Literal[
@@ -33,7 +26,7 @@ class PreprocessingConfig(BaseModel):
     )
 
     def contract_payload(self) -> dict[str, object]:
-        """Return the serializable preprocessing contract used for fingerprinting."""
+        """Return the serializable preprocessing payload persisted with run artifacts."""
 
         return self.model_dump(mode="json")
 

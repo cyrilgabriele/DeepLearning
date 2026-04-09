@@ -1,11 +1,12 @@
 import math
+import json
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 
-from configs import (
+from src.config import (
     ExperimentConfig,
     ModelConfig,
     PreprocessingConfig,
@@ -158,6 +159,47 @@ def test_trainer_exports_eval_artifacts_under_recipe_namespace(tmp_path, monkeyp
     assert (eval_dir / "feature_types.json").exists()
 
 
+def test_trainer_persists_preprocessing_payload_without_fingerprint(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    train_csv = _write_mock_training_csv(tmp_path)
+    test_csv = _write_mock_test_csv(tmp_path)
+    config = ExperimentConfig(
+        trainer=TrainerConfig(
+            experiment_name="xgb-artifacts",
+            train_csv=train_csv,
+            test_csv=test_csv,
+            seed=21,
+        ),
+        preprocessing=PreprocessingConfig(
+            recipe="xgboost_paper",
+        ),
+        model=ModelConfig(
+            name="xgboost-paper",
+            flavor=None,
+            depth=1,
+            width=1,
+            degree=1,
+            params={
+                "n_estimators": 3,
+                "max_depth": 3,
+                "learning_rate": 0.3,
+            },
+        ),
+    )
+
+    seed = set_global_seed(config.trainer.seed)
+    trainer = Trainer(config, device="cpu", random_seed=seed)
+    artifacts = trainer.run()
+
+    summary_payload = json.loads(artifacts.summary_path.read_text())
+    checkpoint_manifest = json.loads(artifacts.checkpoint_path.with_suffix(".manifest.json").read_text())
+
+    assert "expected_feature_fingerprint" not in summary_payload["preprocessing"]
+    assert "feature_space_fingerprint" not in summary_payload["preprocessing"]
+    assert "expected_feature_fingerprint" not in checkpoint_manifest["preprocessing"]
+    assert "feature_space_fingerprint" not in checkpoint_manifest["preprocessing"]
+
+
 def test_config_loader_reads_yaml(tmp_path):
     cfg_text = """
 trainer:
@@ -208,6 +250,7 @@ trainer:
   eval_size: 0.2
 preprocessing:
   recipe: kan_paper
+  expected_feature_fingerprint: abc123
   missing_threshold: 0.5
 model:
   name: tabkan-base

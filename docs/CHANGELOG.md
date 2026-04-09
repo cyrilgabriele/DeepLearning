@@ -23,7 +23,7 @@ Track what was changed, why it was changed, and any important notes.
 - Implemented the pipeline-audit follow-up across config validation, orchestration, tuning, retraining, selection, artifact contracts, final comparison, and legacy-script cleanup.
 - Made the typed config layer strict in `configs/config_loader.py`, `configs/train/trainer_config.py`, `configs/preprocessing/preprocessing_config.py`, `configs/model/model_config.py`, and `configs/tune/tune_config.py`, so stale keys now fail loudly instead of being silently ignored.
 - Removed the dead preprocessing knobs from the active experiment YAMLs, updated the model configs to the current schema, and refreshed `README.md` so `main.py` is the only supported orchestration path.
-- Kept preprocessing behavior frozen, but added a machine-verifiable preprocessing contract: run summaries and checkpoint-adjacent manifests now persist the preprocessing payload plus a derived feature-space fingerprint in `src/training/trainer.py`.
+- Kept preprocessing behavior frozen and tightened the surrounding artifact contract: run summaries and checkpoint-adjacent manifests now persist the effective preprocessing payload in `src/training/trainer.py`, without runtime fingerprint enforcement.
 - Added canonical KAN architecture support through `hidden_widths` in `configs/model/model_config.py` and `src/models/tabkan.py`, then updated the KAN interpretability loaders in `src/interpretability/kan_pruning.py`, `src/interpretability/kan_symbolic.py`, and `src/interpretability/r2_pipeline.py` to reconstruct from the saved architecture rather than assuming uniform `[width] * depth`.
 - Extended the tune stage in `src/tune/sweep.py` to emit top-k candidate manifests (`*_candidates.json`) and added the missing FourierKAN tune config under `configs/tune/kan_fourier/kan_fourier_tune.yaml`.
 - Added the new `retrain` stage in `src/retrain/pipeline.py` and wired it into `main.py`, so selected KAN candidates can be materialized across multiple seeds with sparsity regularization enforced and persisted under `artifacts/retrain/<family>/<selection_name>/manifest.json`.
@@ -33,9 +33,9 @@ Track what was changed, why it was changed, and any important notes.
 - Added regression coverage for the new behavior in `tests/test_main.py`, `tests/training/test_trainer.py`, `tests/tune/test_sweep.py`, `tests/retrain/test_pipeline.py`, `tests/selection/test_selection_pipeline.py`, `tests/interpretability/test_final_comparison.py`, `tests/models/test_tabkan.py`, and related pipeline tests.
 
 #### Why
-- The audit showed that the core `train`/`tune`/`interpret` path was usable, but the repo still mixed two workflow eras, silently ignored stale config fields, lacked a machine-verifiable preprocessing contract, collapsed tuning to one winner too early, and was missing the documented retraining/selection bridge.
+- The audit showed that the core `train`/`tune`/`interpret` path was usable, but the repo still mixed two workflow eras, silently ignored stale config fields, lacked a reliable preprocessing/artifact contract, collapsed tuning to one winner too early, and was missing the documented retraining/selection bridge.
 - Strict configs and cleaned-up docs reduce operator error immediately.
-- Persisting preprocessing fingerprints and explicit hidden-layer layouts makes artifacts reproducible and keeps downstream interpretation aligned with what was actually trained.
+- Persisting the effective preprocessing payload and explicit hidden-layer layouts makes artifacts easier to audit and keeps downstream interpretation aligned with what was actually trained.
 - Top-k candidate export plus dedicated `retrain` and `select` stages turns the previously manual KAN candidate workflow into a reproducible pipeline.
 - Rewriting final comparison and disabling legacy scripts removes old-path ambiguity and aligns the repo with the current namespaced artifact layout.
 

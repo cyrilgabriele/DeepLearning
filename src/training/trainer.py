@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -12,7 +11,7 @@ from typing import Dict, Optional
 import pandas as pd
 from sklearn.metrics import accuracy_score, cohen_kappa_score, f1_score, mean_absolute_error
 
-from configs import ExperimentConfig, set_global_seed
+from src.config import ExperimentConfig, set_global_seed
 from src.preprocessing import preprocess_xgboost_paper as paper_prep
 from src.preprocessing import preprocess_kan_paper as kan_prep
 from src.preprocessing import preprocess_kan_sota as kan_sota_prep
@@ -227,30 +226,14 @@ class Trainer:
         return None
 
     def _build_preprocessing_contract(self, dataset: "PreparedDataset") -> Dict[str, object]:
-        """Return the effective preprocessing contract and feature-space fingerprint."""
+        """Return the effective preprocessing payload stored with the run artifacts."""
 
         feature_names = list(dataset.feature_names or dataset.X_train.columns)
         contract_payload = self.config.preprocessing.contract_payload()
-        fingerprint_source = {
-            "contract": contract_payload,
-            "feature_names": feature_names,
-            "feature_count": len(feature_names),
-            "recipe": dataset.recipe,
-        }
-        fingerprint = hashlib.sha256(
-            json.dumps(fingerprint_source, sort_keys=True).encode("utf-8")
-        ).hexdigest()
-        expected_fingerprint = self.config.preprocessing.expected_feature_fingerprint
-        if expected_fingerprint is not None and expected_fingerprint != fingerprint:
-            raise ValueError(
-                "The runtime preprocessing feature-space fingerprint does not match the "
-                "expected preprocessing contract."
-            )
         return {
             **contract_payload,
             "feature_count": len(feature_names),
             "feature_names": feature_names,
-            "feature_space_fingerprint": fingerprint,
         }
 
     def _persist_checkpoint(self, model: PrudentialModel, timestamp: str) -> Optional[Path]:

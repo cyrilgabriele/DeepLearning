@@ -1,111 +1,166 @@
 # Experiment Stages
 
-This note defines the concrete experiment structure for the project.
+This is the executable runbook for the current experiment pipeline.
 
-The goal is to separate predictive tuning from interpretability-driven selection and to keep the final results defensible against the KAN and TabKAN papers.
+Run every command from the repository root.
 
-## Overall Principle
+## Stage Config Tree
 
-- Keep preprocessing fixed during the experiment stages.
-- First optimize for predictive quality.
-- Then optimize for interpretability within a small accuracy gap.
-- Only generate the final explanation package from the selected pruned models.
+- Stage A runnable tune configs:
+  - `configs/experiment_stages/stage_a_performance_tuning/chebykan_tune.yaml`
+  - `configs/experiment_stages/stage_a_performance_tuning/fourierkan_tune.yaml`
+  - `configs/experiment_stages/stage_a_performance_tuning/xgboost_tune.yaml`
+- Stage B administrative plans:
+  - `configs/experiment_stages/stage_b_interpretability_tuning/chebykan_retrain_plan.yaml`
+  - `configs/experiment_stages/stage_b_interpretability_tuning/fourierkan_retrain_plan.yaml`
+- Stage C runnable and materialized configs:
+  - `configs/experiment_stages/stage_c_explanation_package/glm_baseline.yaml`
+  - `configs/experiment_stages/stage_c_explanation_package/explanation_package_plan.yaml`
+  - `configs/experiment_stages/stage_c_explanation_package/materialized/*.yaml`
 
-## Core Models
+## Preconditions
 
-- KAN models: `ChebyKAN`, `FourierKAN`
-- Optional extension: `BSplineKAN`
-- Performance baseline: `XGBoost`
-- Interpretability baselines: `XGBoost`, `GLM`
+Install dependencies and verify the Kaggle CSVs are present:
 
-## Selection Rule
+```bash
+uv sync
+test -f data/prudential-life-insurance-assessment/train.csv
+test -f data/prudential-life-insurance-assessment/test.csv
+```
 
-- Primary metric: validation `QWK`
-- Interpretability tolerance: `<= 0.01` validation QWK from the best model in the same family
+The pipeline creates `sweeps/`, `artifacts/`, `checkpoints/`, and `outputs/` automatically.
 
 ## Stage A: Performance Tuning
 
-- Use fixed preprocessing.
-- Tune `ChebyKAN` and `FourierKAN` on validation `QWK`.
-- Tune `XGBoost` as the main predictive baseline.
-- Search shallow architectures first.
-- For KANs, prioritize the proposal-motivated range of `1–3` layers.
-- Tune depth, width, and basis complexity.
+Tune each family, then immediately materialize the best full-data run from the generated `_best.yaml`.
 
-Why:
+### A1. ChebyKAN
 
-- This stage identifies the strongest predictive candidates before interpretability constraints are imposed.
-- Starting shallow is consistent with the proposal and keeps the models easier to analyze later.
+```bash
+uv run python main.py --stage tune --config configs/experiment_stages/stage_a_performance_tuning/chebykan_tune.yaml
+uv run python main.py --stage train --config sweeps/stage-a-chebykan-tune_best.yaml
+```
 
-Outputs:
+Main outputs:
 
-- best validation-QWK runs for `ChebyKAN`
-- best validation-QWK runs for `FourierKAN`
-- best validation-QWK run for `XGBoost`
-- a small shortlist of strong KAN configurations for the next stage
+- `sweeps/stage-a-chebykan-tune_best.yaml`
+- `sweeps/stage-a-chebykan-tune_candidates.json`
+- `artifacts/stage-a-chebykan-tuned/run-summary-*.json`
+- `checkpoints/stage-a-chebykan-tuned/model-*.pt`
+
+### A2. FourierKAN
+
+```bash
+uv run python main.py --stage tune --config configs/experiment_stages/stage_a_performance_tuning/fourierkan_tune.yaml
+uv run python main.py --stage train --config sweeps/stage-a-fourierkan-tune_best.yaml
+```
+
+Main outputs:
+
+- `sweeps/stage-a-fourierkan-tune_best.yaml`
+- `sweeps/stage-a-fourierkan-tune_candidates.json`
+- `artifacts/stage-a-fourierkan-tuned/run-summary-*.json`
+- `checkpoints/stage-a-fourierkan-tuned/model-*.pt`
+
+### A3. XGBoost
+
+```bash
+uv run python main.py --stage tune --config configs/experiment_stages/stage_a_performance_tuning/xgboost_tune.yaml
+uv run python main.py --stage train --config sweeps/stage-a-xgboost-tune_best.yaml
+```
+
+Main outputs:
+
+- `sweeps/stage-a-xgboost-tune_best.yaml`
+- `artifacts/stage-a-xgboost-tuned/run-summary-*.json`
+- `checkpoints/stage-a-xgboost-tuned/model-*.joblib`
 
 ## Stage B: Interpretability Tuning
 
-- Take the top few Stage-A KAN configurations.
-- Retrain each with sparsification and entropy regularization enabled.
-- Run `3–5` seeds per candidate.
-- Prune each trained model with one fixed pruning rule.
-- If needed, briefly fine-tune after pruning.
-- Select the smallest pruned model within `<= 0.01` validation `QWK` of the best model in that KAN family.
+The Stage B YAMLs are run-control records. The actual pipeline input is the candidate manifest emitted by Stage A.
 
-Prefer:
+The fixed controls are:
 
-- fewer active nodes and edges after pruning
-- lower basis complexity
-- cleaner learned feature-response curves
-- better seed stability
+- `top_k=5`
+- `seeds=13 29 47`
+- `qwk_tolerance=0.01`
+- `pruning_threshold=0.01`
+- `candidate_library=scipy`
 
-Why:
+### B1. ChebyKAN shortlist, selection, and config materialization
 
-- This stage turns the KAN paper logic into an actual model-selection rule.
-- The final interpretable model should not be an arbitrary dense winner.
+```bash
+uv run python main.py --stage retrain --candidate-manifest sweeps/stage-a-chebykan-tune_candidates.json --top-k 5 --seeds 13 29 47 --selection-name stage-b-chebykan-shortlist --output-experiment-prefix stage-b-chebykan
+uv run python main.py --stage select --retrain-manifest artifacts/retrain/chebykan/stage-b-chebykan-shortlist/manifest.json --qwk-tolerance 0.01
+uv run python -m src.selection.materialize_config --selection-manifest artifacts/selection/chebykan_selection.json --role best_performance_candidate --output configs/experiment_stages/stage_c_explanation_package/materialized/chebykan_best_performance.yaml
+uv run python -m src.selection.materialize_config --selection-manifest artifacts/selection/chebykan_selection.json --role best_interpretable_candidate --output configs/experiment_stages/stage_c_explanation_package/materialized/chebykan_best_interpretable.yaml
+```
 
-Outputs:
+### B2. FourierKAN shortlist, selection, and config materialization
 
-- best-performance `ChebyKAN`
-- best-interpretable `ChebyKAN`
-- best-performance `FourierKAN`
-- best-interpretable `FourierKAN`
+```bash
+uv run python main.py --stage retrain --candidate-manifest sweeps/stage-a-fourierkan-tune_candidates.json --top-k 5 --seeds 13 29 47 --selection-name stage-b-fourierkan-shortlist --output-experiment-prefix stage-b-fourierkan
+uv run python main.py --stage select --retrain-manifest artifacts/retrain/fourierkan/stage-b-fourierkan-shortlist/manifest.json --qwk-tolerance 0.01
+uv run python -m src.selection.materialize_config --selection-manifest artifacts/selection/fourierkan_selection.json --role best_performance_candidate --output configs/experiment_stages/stage_c_explanation_package/materialized/fourierkan_best_performance.yaml
+uv run python -m src.selection.materialize_config --selection-manifest artifacts/selection/fourierkan_selection.json --role best_interpretable_candidate --output configs/experiment_stages/stage_c_explanation_package/materialized/fourierkan_best_interpretable.yaml
+```
+
+Main Stage B outputs:
+
+- `artifacts/retrain/chebykan/stage-b-chebykan-shortlist/manifest.json`
+- `artifacts/retrain/fourierkan/stage-b-fourierkan-shortlist/manifest.json`
+- `artifacts/selection/chebykan_selection.json`
+- `artifacts/selection/fourierkan_selection.json`
+- `configs/experiment_stages/stage_c_explanation_package/materialized/*.yaml`
 
 ## Stage C: Explanation Package
 
-Generate the final explanation artifacts only for the selected final models.
+Interpret every selected KAN config plus the two baselines. The materialized KAN YAMLs from Stage B make these commands stable and repeatable.
 
-For KANs:
+### C1. Train and interpret the GLM baseline
 
-- active nodes and edges after pruning
-- feature-wise learned function plots
-- coefficient-based global feature importance
-- feature-reduction ablation using top-k features
-- symbolic fit only for the clearest `1D` activations, with `R^2`
+```bash
+uv run python main.py --stage train --config configs/experiment_stages/stage_c_explanation_package/glm_baseline.yaml
+uv run python main.py --stage interpret --config configs/experiment_stages/stage_c_explanation_package/glm_baseline.yaml
+```
 
-For `XGBoost`:
+### C2. Interpret the Stage A XGBoost winner
 
-- SHAP summary outputs
-- dependence-style inspection for important features
+```bash
+uv run python main.py --stage interpret --config sweeps/stage-a-xgboost-tune_best.yaml
+```
 
-For `GLM`:
+### C3. Interpret the selected ChebyKAN and FourierKAN runs
 
-- coefficient magnitudes
-- coefficient signs
+```bash
+uv run python main.py --stage interpret --config configs/experiment_stages/stage_c_explanation_package/materialized/chebykan_best_performance.yaml --pruning-threshold 0.01 --qwk-tolerance 0.01 --candidate-library scipy
+uv run python main.py --stage interpret --config configs/experiment_stages/stage_c_explanation_package/materialized/chebykan_best_interpretable.yaml --pruning-threshold 0.01 --qwk-tolerance 0.01 --candidate-library scipy
+uv run python main.py --stage interpret --config configs/experiment_stages/stage_c_explanation_package/materialized/fourierkan_best_performance.yaml --pruning-threshold 0.01 --qwk-tolerance 0.01 --candidate-library scipy
+uv run python main.py --stage interpret --config configs/experiment_stages/stage_c_explanation_package/materialized/fourierkan_best_interpretable.yaml --pruning-threshold 0.01 --qwk-tolerance 0.01 --candidate-library scipy
+```
 
-Why:
+### C4. Assemble the final comparison package
 
-- This gives a compact and consistent explanation package across model families.
-- It keeps symbolic fitting in the right role: useful, but not the main success criterion.
+```bash
+uv run python -m src.interpretability.final_comparison \
+  --selection-manifest artifacts/selection/chebykan_selection.json \
+  --selection-manifest artifacts/selection/fourierkan_selection.json \
+  --baseline-config sweeps/stage-a-xgboost-tune_best.yaml \
+  --baseline-config configs/experiment_stages/stage_c_explanation_package/glm_baseline.yaml \
+  --output-root outputs
+```
 
-## How To Read The Stages
+Main Stage C outputs:
 
-- Stage A answers: which models are competitive?
-- Stage B answers: which KAN models are still strong after enforcing simplicity?
-- Stage C answers: what do the selected final models actually learn and how interpretable are they?
+- `outputs/interpretability/kan_paper/stage-c-glm-baseline/`
+- `outputs/interpretability/xgboost_paper/stage-a-xgboost-tuned/`
+- `outputs/interpretability/kan_paper/<selected-kan-experiment>/`
+- `outputs/final_comparison/final_comparison.json`
+- `outputs/final_comparison/final_comparison.md`
 
-## Scope Note
+## Practical Notes
 
-- `BSplineKAN` remains optional.
-- It can be added only after the `ChebyKAN` and `FourierKAN` pipeline is stable and reproducible.
+- Stage A uses predictive tuning only. `sparsity_lambda` is fixed to `0.0` there on purpose.
+- Stage B is where sparsity regularization matters; the retrain stage enforces it if a candidate comes in dense.
+- Stage C uses `scipy` symbolic fitting by default so the workflow does not require Julia or PySR.
+- If you rerun any stage, the pipeline will append new timestamped artifacts; the commands above always target the latest matching summary/checkpoint for the chosen experiment name.

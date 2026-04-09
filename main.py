@@ -32,8 +32,8 @@ def run(argv: Sequence[str] | None = None) -> None:
         parser.error("stage 'select' requires --retrain-manifest.")
 
     if args.stage == "train":
-        from configs import detect_device
-        from configs import load_experiment_config
+        from src.config import detect_device
+        from src.config import load_experiment_config
         from src.training.trainer import run_train
 
         config = load_experiment_config(args.config)
@@ -43,8 +43,8 @@ def run(argv: Sequence[str] | None = None) -> None:
         return
 
     if args.stage == "tune":
-        from configs import detect_device
-        from configs import load_experiment_config
+        from src.config import detect_device
+        from src.config import load_experiment_config
         from src.tune.sweep import run_tune
 
         config = load_experiment_config(args.config)
@@ -77,7 +77,7 @@ def run(argv: Sequence[str] | None = None) -> None:
         return
 
     if args.stage == "retrain":
-        from configs import detect_device
+        from src.config import detect_device
         from src.retrain import run_retrain
 
         device = detect_device()

@@ -9,15 +9,15 @@ label them as such instead of fabricating conditional KAN scores.
 
 Usage:
     uv run python -m src.interpretability.comparison_per_risk \\
-        --glm-coefficients     outputs/data/glm_coefficients.csv \\
-        --shap-values          outputs/data/shap_xgb_values.parquet \\
-        --chebykan-symbolic    outputs/data/chebykan_symbolic_fits.csv \\
-        --fourierkan-symbolic  outputs/data/fourierkan_symbolic_fits.csv \\
-        --chebykan-checkpoint  outputs/models/chebykan_pruned_module.pt \\
-        --chebykan-config      configs/chebykan_experiment.yaml \\
-        --xgb-checkpoint       checkpoints/xgb-baseline/model-<timestamp>.joblib \\
-        --eval-features        outputs/data/X_eval.parquet \\
-        --eval-labels          outputs/data/y_eval.parquet
+        --glm-coefficients     outputs/interpretability/kan_paper/stage-c-glm-baseline/data/glm_coefficients.csv \\
+        --shap-values          outputs/interpretability/xgboost_paper/stage-a-xgboost-tuned/data/shap_xgb_values.parquet \\
+        --chebykan-symbolic    outputs/interpretability/kan_paper/<cheby-experiment>/data/chebykan_symbolic_fits.csv \\
+        --fourierkan-symbolic  outputs/interpretability/kan_paper/<fourier-experiment>/data/fourierkan_symbolic_fits.csv \\
+        --chebykan-checkpoint  checkpoints/<cheby-experiment>/model-<timestamp>.pt \\
+        --chebykan-config      configs/experiment_stages/stage_c_explanation_package/materialized/chebykan_best_interpretable.yaml \\
+        --xgb-checkpoint       checkpoints/stage-a-xgboost-tuned/model-<timestamp>.joblib \\
+        --eval-features        outputs/eval/xgboost_paper/stage-a-xgboost-tuned/X_eval.parquet \\
+        --eval-labels          outputs/eval/xgboost_paper/stage-a-xgboost-tuned/y_eval.parquet
 """
 
 from __future__ import annotations
@@ -239,14 +239,14 @@ def run(
             return None
         try:
             import torch
-            from configs import load_experiment_config
+            from src.config import load_experiment_config
             from src.models.tabkan import TabKAN
             from src.models.kan_layers import ChebyKANLayer, FourierKANLayer
 
             cfg = load_experiment_config(cfg_path)
             module = TabKAN(
                 in_features=X_eval.shape[1],
-                widths=[cfg.model.width] * cfg.model.depth,
+                widths=cfg.model.resolved_hidden_widths(),
                 kan_type=flavor,
                 degree=cfg.model.degree or 3,
             )

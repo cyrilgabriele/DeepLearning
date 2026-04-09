@@ -5,10 +5,10 @@ For each active (non-pruned) edge in a trained KAN, samples the learned
 
 Usage:
     uv run python -m src.interpretability.kan_symbolic \
-        --pruned-checkpoint outputs/chebykan_pruned_module.pt \
-        --pruning-summary   outputs/chebykan_pruning_summary.json \
-        --config            configs/chebykan_experiment.yaml \
-        --eval-features     outputs/X_eval.parquet \
+        --pruned-checkpoint outputs/interpretability/kan_paper/<experiment>/models/chebykan_pruned_module.pt \
+        --pruning-summary   outputs/interpretability/kan_paper/<experiment>/reports/chebykan_pruning_summary.json \
+        --config            configs/experiment_stages/stage_c_explanation_package/materialized/chebykan_best_interpretable.yaml \
+        --eval-features     outputs/eval/kan_paper/<experiment>/X_eval.parquet \
         --flavor            chebykan
 """
 
@@ -22,7 +22,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from configs import ExperimentConfig
+from src.config import ExperimentConfig
 
 
 # ── Edge activation sampler ───────────────────────────────────────────────────
@@ -581,7 +581,7 @@ def _parse_args() -> argparse.Namespace:
 
 if __name__ == "__main__":
     args = _parse_args()
-    from configs import load_experiment_config
+    from src.config import load_experiment_config
 
     X_raw_arg = pd.read_parquet(args.eval_features_raw) if args.eval_features_raw else None
     run(

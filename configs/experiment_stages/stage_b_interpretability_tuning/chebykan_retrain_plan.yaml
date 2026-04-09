@@ -1,0 +1,22 @@
+family: chebykan
+
+stage_a_inputs:
+  tune_config: configs/experiment_stages/stage_a_performance_tuning/chebykan_tune.yaml
+  candidate_manifest: sweeps/stage-a-chebykan-tune_candidates.json
+
+stage_b_controls:
+  top_k: 5
+  seeds: [13, 29, 47]
+  selection_name: stage-b-chebykan-shortlist
+  output_experiment_prefix: stage-b-chebykan
+  qwk_tolerance: 0.01
+  pruning_threshold: 0.01
+  candidate_library: scipy
+
+stage_b_outputs:
+  retrain_manifest: artifacts/retrain/chebykan/stage-b-chebykan-shortlist/manifest.json
+  selection_manifest: artifacts/selection/chebykan_selection.json
+
+stage_c_materialized_configs:
+  best_performance: configs/experiment_stages/stage_c_explanation_package/materialized/chebykan_best_performance.yaml
+  best_interpretable: configs/experiment_stages/stage_c_explanation_package/materialized/chebykan_best_interpretable.yaml
