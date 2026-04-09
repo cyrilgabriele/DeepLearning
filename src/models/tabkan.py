@@ -173,6 +173,7 @@ class TabKANClassifier(PrudentialModel):
         *,
         random_state: int = 42,
         flavor: str = "chebykan",
+        hidden_widths: list[int] | tuple[int, ...] | None = None,
         depth: int | None = None,
         width: int | None = None,
         degree: int = 3,
@@ -185,8 +186,13 @@ class TabKANClassifier(PrudentialModel):
         **extra_params,
     ) -> None:
         params = {
-            "preset": preset, "flavor": flavor, "depth": depth,
-            "width": width, "degree": degree, "random_state": random_state,
+            "preset": preset,
+            "flavor": flavor,
+            "hidden_widths": list(hidden_widths) if hidden_widths is not None else None,
+            "depth": depth,
+            "width": width,
+            "degree": degree,
+            "random_state": random_state,
         }
         params.update(extra_params)
         super().__init__(**params)
@@ -204,7 +210,9 @@ class TabKANClassifier(PrudentialModel):
         self.entropy_weight = entropy_weight
 
         base_widths = list(base["widths"])
-        if depth is not None and width is not None:
+        if hidden_widths is not None:
+            self.widths = [int(item) for item in hidden_widths]
+        elif depth is not None and width is not None:
             self.widths = [width] * depth
         elif depth is not None:
             self.widths = [base_widths[0]] * depth
@@ -296,6 +304,7 @@ def build_tabkan_model(
     *,
     random_state: int,
     flavor: str | None = None,
+    hidden_widths: list[int] | tuple[int, ...] | None = None,
     depth: int | None = None,
     width: int | None = None,
     degree: int | None = None,
@@ -305,6 +314,8 @@ def build_tabkan_model(
     kwargs: dict = {"random_state": random_state}
     if flavor is not None:
         kwargs["flavor"] = flavor
+    if hidden_widths is not None:
+        kwargs["hidden_widths"] = list(hidden_widths)
     if depth is not None:
         kwargs["depth"] = depth
     if width is not None:

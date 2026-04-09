@@ -1,0 +1,43 @@
+trainer:
+  experiment_name: stage-a-fourierkan
+  train_csv: data/prudential-life-insurance-assessment/train.csv
+  test_csv: data/prudential-life-insurance-assessment/test.csv
+  seed: 42
+
+preprocessing:
+  contract_version: 1
+  recipe: kan_paper
+
+model:
+  name: tabkan-base
+  flavor: fourierkan
+  hidden_widths: [128, 128]
+  params:
+    max_epochs: 100
+    grid_size: 4
+    sparsity_lambda: 0.0
+    l1_weight: 1.0
+    entropy_weight: 1.0
+
+tune:
+  name: stage-a-fourierkan-tune
+  storage: sweeps/stage-a-fourierkan-tune.db
+  n_trials: 50
+  timeout: null
+  sampler: tpe
+  top_k_candidates: 5
+  search_space:
+    depth:
+      type: int
+      low: 1
+      high: 3
+    width:
+      type: categorical
+      choices: [32, 64, 128, 256]
+    max_epochs:
+      type: categorical
+      choices: [75, 100, 150, 200]
+    grid_size:
+      type: int
+      low: 2
+      high: 8

@@ -17,6 +17,49 @@ Track what was changed, why it was changed, and any important notes.
 - Optional notes, issues, or future work
 ```
 
+### [2026-04-09] - Cyril Gabriele
+
+#### What
+- Implemented the pipeline-audit follow-up across config validation, orchestration, tuning, retraining, selection, artifact contracts, final comparison, and legacy-script cleanup.
+- Made the typed config layer strict in `configs/config_loader.py`, `configs/train/trainer_config.py`, `configs/preprocessing/preprocessing_config.py`, `configs/model/model_config.py`, and `configs/tune/tune_config.py`, so stale keys now fail loudly instead of being silently ignored.
+- Removed the dead preprocessing knobs from the active experiment YAMLs, updated the model configs to the current schema, and refreshed `README.md` so `main.py` is the only supported orchestration path.
+- Kept preprocessing behavior frozen and tightened the surrounding artifact contract: run summaries and checkpoint-adjacent manifests now persist the effective preprocessing payload in `src/training/trainer.py`, without runtime fingerprint enforcement.
+- Added canonical KAN architecture support through `hidden_widths` in `configs/model/model_config.py` and `src/models/tabkan.py`, then updated the KAN interpretability loaders in `src/interpretability/kan_pruning.py`, `src/interpretability/kan_symbolic.py`, and `src/interpretability/r2_pipeline.py` to reconstruct from the saved architecture rather than assuming uniform `[width] * depth`.
+- Extended the tune stage in `src/tune/sweep.py` to emit top-k candidate manifests (`*_candidates.json`) and added the missing FourierKAN tune config under `configs/tune/kan_fourier/kan_fourier_tune.yaml`.
+- Added the new `retrain` stage in `src/retrain/pipeline.py` and wired it into `main.py`, so selected KAN candidates can be materialized across multiple seeds with sparsity regularization enforced and persisted under `artifacts/retrain/<family>/<selection_name>/manifest.json`.
+- Added the new `select` stage in `src/selection/pipeline.py` and wired it into `main.py`, implementing family-wise best-performance vs. best-interpretable selection under the documented QWK tolerance rule and persisting results under `artifacts/selection/<family>_selection.json`.
+- Rewrote `src/interpretability/final_comparison.py` to consume the current manifest-driven, namespaced artifact layout instead of the older flat output conventions.
+- Marked `src/evaluate.py` and `src/submit.py` as legacy entrypoints that fail loudly and point users back to `main.py`.
+- Added regression coverage for the new behavior in `tests/test_main.py`, `tests/training/test_trainer.py`, `tests/tune/test_sweep.py`, `tests/retrain/test_pipeline.py`, `tests/selection/test_selection_pipeline.py`, `tests/interpretability/test_final_comparison.py`, `tests/models/test_tabkan.py`, and related pipeline tests.
+
+#### Why
+- The audit showed that the core `train`/`tune`/`interpret` path was usable, but the repo still mixed two workflow eras, silently ignored stale config fields, lacked a reliable preprocessing/artifact contract, collapsed tuning to one winner too early, and was missing the documented retraining/selection bridge.
+- Strict configs and cleaned-up docs reduce operator error immediately.
+- Persisting the effective preprocessing payload and explicit hidden-layer layouts makes artifacts easier to audit and keeps downstream interpretation aligned with what was actually trained.
+- Top-k candidate export plus dedicated `retrain` and `select` stages turns the previously manual KAN candidate workflow into a reproducible pipeline.
+- Rewriting final comparison and disabling legacy scripts removes old-path ambiguity and aligns the repo with the current namespaced artifact layout.
+
+#### Remarks
+- Preprocessing logic itself was intentionally left unchanged; only the surrounding config/artifact contract was tightened.
+- Verified with targeted pytest runs covering config loading, trainer artifacts, KAN architecture handling, tune manifests, retrain/select stages, interpretability helpers, and the pipeline integration path (`57 passed` in the focused suite).
+
+### [2026-04-09] - Cyril Gabriele
+
+#### What
+- Audited the preprocessing hierarchy against the project proposal (`docs/proposal/KAN-2026-DL-Project-Proposal.pdf`), the cited XGBoost baseline paper (`docs/Analysis_Accuracy_of_XGBoost_Model_for_Multiclass_Classification_-_A_Case_Study_of_Applicant_Level_Risk_Prediction_for_Life_Insurance.pdf`), and the Prudential EDA notebook in `src/preprocessing/playground/data_insights.ipynb`.
+- Kept `src/preprocessing/preprocess_xgboost_paper.py` as the paper-faithful baseline and confirmed that `src/preprocessing/preprocess_kan_paper.py` remains the minimal KAN-safe adaptation of that same preprocessing.
+- Reworked `src/preprocessing/preprocess_kan_sota.py` so the stronger KAN pipeline now uses leakage-safe out-of-fold CatBoost encoding on training rows, retains explicit missingness indicators, drops only ultra-sparse numeric value channels above the 50% missingness threshold while keeping their masks, and separates continuous (`QuantileTransformer`) from ordinal (`MinMaxScaler`) scaling.
+- Exposed dropped-value-column metadata through `src/preprocessing/dataset.py`, updated `src/training/trainer.py` so encoded/scaled SOTA feature names are mapped back to the correct feature types during eval export, and added regression coverage for the sparse-column behavior in `tests/data/test_dataset_pipeline.py`.
+
+#### Why
+- The intended comparison is `XGBoost paper baseline` vs `KAN with the same preprocessing except for the minimum changes needed to remove raw NaNs`, followed by a clearly stronger `KAN SOTA` recipe. The audit was needed to make sure those three preprocessing paths are scientifically distinct and internally consistent.
+- The previous `kan_sota` implementation still encoded training categoricals in a leakage-prone way and applied one scaling strategy too broadly. The revised version aligns better with both the notebook evidence on structured missingness and the repo's earlier notes about ordinal features behaving poorly under quantile scaling.
+- Surfacing dropped-feature metadata and preserving correct feature typing keeps downstream diagnostics and interpretability artifacts honest once SOTA features are prefixed as `cb_`, `qt_`, `mm_`, or `missing_`.
+
+#### Remarks
+- On the real Prudential training data, the updated `kan_sota` path now drops the six value channels above the 50% missingness threshold (`Family_Hist_3`, `Family_Hist_5`, `Medical_History_10`, `Medical_History_15`, `Medical_History_24`, `Medical_History_32`) while keeping all corresponding missingness masks.
+- Verified with `./.venv/bin/python -m pytest tests/data/test_dataset_pipeline.py tests/training/test_trainer.py -q` and with direct real-data runs of the three preprocessing pipelines.
+
 ### [2026-04-06] - Cyril Gabriele
 
 #### What

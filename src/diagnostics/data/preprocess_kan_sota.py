@@ -37,8 +37,8 @@ from sklearn.experimental import enable_iterative_imputer  # noqa: F401
 from sklearn.impute import IterativeImputer
 from sklearn.preprocessing import MinMaxScaler, QuantileTransformer
 
-from src.data.prudential_features import get_feature_lists
-from src.data.preprocess_paper_base import PaperPreprocessingBase, PreprocessorState
+from src.preprocessing.prudential_features import get_feature_lists
+from src.preprocessing.preprocess_paper_base import PaperPreprocessingBase, PreprocessorState
 
 TARGET_COLUMN = PaperPreprocessingBase.TARGET_COLUMN
 ID_COLUMN = PaperPreprocessingBase.ID_COLUMN
@@ -401,7 +401,7 @@ def run_pipeline(
 if __name__ == "__main__":
     default_path = Path("data/prudential-life-insurance-assessment/train.csv")
     if default_path.exists():
-        from configs import set_global_seed
+        from src.config import set_global_seed
 
         seed = set_global_seed(42)
         results = run_pipeline(default_path, random_seed=seed)

@@ -6,8 +6,8 @@ QWK drop stays within tolerance.
 
 Usage:
     uv run python -m src.interpretability.kan_pruning \
-        --checkpoint checkpoints/chebykan-base/model-<timestamp>.pt \
-        --config    configs/chebykan_experiment.yaml \
+        --checkpoint checkpoints/stage-b-chebykan-.../model-<timestamp>.pt \
+        --config    configs/experiment_stages/stage_c_explanation_package/materialized/chebykan_best_interpretable.yaml \
         --flavor    chebykan
 """
 
@@ -23,7 +23,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from configs import ExperimentConfig
+from src.config import ExperimentConfig
 
 
 # ── Edge magnitude ────────────────────────────────────────────────────────────
@@ -170,6 +170,7 @@ def run(
     wrapper = TabKANClassifier(
         preset=config.model.name,
         flavor=flavor,
+        hidden_widths=config.model.resolved_hidden_widths(),
         depth=config.model.depth,
         width=config.model.width,
         degree=config.model.degree or 3,
@@ -255,7 +256,7 @@ def _parse_args() -> argparse.Namespace:
 
 if __name__ == "__main__":
     args = _parse_args()
-    from configs import load_experiment_config
+    from src.config import load_experiment_config
 
     run(
         args.checkpoint,

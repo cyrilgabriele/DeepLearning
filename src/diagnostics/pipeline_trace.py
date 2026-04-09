@@ -20,8 +20,8 @@ import pandas as pd
 import torch
 import lightning as L
 
-from src.data.prudential_features import get_feature_lists
-from src.data import preprocess_kan_paper as kan_prep
+from src.preprocessing.prudential_features import get_feature_lists
+from src.preprocessing import preprocess_kan_paper as kan_prep
 from src.models.kan_layers import ChebyKANLayer, FourierKANLayer, BSplineKANLayer
 from src.models.tabkan import TabKAN
 from src.models.base import PrudentialModel

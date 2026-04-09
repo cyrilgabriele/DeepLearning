@@ -6,10 +6,10 @@ Usage (programmatic):
 
 Usage (CLI):
     uv run python -m src.interpretability.r2_pipeline \
-        --pruned-checkpoint outputs/chebykan_pruned_module.pt \
-        --pruning-summary   outputs/chebykan_pruning_summary.json \
-        --config            configs/chebykan_experiment.yaml \
-        --eval-features     outputs/X_eval.parquet \
+        --pruned-checkpoint outputs/interpretability/kan_paper/<experiment>/models/chebykan_pruned_module.pt \
+        --pruning-summary   outputs/interpretability/kan_paper/<experiment>/reports/chebykan_pruning_summary.json \
+        --config            configs/experiment_stages/stage_c_explanation_package/materialized/chebykan_best_interpretable.yaml \
+        --eval-features     outputs/eval/kan_paper/<experiment>/X_eval.parquet \
         --flavor            chebykan
 """
 
@@ -23,7 +23,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from configs import ExperimentConfig
+from src.config import ExperimentConfig
 
 
 def evaluate_symbolic_fit(
@@ -142,7 +142,7 @@ def run(
     X_eval = pd.read_parquet(eval_features_path)
     feature_names = list(X_eval.columns)
     in_features = X_eval.shape[1]
-    widths = [config.model.width] * config.model.depth
+    widths = config.model.resolved_hidden_widths()
 
     module = TabKAN(
         in_features=in_features,
@@ -190,7 +190,7 @@ def _parse_args() -> argparse.Namespace:
 
 if __name__ == "__main__":
     args = _parse_args()
-    from configs import load_experiment_config
+    from src.config import load_experiment_config
 
     run(
         args.pruned_checkpoint,

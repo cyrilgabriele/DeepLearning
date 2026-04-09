@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from configs import ExperimentConfig, ModelConfig, PreprocessingConfig, TrainerConfig
+from src.config import ExperimentConfig, ModelConfig, PreprocessingConfig, TrainerConfig
 from src.interpretability.pipeline import resolve_interpret_config, run_interpret
 
 
