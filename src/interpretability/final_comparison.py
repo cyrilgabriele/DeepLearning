@@ -139,7 +139,7 @@ def _compute_qwk_retention_curve(
     from sklearn.metrics import cohen_kappa_score
     from src.interpretability.utils.kan_coefficients import coefficient_importance_from_module
     from src.models.kan_layers import ChebyKANLayer, FourierKANLayer
-    from configs import load_experiment_config
+    from src.config import load_experiment_config
     from src.models.tabkan import TabKAN
 
     X_eval = pd.read_parquet(eval_features_path)
@@ -161,7 +161,7 @@ def _compute_qwk_retention_curve(
         cfg = load_experiment_config(cfg_path)
         module = TabKAN(
             in_features=n_feats,
-            widths=[cfg.model.width] * cfg.model.depth,
+            widths=cfg.model.resolved_hidden_widths(),
             kan_type=flavor,
             degree=cfg.model.degree or 3,
         )
@@ -680,7 +680,7 @@ def run(
     if cheby_ckpt.exists() and cheby_cfg.exists() and eval_feat_path.exists():
         try:
             import torch
-            from configs import load_experiment_config
+            from src.config import load_experiment_config
             from src.models.tabkan import TabKAN
             from src.interpretability.utils.paths import figures as fig_dir
 
@@ -688,7 +688,7 @@ def run(
             _cheby_degree = cheby_cfg_loaded.model.degree
             cheby_module_pg = TabKAN(
                 in_features=n_feats,
-                widths=[cheby_cfg_loaded.model.width] * cheby_cfg_loaded.model.depth,
+                widths=cheby_cfg_loaded.model.resolved_hidden_widths(),
                 kan_type="chebykan",
                 degree=_cheby_degree if _cheby_degree is not None else 3,
             )
@@ -703,7 +703,7 @@ def run(
     if fourier_ckpt.exists() and fourier_cfg.exists() and eval_feat_path.exists():
         try:
             import torch
-            from configs import load_experiment_config
+            from src.config import load_experiment_config
             from src.models.tabkan import TabKAN
             from src.interpretability.utils.paths import figures as fig_dir
 
@@ -711,7 +711,7 @@ def run(
             _fourier_degree = fourier_cfg_loaded.model.degree
             fourier_module_pg = TabKAN(
                 in_features=n_feats,
-                widths=[fourier_cfg_loaded.model.width] * fourier_cfg_loaded.model.depth,
+                widths=fourier_cfg_loaded.model.resolved_hidden_widths(),
                 kan_type="fourierkan",
                 degree=_fourier_degree if _fourier_degree is not None else 3,
             )

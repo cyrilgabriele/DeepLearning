@@ -245,7 +245,7 @@ def run_interpret(
     X_eval = pd.read_parquet(eval_features_path)
     feature_names = list(X_eval.columns)
     in_features = X_eval.shape[1]
-    widths = [config.model.width] * config.model.depth
+    widths = config.model.resolved_hidden_widths()
     pruned_module = TabKAN(
         in_features=in_features, widths=widths, kan_type=flavor,
         degree=config.model.degree or 3,

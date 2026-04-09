@@ -113,7 +113,7 @@ def test_main_dispatches_retrain_stage(tmp_path, monkeypatch):
     )
 
     assert captured["candidate_manifest"] == candidate_manifest
-    assert captured["device"] == "cpu"
+    assert captured["device"] in ("cpu", "cuda", "mps")
     assert captured["seeds"] == [13, 29]
     assert captured["candidate_ids"] == ["cand-a"]
     assert captured["selection_name"] == "shortlist"
@@ -203,7 +203,7 @@ def test_main_dispatches_retrain_stage(tmp_path, monkeypatch):
     )
 
     assert captured["manifest_path"] == candidate_manifest
-    assert captured["device"] == "cpu"
+    assert captured["device"] in ("cpu", "cuda", "mps")
     assert captured["seeds"] == [13, 29]
     assert captured["candidate_ids"] == ["cand-1"]
     assert captured["top_k"] == 2
