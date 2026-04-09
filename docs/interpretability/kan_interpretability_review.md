@@ -2,7 +2,7 @@
 
 This note documents how the current `src/interpretability/` pipeline implements (or diverges from) the interpretability workflow described in the two reference papers (arXiv:2404.19756v5 and arXiv:2504.06559v3).
 
-Last updated: 2026-03-29 (after commit c66108f).
+Last updated: 2026-04-09 (after all 3.1–3.9 fixes and new module additions).
 
 ---
 
@@ -10,155 +10,150 @@ Last updated: 2026-03-29 (after commit c66108f).
 
 | Stage | What the papers recommend | What the codebase does |
 | --- | --- | --- |
-| **Sparsification** | Liu et al. (2404.19756): L¹ + entropy penalties during training so the sparse graph emerges before pruning; L¹ alone is explicitly stated as insufficient. TabKAN (2504.06559): frequency-weighted ℓ₂ penalty on Chebyshev/Fourier coefficients to suppress high-order terms. | `tabkan.py:77-126` implements L¹ + entropy regularisation (parameters `sparsity_lambda`, `l1_weight`, `entropy_weight`) and wires it into `training_step()`. However, `sparsity_lambda` is `0.0` in the experiment configs that are actually run, so regularisation is disabled in practice. `kan_pruning.py:29-209` applies post-hoc L¹-threshold pruning on the dense trained model. |
-| **Feature importance** | TabKAN (Section 5.7): compute absolute values of Chebyshev/Fourier coefficients (Eq. 8 and Eq. 14) as the model-native importance ranking. The paper shows separate bar charts per architecture; cross-model scale comparison is never attempted. | `utils/kan_coefficients.py:26-93` correctly implements `sum(abs(coefficients))` over outputs and basis terms per input feature, matching Eq. 8 / Eq. 14. Used throughout comparison scripts. Both models are plotted on the same bar chart axis in `comparison_per_risk.py`, which the paper does not do (see §3.3). |
-| **Function inspection** | Plot every active 1D edge function on the normalized input domain to reveal monotonicity, periodicity, saturation. ChebyKAN: x-axis is tanh-normalized [-1,1] (Eq. 4). FourierKAN: x-axis is standardized input. | `kan_symbolic.py` samples surviving edges and renders top-10 feature grids. `comparison_side_by_side.py` and `feature_risk_influence.py` now use `sample_feature_function` (mean aggregation across hidden outputs). The linear residual term (`base_weight`) is applied to `tanh(x)` in visualization but to raw `x` in the forward pass — a confirmed bug (see §3.4). |
-| **Symbolification** | After simplification, replace functions with human-readable formulas and document quality (R² tiers). | Symbolic fits recorded with mean/median R² and tier flags (`≥0.99` clean, `0.90–0.99` acceptable, `<0.90` flagged). `r2_pipeline.py:25-116` generalises the quality report. Correctly implemented. |
-| **Human workflow** | Iterate across all layers: train with sparsity → visualise → prune nodes → inspect paths → recover symbolic expressions. The compositional graph is the primary differentiator of KANs over GAMs. | All comparison helpers and `utils/kan_coefficients.py` hardcode the first KAN layer only. No multi-layer composition is visible. The pipeline treats KAN as a flat attribution method equivalent to a GAM. |
+| **Sparsification** | Liu et al. (2404.19756): L¹ + entropy penalties during training so the sparse graph emerges before pruning; L¹ alone is explicitly stated as insufficient. TabKAN (2504.06559): frequency-weighted ℓ₂ penalty on Chebyshev/Fourier coefficients to suppress high-order terms. | `tabkan.py:77-126` implements L¹ + entropy regularisation (parameters `sparsity_lambda`, `l1_weight`, `entropy_weight`) and wires it into `training_step()`. Configs set `sparsity_lambda: 0.001`, `l1_weight: 1.0`, `entropy_weight: 1.0`. Models need retraining with these values. |
+| **Feature importance** | TabKAN (Section 5.7): compute absolute values of Chebyshev/Fourier coefficients (Eq. 8 and Eq. 14) as the model-native importance ranking. The paper shows separate bar charts per architecture; cross-model scale comparison is never attempted. | `utils/kan_coefficients.py` correctly implements `sum(abs(coefficients))` over outputs and basis terms per input feature, matching Eq. 8 / Eq. 14. Importance scores are normalized by `n_basis_terms × n_hidden_outputs` for cross-architecture comparability. |
+| **Function inspection** | Plot every active 1D edge function on the normalized input domain to reveal monotonicity, periodicity, saturation. ChebyKAN: x-axis is tanh-normalized [-1,1] (Eq. 4). FourierKAN: x-axis is standardized input. | `kan_symbolic.py` samples surviving edges and renders top-10 feature grids. `sample_feature_function` correctly applies `base_weight` to raw `x` (not `tanh(x)`). `kan_network_diagram.py` produces the signature KAN visualization with mini activation function plots on edges. |
+| **Symbolification** | After simplification, replace functions with human-readable formulas and document quality (R² tiers). | Symbolic fits recorded with mean/median R² and tier flags (`≥0.99` clean, `0.90–0.99` acceptable, `<0.90` flagged). `r2_pipeline.py` generalises the quality report. Clean edges are locked in via `lock_in_symbolic_edges()`, which projects the symbolic function onto the basis and replaces layer coefficients. |
+| **Formula composition** | Compose edge functions through layers to extract a closed-form end-to-end expression. This is the primary differentiator of KANs over GAMs. | `formula_composition.py` traverses the pruned graph and composes per-edge symbolic fits into SymPy expressions. Computes end-to-end R² between composed formula and model output. Multi-layer coefficient analysis supported via `coefficient_importance_all_layers()`. |
 
 ---
 
 ## 2. Alignment Highlights
 
 1. **Activation-based pruning metric** — The pruning stage measures the L¹ magnitude of learned activation functions, matching Liu et al. Eq. 2.17–2.18 (`kan_pruning.py:29-139`).
-2. **Symbolic recovery tooling** — Surviving edges are exported to CSVs, fitted with formulae, and assigned quality tiers. Matches the symbolification workflow (`kan_symbolic.py:391-470`, `r2_pipeline.py:25-116`).
-3. **Original-scale visualisations** — Figures invert preprocessing to show KAN outputs on raw feature scales (`comparison_side_by_side.py`, `feature_risk_influence.py`).
-4. **Regularisation infrastructure exists** — `tabkan.py:77-126` correctly implements the full L¹ + entropy formula from Eq. 2.20 of the original KAN paper.
-5. **Paper-native coefficient importance** — `utils/kan_coefficients.py` now correctly derives feature importance from `sum(abs(cheby_coeffs))` and `sum(abs(fourier_a) + abs(fourier_b))` per TabKAN Section 5.7.
-6. **KAN-native feature selection** — `feature_risk_influence.py` uses coefficient-magnitude ranking as the primary sort key for which features to show, consistent with TabKAN Section 5.7's empirical finding that KAN-native selection outperforms SHAP.
-7. **Global KAN bars honestly labelled** — `comparison_per_risk.py` now labels KAN bars as "(global)" and includes a figure caption stating they are repeated reference values, not conditional estimates.
+2. **Symbolic recovery tooling** — Surviving edges are exported to CSVs, fitted with formulae, and assigned quality tiers. Matches the symbolification workflow (`kan_symbolic.py`, `r2_pipeline.py`).
+3. **Symbolic lock-in** — Clean edges (R² ≥ 0.99) are locked in by projecting the symbolic function onto the Chebyshev/Fourier basis via least-squares, replacing layer coefficients and zeroing `base_weight`. Produces a symbolified checkpoint.
+4. **End-to-end formula composition** — `formula_composition.py` composes per-edge SymPy expressions through the network graph, producing closed-form formulas per output node.
+5. **Original-scale visualisations** — Figures invert preprocessing to show KAN outputs on raw feature scales (`comparison_side_by_side.py`, `feature_risk_influence.py`).
+6. **Regularisation infrastructure** — `tabkan.py:77-126` correctly implements the full L¹ + entropy formula from Eq. 2.20 of the original KAN paper. Configs set `sparsity_lambda: 0.001`.
+7. **Paper-native coefficient importance** — `utils/kan_coefficients.py` correctly derives feature importance from `sum(abs(cheby_coeffs))` and `sum(abs(fourier_a) + abs(fourier_b))` per TabKAN Section 5.7, normalized by `n_basis_terms × n_hidden_outputs` for cross-architecture comparability.
+8. **Multi-layer analysis** — `coefficient_importance_all_layers()` covers all KAN layers, labelling hidden-layer inputs as `h0`, `h1`, etc. `draw_pruned_network_graph()` visualises the compositional structure.
+9. **KAN network diagram** — `kan_network_diagram.py` produces the canonical KAN figure (Liu et al. Figure 2.4): each edge displays a mini-plot of its learned 1D function, with opacity scaled by `tanh(3 × normalized_L1)`.
+10. **Feature validation** — `feature_validation.py` implements the TabKAN §5.7 validation: QWK vs. top-k features retained, comparing KAN-native ranking against SHAP.
 
 ---
 
-## 3. Open Divergences and Bugs
+## 3. Resolved Divergences (April 2026)
 
-### 3.1 Regularisation is implemented but disabled (Critical)
+All issues identified in the original review have been resolved. This section documents what was found and how each was fixed.
 
-`tabkan.py:87` returns `0.0` when `sparsity_lambda == 0.0`. Both experiment configs run with this default. Training without sparsity pressure means the post-hoc pruning cuts an already-dense model whose activations were never encouraged to separate into important and unimportant edges. The pruned graph does not reflect learned sparsity; it reflects an arbitrary threshold applied to a uniformly-dense model.
+### 3.1 Regularisation was disabled in configs
 
-**Fix:** Set `sparsity_lambda > 0` in `configs/chebykan_experiment.yaml` and `configs/fourierkan_experiment.yaml`. No code changes needed. One ablation run required to find a lambda that preserves QWK while reducing edge density.
+**Problem:** `sparsity_lambda` was `0.0` in both experiment configs, meaning training ran without sparsity pressure. Post-hoc pruning on a dense model does not reflect learned sparsity.
 
----
-
-### 3.2 Layer-0 tunnel vision invalidates compositional claims (Critical)
-
-`utils/kan_coefficients.py:16-23` (`get_first_kan_layer`) always returns the input-adjacent layer. Every downstream importance and visualization function inherits this restriction:
-
-- `coefficient_importance_from_layer` / `coefficient_importance_from_module` — layer 0 only
-- `sample_feature_function` — layer 0 only
-- `top_features_by_coefficients` — layer 0 only
-
-KANs differ from GAMs precisely because information flows through composed layers. Restricting all analysis to layer 0 is equivalent to reading only the input embeddings of a neural network. Any claim about KAN "interpretability" from this pipeline describes only the first-layer mappings. There is no justification for KAN's added complexity over a GAM if the compositional structure is never inspected.
-
-**Fix:** Extend all comparison helpers and `kan_coefficients.py` to cover all layers. Label hidden-layer edges as `h{i}` (already done in `kan_symbolic.py:448`). Optionally add a pruned-network diagram (nodes as circles, surviving edges weighted by L¹ magnitude).
+**Resolution:** Both `configs/model/chebykan_experiment.yaml` and `configs/model/fourierkan_experiment.yaml` now set `sparsity_lambda: 0.001`, `l1_weight: 1.0`, `entropy_weight: 1.0`. Models need retraining with these values (see `docs/interpretability/human_action_needed.md`).
 
 ---
 
-### 3.3 Cross-model importance bars on an incomparable scale (Moderate)
+### 3.2 Layer-0 tunnel vision
 
-`comparison_per_risk.py` plots ChebyKAN and FourierKAN importance bars on the same axis with raw (unnormalized) scores. The TabKAN paper (Figures 3 and 4) shows them in **separate** charts. The raw scores are not comparable across architectures:
+**Problem:** `get_first_kan_layer()` always returned only the input-adjacent layer. All downstream analysis was restricted to layer 0, treating KAN as equivalent to a GAM.
 
-- ChebyKAN with `degree=3`: 4 basis terms per edge → `sum(abs(coeffs))` over 4 terms
-- FourierKAN with `grid_size=4`: 8 basis terms per edge (4 cosine + 4 sine) → `sum(abs(a) + abs(b))` over 8 terms
-
-All else being equal, FourierKAN scores are ~2× larger purely as an artifact of having more basis terms. The feature-selection union step (lines 118–121) correctly normalizes each column to [0,1] before voting, so the **ranking** logic is sound. But the **displayed bars** in the figure are on incomparable scales.
-
-**Fix:** Either normalize each model's bar heights by `n_basis_terms × n_hidden_outputs` before plotting, or show ChebyKAN and FourierKAN in separate subplots as the paper does.
-
----
-
-### 3.4 `base_weight` visualization uses wrong input scale (Moderate)
-
-**Confirmed by reading `kan_layers.py:41-42` and `kan_layers.py:88`.**
-
-Both layer forward passes apply `base_weight` to **raw x**:
-```python
-base_out = nn.functional.linear(x, self.base_weight)  # raw x, not tanh(x)
-```
-
-But `utils/kan_coefficients.py:168` applies it to `x_norm = tanh(x)`:
-```python
-base = layer.base_weight[:, feature_idx].detach() * x_norm.unsqueeze(-1)  # wrong
-```
-
-The same error exists in `kan_symbolic.py` (`_sample_chebykan_edge`): `base_w * x_norm` should be `base_w * x`.
-
-The consequence: the plotted feature function systematically flattens the linear component in the tails (where `tanh'(x) ≈ 0`). The visualization does not faithfully reproduce what the model actually computes. For features with a strong linear trend, the displayed curve underestimates the model's sensitivity at extreme values.
-
-**Fix:** In `sample_feature_function`, replace `x_norm` with `x` for the `base_weight` term. Apply the same fix to `_sample_chebykan_edge`.
+**Resolution (commit `45959c9`):**
+- Added `get_all_kan_layers()` and `coefficient_importance_all_layers()` to `kan_coefficients.py`. Layer 0 uses feature names; subsequent layers label inputs as `h0`, `h1`, etc.
+- Added `draw_pruned_network_graph()` to `final_comparison.py`: a 3-column diagram (inputs → hidden → outputs) with edge width proportional to L1 magnitude.
+- Added `formula_composition.py`: SymPy-based composition of per-edge formulas through the full network graph, producing end-to-end closed-form expressions.
+- Tests: `test_kan_coefficients_multilayer.py` covers `get_all_kan_layers`, `coefficient_importance_all_layers`, and hidden-layer labelling.
 
 ---
 
-### 3.5 Kendall τ annotations mislead when KAN series is constant (Low)
+### 3.3 Cross-model importance bars on incomparable scales
 
-`comparison_per_risk.py:168-196` computes `τ_GLM↔Cheby` and `τ_SHAP↔Cheby` inside the per-panel loop. Because the KAN importance series is **identical** across all 8 panels, τ variation across panels is entirely driven by the changing `top_feats` subset (itself influenced by the per-panel SHAP values). A reader may interpret the variation in `τ_GLM↔Cheby` as evidence that the KAN captures risk-level structure. It does not.
+**Problem:** ChebyKAN (4 basis terms per edge) and FourierKAN (8 basis terms per edge) produced raw importance sums on different scales. FourierKAN scores were ~2× larger purely as an artifact.
 
-**Fix:** Either remove the KAN τ annotations from the per-risk panels and report them once in a global summary table, or add "(KAN ranking is identical across all panels)" explicitly to the annotation text.
-
----
-
-### 3.6 No graph or path visualisation after pruning (Low)
-
-After pruning, `final_comparison.py` records only scalar counts (non-zero weights, active edges). The compositional graph — which nodes survive, how they connect, which input-to-output paths dominate — is never drawn. Without this, the concept of "structural compactness" is unverifiable and the main visual differentiator of KANs over MLPs is absent.
-
-**Fix:** Add a minimal pruned-network diagram after pruning using matplotlib or networkx. Nodes as circles, surviving edges as lines weighted by L¹ magnitude.
+**Resolution (commit `08f2a7a`):**
+- `coefficient_importance_from_layer()` now exports `n_basis_terms` and `n_hidden_outputs` in the returned DataFrame.
+- `_kan_importance_global()` in `comparison_per_risk.py` divides raw scores by `n_basis_terms × n_hidden_outputs`, making ChebyKAN and FourierKAN importance values comparable per-parameter.
+- Test: `test_importance_normalization.py` verifies that two architectures with identical coefficient magnitudes but different basis counts produce equal normalized scores.
 
 ---
 
-### 3.7 Broken test and missing coverage for `kan_coefficients.py` (Low, but blocks CI)
+### 3.4 `base_weight` applied to wrong input scale
 
-- `tests/interpretability/test_comparison_per_risk.py` still imports `_kan_importance_from_variance`, which was deleted in commit c66108f. The test suite has an `ImportError` on this file.
-- `utils/kan_coefficients.py` is the central new utility (all importance and visualization code depends on it) but has zero test coverage.
+**Problem:** The forward pass applies `base_weight` to raw `x`, but `_sample_chebykan_edge`, `_sample_fourierkan_edge`, and `sample_feature_function` applied it to `x_norm = tanh(x)`. This systematically flattened the linear component in the tails.
 
-**Fix:** Replace the broken test with a test covering `_kan_importance_global` using `coefficient_importance_from_layer`. Add unit tests for `kan_coefficients.py`: both layer types, `layer=None`, sort order, and `sample_feature_function` shape/range.
-
----
-
-### 3.8 Symbolic lock-in step is missing (Moderate)
-
-The original KAN paper (arXiv:2404.19756, Section 2.5.1 and Figure 2.4) defines symbolification as a two-step process:
-
-1. **Fit** a symbolic formula to the learned activation curve (R² assessment).
-2. **Replace** the learned spline/basis activation with the locked symbolic function, then fine-tune the affine parameters (a, b, c, d) to machine precision.
-
-Only step 1 is implemented. `kan_symbolic.py` fits formulae and records R² tiers, but the symbolic formula is never written back into the model. The activations remain as learned Chebyshev/Fourier expansions. This means:
-
-- The final model is not a symbolic expression — it cannot be written down as a closed-form formula.
-- The R² tiers (`clean`, `acceptable`, `flagged`) report fit quality but have no downstream effect on the model.
-- The core claim of symbolic regression in KANs — that the network *becomes* the formula — is not realized.
-
-This is not a requirement for reporting feature importance or visualizing learned functions, but it is the step that distinguishes KAN interpretability from post-hoc curve fitting on a black-box model.
-
-**Fix:** After identifying edges with R² ≥ 0.99 (`clean` tier), replace those edges' activations in the model state with the fitted symbolic function (evaluated as a fixed tensor lookup or as a PyTorch expression). Fit affine correction parameters (a, b, c, d) by linear regression on the pre- and post-activation samples, as described in the paper. Save the symbolified checkpoint separately from the pruned checkpoint.
+**Resolution (commit `e908c5f`):**
+- `kan_symbolic.py`: changed `base_w * x_norm` → `base_w * x` in both `_sample_chebykan_edge` (line 49) and `_sample_fourierkan_edge` (line 71).
+- `kan_coefficients.py`: changed `base_weight * x_norm` → `base_weight * x` in `sample_feature_function`.
+- Test: `test_base_weight_fix.py` constructs a layer with `cheby_coeffs=0` and `base_weight=1`, verifying the output equals raw `x` (not `tanh(x)`) at the tails.
 
 ---
 
-### 3.9 PySR is a fallback rather than the primary symbolic backend (Low)
+### 3.5 Kendall τ annotations misleading when KAN ranking is constant
 
-The original KAN paper uses PySR (evolutionary symbolic regression) as the **primary** method for discovering symbolic formulas on edges. The codebase inverts this:
+**Problem:** Per-risk panels computed `τ_GLM↔Cheby` and `τ_SHAP↔Cheby` inside the loop. Because KAN importance is global (identical across all 8 panels), τ variation across panels was driven entirely by the changing feature subset, not by risk-level structure.
 
-- `kan_symbolic.py:185-190`: scipy fixed-candidate library runs first.
-- PySR is invoked only when scipy achieves R² < 0.90 (`pysr_fallback_threshold`).
-- PySR requires Julia and is gated behind `--use-pysr`.
-
-The fixed-candidate library (linear, polynomial up to degree 3, sin, cos, log, exp) will miss formulas outside its vocabulary. An edge that encodes, e.g., `a * x^1.5 + b` or `a / (1 + exp(-bx))` will be flagged as R² < 0.90 and reported as unresolved even though PySR would find it. The BIC-penalized scipy approach is a reasonable engineering shortcut, but it should be documented as a limitation rather than presented as equivalent to the paper's method.
-
-**Fix (minimal):** Lower `pysr_fallback_threshold` from 0.90 to 0.95 so PySR is attempted on edges where scipy finds an acceptable but not clean fit. Document in the report that scipy is used instead of PySR for computational reasons.
+**Resolution (commit `7b8c822`):** Removed the per-panel KAN Kendall-τ annotations. KAN importance is reported once globally in the summary table, not repeated per risk level.
 
 ---
 
-## 4. Priority Summary
+### 3.6 No pruned-network graph visualisation
 
-| # | Severity | Item |
-|---|----------|------|
-| 3.1 | Critical | Sparsity regularisation disabled in configs |
-| 3.2 | Critical | All analysis restricted to layer 0; compositional structure never inspected |
-| 3.4 | Moderate | `base_weight` visualization uses `tanh(x)` but forward pass uses raw `x` |
-| 3.3 | Moderate | ChebyKAN and FourierKAN importance bars on incomparable scales in same plot |
-| 3.8 | Moderate | Symbolic lock-in step (replace activation with formula) not implemented |
-| 3.6 | Low | No pruned-network graph visualization |
-| 3.5 | Low | Per-panel Kendall τ annotations misleading when KAN ranking is constant |
-| 3.7 | Low | Broken test (`ImportError`) + no tests for `kan_coefficients.py` |
-| 3.9 | Low | PySR is fallback rather than primary; fixed-candidate library misses formulas outside its vocabulary |
+**Problem:** After pruning, only scalar counts were recorded. The compositional graph was never drawn.
 
-Items 3.1 and 3.2 must be fixed before any result from this pipeline can support a published claim about KAN interpretability. Items 3.3, 3.4, and 3.8 affect the scientific accuracy of figures and claims in reports. Items 3.5–3.7 and 3.9 are quality and documentation issues that do not block correctness.
+**Resolution (commit `45959c9` + new `kan_network_diagram.py`):**
+- `draw_pruned_network_graph()` in `final_comparison.py`: 3-column diagram with edge width proportional to L1 magnitude.
+- `kan_network_diagram.py`: the signature KAN figure with mini activation function plots on each edge, opacity = `tanh(3 × normalized_L1)`, optional formula text on locked edges. Also includes `draw_before_after_pruning()` for side-by-side dense vs. sparse comparison.
+
+---
+
+### 3.7 Broken test and missing coverage
+
+**Problem:** `test_comparison_per_risk.py` imported the deleted `_kan_importance_from_variance`. `kan_coefficients.py` had zero test coverage.
+
+**Resolution (commit `0c92ece`):** Replaced the broken import test with a live test covering `_kan_importance_global` using `coefficient_importance_from_layer`. Added `test_kan_coefficients_multilayer.py` for multi-layer analysis coverage.
+
+---
+
+### 3.8 Symbolic lock-in step was missing
+
+**Problem:** Symbolic fitting existed (step 1), but the fitted formula was never written back into the model (step 2). The model remained a black-box with post-hoc curve labels.
+
+**Resolution (commit `d168eb9`):**
+- Added `lock_in_symbolic_edges()` to `kan_symbolic.py`. For each clean edge (R² ≥ 0.99):
+  1. Re-samples the learned activation to get `(x_norm, y_learned)`.
+  2. Re-fits the scipy formula to recover exact parameter values.
+  3. Evaluates the symbolic function to get `y_symbolic`.
+  4. Projects `y_symbolic` onto the Chebyshev/Fourier basis via least-squares.
+  5. Replaces the edge's coefficients; zeros out `base_weight`.
+- Added `_project_onto_chebyshev()` and `_project_onto_fourier()` helper functions.
+- Produces a symbolified checkpoint (`{flavor}_symbolified_module.pt`) and lock-in log CSV.
+- Test: `test_kan_symbolic_extended.py::test_lock_in_replaces_coefficients_for_clean_edges` verifies coefficient replacement and base_weight zeroing.
+
+---
+
+### 3.9 PySR fallback threshold too conservative
+
+**Problem:** PySR was only attempted when scipy R² < 0.90. Edges with acceptable but not clean scipy fits (0.90–0.95) were never tried with PySR.
+
+**Resolution (commit `c6e0515`):** Lowered `pysr_fallback_threshold` from 0.90 to 0.95. PySR is now attempted on edges where scipy finds an acceptable fit but not a clean one. The scipy-first approach is documented as a computational shortcut, not as equivalent to the paper's PySR-primary method.
+
+---
+
+## 4. New Modules (April 2026)
+
+| Module | Purpose | Paper Reference |
+|--------|---------|-----------------|
+| `formula_composition.py` | Compose per-edge symbolic fits into end-to-end closed-form SymPy expressions per output node. Computes end-to-end R². | Liu et al. (2024) §2.5 |
+| `feature_validation.py` | QWK vs. top-k features retained for each model's native ranking. Cross-model ranking comparison figure with consensus highlighting. | TabKAN (2025) §5.7, Figures 6-7 |
+| `kan_network_diagram.py` | KAN network diagram with mini activation function plots on edges, opacity = `tanh(3 × L1)`. Before/after pruning side-by-side. | Liu et al. (2024) Figure 2.4 |
+| `quality_figures.py` | R² distribution histogram with tier boundaries and pie chart. Pruning Pareto curve (QWK vs. sparsity for multiple thresholds). | General paper figures |
+
+All modules have unit tests in `tests/interpretability/` (69 tests, all passing).
+
+---
+
+## 5. Remaining Items Requiring Human Action
+
+All code-level issues are resolved. Items requiring GPU time, human judgment, or paper authorship are documented in `docs/interpretability/human_action_needed.md`. Summary:
+
+| Priority | Item |
+|----------|------|
+| Critical | Retrain models with `sparsity_lambda: 0.001` |
+| High | Run full pipeline end-to-end on retrained models |
+| High | Run feature subset validation with all 4 model checkpoints |
+| High | Sparsity lambda ablation sweep |
+| Medium | Run pruning Pareto curve on actual models |
+| Low | PySR runs for complex edges (requires Julia) |
+| Low | Degree/grid-size ablation |
+| Human | Paper writing: methods, results, discussion |

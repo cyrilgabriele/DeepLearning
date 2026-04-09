@@ -238,10 +238,50 @@ def run_interpret(
         output_dir=interpret_dir,
     )
 
+    # ── New paper-ready stages ───────────────────────────────────────────────
+    import torch
+    from src.models.tabkan import TabKAN
+
+    X_eval = pd.read_parquet(eval_features_path)
+    feature_names = list(X_eval.columns)
+    in_features = X_eval.shape[1]
+    widths = [config.model.width] * config.model.depth
+    pruned_module = TabKAN(
+        in_features=in_features, widths=widths, kan_type=flavor,
+        degree=config.model.degree or 3,
+    )
+    pruned_module.load_state_dict(torch.load(pruned_checkpoint_path, map_location="cpu"))
+    pruned_module.eval()
+
+    symbolic_fits_path = data_dir(interpret_dir) / f"{flavor}_symbolic_fits.csv"
+
+    # Formula composition (SymPy)
+    from src.interpretability.formula_composition import run as run_formula_composition
+    run_formula_composition(
+        symbolic_fits_path, pruned_module, feature_names,
+        interpret_dir, flavor, X_eval=X_eval,
+    )
+
+    # R² distribution histogram + quality tier pie chart
+    from src.interpretability.quality_figures import plot_r2_distribution
+    fits_df = pd.read_csv(symbolic_fits_path)
+    if not fits_df.empty:
+        plot_r2_distribution(fits_df, flavor, interpret_dir)
+
+    # KAN network diagram with edge functions
+    from src.interpretability.kan_network_diagram import draw_kan_diagram
+    draw_kan_diagram(
+        pruned_module, feature_names, flavor, interpret_dir,
+        symbolic_fits=fits_df if not fits_df.empty else None,
+    )
+
     result["artifacts"] = {
         "pruning_summary": pruning_summary_path,
         "pruned_checkpoint": pruned_checkpoint_path,
-        "symbolic_fits": data_dir(interpret_dir) / f"{flavor}_symbolic_fits.csv",
+        "symbolic_fits": symbolic_fits_path,
         "r2_report": reports_dir(interpret_dir) / f"{flavor}_r2_report.json",
+        "symbolic_formulas": reports_dir(interpret_dir) / f"{flavor}_symbolic_formulas.json",
+        "kan_diagram": Path("figures") / f"{flavor}_kan_diagram.pdf",
+        "r2_distribution": Path("figures") / f"{flavor}_r2_distribution.pdf",
     }
     return result
