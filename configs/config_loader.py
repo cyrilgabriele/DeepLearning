@@ -25,7 +25,7 @@ class ExperimentConfig(BaseModel):
         description="Optional Optuna sweep configuration for stage 'tune'.",
     )
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
 
 def load_experiment_config(config_path: Path) -> ExperimentConfig:

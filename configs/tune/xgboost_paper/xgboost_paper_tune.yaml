@@ -5,14 +5,11 @@ trainer:
   seed: 42
 
 preprocessing:
+  contract_version: 1
   recipe: xgboost_paper
 
 model:
   name: xgboost-paper
-  flavor: null
-  depth: 1
-  width: 1
-  degree: 1
   params:
     n_estimators: 500
     max_depth: 15
@@ -32,6 +29,7 @@ tune:
   n_trials: 50
   timeout: null
   sampler: tpe
+  top_k_candidates: 5
   search_space:
     n_estimators:
       type: int

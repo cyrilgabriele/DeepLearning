@@ -30,4 +30,4 @@ class TrainerConfig(BaseModel):
             return None
         return value.expanduser().resolve()
 
-    model_config = ConfigDict(arbitrary_types_allowed=True, frozen=True)
+    model_config = ConfigDict(arbitrary_types_allowed=True, extra="forbid", frozen=True)

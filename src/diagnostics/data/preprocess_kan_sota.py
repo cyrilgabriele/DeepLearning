@@ -37,8 +37,8 @@ from sklearn.experimental import enable_iterative_imputer  # noqa: F401
 from sklearn.impute import IterativeImputer
 from sklearn.preprocessing import MinMaxScaler, QuantileTransformer
 
-from src.data.prudential_features import get_feature_lists
-from src.data.preprocess_paper_base import PaperPreprocessingBase, PreprocessorState
+from src.preprocessing.prudential_features import get_feature_lists
+from src.preprocessing.preprocess_paper_base import PaperPreprocessingBase, PreprocessorState
 
 TARGET_COLUMN = PaperPreprocessingBase.TARGET_COLUMN
 ID_COLUMN = PaperPreprocessingBase.ID_COLUMN

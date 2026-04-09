@@ -242,6 +242,6 @@ def build_xgboost_paper_model(*, random_state: int, **model_params: Any) -> XGBo
 
     # Trainer always passes a `device` kwarg so TabKAN can place tensors. XGB
     # ignores that, so drop it (and other TabKAN-specific knobs) here.
-    for unused in ("depth", "width", "degree", "flavor", "device"):
+    for unused in ("depth", "width", "hidden_widths", "degree", "flavor", "device"):
         model_params.pop(unused, None)
     return XGBoostPaperModel(random_state=random_state, **model_params)

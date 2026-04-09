@@ -3,6 +3,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from configs import (
     ExperimentConfig,
@@ -196,3 +197,28 @@ tune:
     assert config.tune is not None
     assert config.tune.n_trials == 7
     assert config.tune.search_space["degree"].type == "int"
+
+
+def test_config_loader_rejects_stale_keys(tmp_path):
+    cfg_text = """
+trainer:
+  experiment_name: base
+  train_csv: placeholder.csv
+  seed: 11
+  eval_size: 0.2
+preprocessing:
+  recipe: kan_paper
+  missing_threshold: 0.5
+model:
+  name: tabkan-base
+  flavor: chebykan
+  depth: 2
+  width: 64
+  degree: 3
+  params: {}
+"""
+    config_path = tmp_path / "bad-config.yaml"
+    config_path.write_text(cfg_text)
+
+    with pytest.raises(ValueError, match="extra"):
+        load_experiment_config(config_path)

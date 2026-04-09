@@ -11,7 +11,7 @@ import pandas as pd
 import pytest
 import torch
 
-from src.data import preprocess_kan_paper as kan_prep
+from src.preprocessing import preprocess_kan_paper as kan_prep
 from src.models.tabkan import TabKAN, TabKANClassifier, build_tabkan_model
 from src.models.mlp import MLPBaseline
 from src.metrics.qwk import quadratic_weighted_kappa, optimize_thresholds, _apply_thresholds

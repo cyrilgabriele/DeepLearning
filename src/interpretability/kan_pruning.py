@@ -170,6 +170,7 @@ def run(
     wrapper = TabKANClassifier(
         preset=config.model.name,
         flavor=flavor,
+        hidden_widths=config.model.resolved_hidden_widths(),
         depth=config.model.depth,
         width=config.model.width,
         degree=config.model.degree or 3,

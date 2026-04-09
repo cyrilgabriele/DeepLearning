@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 from sklearn.impute import SimpleImputer
 
-from src.data.preprocess_paper_base import PaperPreprocessingBase, PreprocessorState
+from src.preprocessing.preprocess_paper_base import PaperPreprocessingBase, PreprocessorState
 
 TARGET_COLUMN = PaperPreprocessingBase.TARGET_COLUMN
 ID_COLUMN = PaperPreprocessingBase.ID_COLUMN

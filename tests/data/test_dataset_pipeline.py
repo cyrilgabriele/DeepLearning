@@ -5,9 +5,9 @@ import numpy as np
 import pandas as pd
 
 from configs import set_global_seed
-from src.data import preprocess_xgboost_paper as paper_prep
-from src.data import preprocess_kan_paper as kan_prep
-from src.data import preprocess_kan_sota as kan_sota_prep
+from src.preprocessing import preprocess_xgboost_paper as paper_prep
+from src.preprocessing import preprocess_kan_paper as kan_prep
+from src.preprocessing import preprocess_kan_sota as kan_sota_prep
 
 
 def _fixed_seed(value: int = 42) -> int:
@@ -115,3 +115,53 @@ def test_kan_sota_pipeline_applies_advanced_encoding(tmp_path):
 
     artifacts = outputs["preprocessor_state"]
     assert {"baseline", "sota"}.issubset(artifacts.keys())
+
+
+def test_kan_sota_drops_ultra_sparse_value_channels_and_keeps_masks(tmp_path):
+    rng = np.random.default_rng(99)
+    n_rows = 80
+    repeats = math.ceil(n_rows / 8)
+    response = np.tile(np.arange(1, 9), repeats)[:n_rows]
+    df = pd.DataFrame(
+        {
+            "Id": np.arange(n_rows),
+            "Response": response,
+            "BMI": rng.normal(27, 4, size=n_rows),
+            "Product_Info_2": rng.choice(["A1", "B2", "C3"], size=n_rows),
+            "Medical_Keyword_1": rng.integers(0, 2, size=n_rows),
+            "Product_Info_3": rng.integers(1, 12, size=n_rows),
+            "Employment_Info_2": rng.integers(1, 40, size=n_rows),
+            "Employment_Info_4": np.where(
+                rng.random(n_rows) < 0.2,
+                np.nan,
+                rng.uniform(0.0, 1.0, size=n_rows),
+            ),
+            "Family_Hist_3": np.where(
+                rng.random(n_rows) < 0.7,
+                np.nan,
+                rng.uniform(0.0, 1.0, size=n_rows),
+            ),
+        }
+    )
+    csv_path = tmp_path / "prudential_sparse.csv"
+    df.to_csv(csv_path, index=False)
+
+    seed = _fixed_seed()
+    outputs = kan_sota_prep.run_pipeline(csv_path, random_seed=seed)
+    feature_names = outputs["feature_names"]
+    sota_state = outputs["preprocessor_state"]["sota"]
+
+    assert "Family_Hist_3" in sota_state.dropped_value_columns
+    assert "missing_Family_Hist_3" in feature_names
+    assert "qt_Family_Hist_3" not in feature_names
+
+    assert "qt_Employment_Info_4" in feature_names
+    assert "missing_Employment_Info_4" in feature_names
+
+    assert "mm_Product_Info_3" in feature_names
+    assert "mm_Employment_Info_2" in feature_names
+
+    X_train = outputs["X_train_outer"]
+    assert X_train.dtype == np.float32
+    assert np.isfinite(X_train).all()
+    assert np.all(X_train <= 1.0001) and np.all(X_train >= -1.0001)

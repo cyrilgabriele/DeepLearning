@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import optuna
@@ -5,6 +6,7 @@ import pytest
 
 from configs import ExperimentConfig, ModelConfig, PreprocessingConfig, TrainerConfig
 from configs.tune.tune_config import SearchParamConfig, TuneConfig
+from src.models import TrainingArtifacts
 from src.tune.sweep import _build_trial_config, _sample_trial_params, run_tune
 
 
@@ -16,6 +18,7 @@ def _base_cheby_config(tmp_path: Path, *, include_tune: bool) -> ExperimentConfi
             storage=tmp_path / "sweeps" / "cheby-smoke.db",
             n_trials=5,
             sampler="random",
+            top_k_candidates=3,
             search_space={
                 "depth": SearchParamConfig(type="int", low=1, high=4),
                 "width": SearchParamConfig(type="categorical", choices=[32, 64, 128]),
@@ -108,3 +111,48 @@ def test_run_tune_requires_tune_block(tmp_path):
 
     with pytest.raises(ValueError, match="requires a `tune:` block"):
         run_tune(config, device="cpu")
+
+
+def test_run_tune_exports_candidate_manifest(tmp_path, monkeypatch):
+    config = _base_cheby_config(tmp_path, include_tune=True)
+
+    def fake_run_train(trial_config, *, device):
+        trial_number = int(trial_config.trainer.experiment_name.rsplit("-", 1)[-1])
+        qwk = 0.7 + (trial_number * 0.01)
+        summary_path = tmp_path / f"summary-{trial_number}.json"
+        checkpoint_path = tmp_path / f"checkpoint-{trial_number}.pt"
+        summary_path.write_text("{}")
+        checkpoint_path.write_text("checkpoint")
+        return TrainingArtifacts(
+            model=object(),
+            metrics={"mae": 1.0, "accuracy": 0.5, "f1_macro": 0.4, "qwk": qwk},
+            device=device,
+            config=trial_config,
+            random_seed=trial_config.trainer.seed,
+            summary_path=summary_path,
+            checkpoint_path=checkpoint_path,
+        )
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("src.tune.sweep.run_train", fake_run_train)
+
+    run_tune(config, device="cpu", n_trials_override=3)
+
+    manifest_path = tmp_path / "sweeps" / "cheby-smoke_candidates.json"
+    payload = json.loads(manifest_path.read_text())
+
+    assert payload["study_name"] == "cheby-smoke"
+    assert payload["model_family"] == "chebykan"
+    assert payload["preprocessing_recipe"] == "kan_paper"
+    assert payload["top_k"] == 3
+    assert len(payload["candidates"]) == 3
+    best_candidate = payload["candidates"][0]
+    assert best_candidate["candidate_id"] == "cheby-smoke-trial-002"
+    assert best_candidate["rank"] == 1
+    assert best_candidate["trial_number"] == 2
+    assert best_candidate["qwk"] == pytest.approx(0.72)
+    assert best_candidate["model_config"]["hidden_widths"] == [128, 128]
+    assert best_candidate["trainer_config"]["experiment_name"] == "cheby-base-candidate-002"
+    assert best_candidate["preprocessing_config"]["recipe"] == "kan_paper"
+    assert best_candidate["selection_metadata"]["architecture"]["hidden_widths"] == [128, 128]
+    assert best_candidate["summary_path"].endswith("summary-2.json")

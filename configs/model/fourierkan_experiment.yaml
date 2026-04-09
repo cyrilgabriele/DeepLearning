@@ -2,18 +2,13 @@ trainer:
   experiment_name: fourierkan-base
   train_csv: data/prudential-life-insurance-assessment/train.csv
   test_csv: data/prudential-life-insurance-assessment/test.csv
-  eval_size: 0.15
 preprocessing:
+  contract_version: 1
   recipe: kan_paper
-  missing_threshold: 0.5
-  stratify: true
-  use_stratified_kfold: true
-  kan_n_splits: 5
 model:
   name: tabkan-base
   flavor: fourierkan
-  depth: 2
-  width: 128
+  hidden_widths: [128, 128]
   degree: null
   params:
     sparsity_lambda: 0.001

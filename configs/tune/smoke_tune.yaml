@@ -4,12 +4,12 @@ trainer:
   test_csv: data/prudential-life-insurance-assessment/test.csv
   seed: 42
 preprocessing:
+  contract_version: 1
   recipe: kan_paper
 model:
   name: tabkan-base
   flavor: chebykan
-  depth: 2
-  width: 128
+  hidden_widths: [128, 128]
   degree: 3
   params: {}
 
@@ -19,6 +19,7 @@ tune:
   n_trials: 20
   timeout: null
   sampler: tpe
+  top_k_candidates: 3
   search_space:
     depth:
       type: int

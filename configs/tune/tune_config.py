@@ -42,7 +42,7 @@ class SearchParamConfig(BaseModel):
 class TuneConfig(BaseModel):
     """Validated configuration for Optuna tuning."""
 
-    model_config = ConfigDict(extra="ignore", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     name: str | None = Field(
         default=None,
@@ -57,6 +57,11 @@ class TuneConfig(BaseModel):
     sampler: Literal["tpe", "random"] = Field(
         default="tpe",
         description="Optuna sampler to use for the study.",
+    )
+    top_k_candidates: int = Field(
+        default=5,
+        ge=1,
+        description="How many top completed trials to export into the candidate manifest.",
     )
     search_space: dict[str, SearchParamConfig] = Field(
         ...,

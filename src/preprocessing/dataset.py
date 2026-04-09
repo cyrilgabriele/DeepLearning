@@ -4,10 +4,10 @@ import pandas as pd
 import numpy as np
 import lightning as L
 
-from src.data import preprocess_kan_paper as kan_paper_prep
-from src.data import preprocess_kan_sota as kan_sota_prep
-from src.data import preprocess_xgboost_paper as xgb_paper_prep
-from src.data.prudential_features import get_feature_lists
+from src.preprocessing import preprocess_kan_paper as kan_paper_prep
+from src.preprocessing import preprocess_kan_sota as kan_sota_prep
+from src.preprocessing import preprocess_xgboost_paper as xgb_paper_prep
+from src.preprocessing.prudential_features import get_feature_lists
 
 PREPROCESSING_PIPELINES = {
     "kan_paper": kan_paper_prep,
@@ -85,6 +85,16 @@ class PrudentialDataModule(L.LightningDataModule):
             )
         pipeline_outputs = prep_module.run_pipeline(self.data_path, random_seed=self.seed)
         self.feature_names = pipeline_outputs.get("feature_names")
+        sota_state = (
+            pipeline_outputs.get("preprocessor_state", {}).get("sota")
+            if self.preprocessing == "kan_sota"
+            else None
+        )
+        if sota_state is not None:
+            self.preprocessor.dropped_features = list(getattr(sota_state, "dropped_value_columns", []))
+            self.preprocessor.missing_threshold = float(
+                getattr(prep_module, "VALUE_DROP_MISSING_THRESHOLD", 0.0)
+            )
 
         X_train = np.asarray(pipeline_outputs["X_train_outer"], dtype=np.float32)
         y_train = np.asarray(pipeline_outputs["y_train_outer"], dtype=np.float32)

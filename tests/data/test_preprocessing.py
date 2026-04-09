@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
 
-from src.data import preprocess_kan_paper as kan_prep
+from src.preprocessing import preprocess_kan_paper as kan_prep
 
 def verify_kan_readiness(X_processed, feature_lists):
     """

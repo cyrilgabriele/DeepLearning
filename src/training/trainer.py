@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -12,9 +13,9 @@ import pandas as pd
 from sklearn.metrics import accuracy_score, cohen_kappa_score, f1_score, mean_absolute_error
 
 from configs import ExperimentConfig, set_global_seed
-from src.data import preprocess_xgboost_paper as paper_prep
-from src.data import preprocess_kan_paper as kan_prep
-from src.data import preprocess_kan_sota as kan_sota_prep
+from src.preprocessing import preprocess_xgboost_paper as paper_prep
+from src.preprocessing import preprocess_kan_paper as kan_prep
+from src.preprocessing import preprocess_kan_sota as kan_sota_prep
 from src.models import PrudentialModel, TrainingArtifacts, create_model
 
 
@@ -70,8 +71,15 @@ class Trainer:
 
         metrics = self._evaluate(model, dataset)
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-        summary_path = self._persist_run_summary(metrics, timestamp)
         checkpoint_path = self._persist_checkpoint(model, timestamp)
+        summary_path = self._persist_run_summary(metrics, dataset, timestamp, checkpoint_path)
+        self._persist_checkpoint_manifest(
+            metrics=metrics,
+            dataset=dataset,
+            timestamp=timestamp,
+            checkpoint_path=checkpoint_path,
+            summary_path=summary_path,
+        )
         self._export_eval_data(dataset)
         test_predictions_path = self._generate_test_predictions(
             model=model,
@@ -150,17 +158,28 @@ class Trainer:
             "qwk": float(cohen_kappa_score(y_true, preds, weights="quadratic")),
         }
 
-    def _persist_run_summary(self, metrics: Dict[str, float], timestamp: str) -> Optional[Path]:
+    def _persist_run_summary(
+        self,
+        metrics: Dict[str, float],
+        dataset: "PreparedDataset",
+        timestamp: str,
+        checkpoint_path: Optional[Path],
+    ) -> Optional[Path]:
         """Write a JSON summary capturing config, seed, device, and metrics."""
 
         output_root = Path("artifacts") / self.config.trainer.experiment_name
         summary_path = output_root / f"run-summary-{timestamp}.json"
+        preprocessing_contract = self._build_preprocessing_contract(dataset)
 
         payload = {
             "experiment_name": self.config.trainer.experiment_name,
             "random_seed": self.random_seed,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "device": self.device,
             "metrics": metrics,
+            "model_architecture": self.config.model.architecture_payload(),
+            "preprocessing": preprocessing_contract,
+            "checkpoint_path": str(checkpoint_path) if checkpoint_path is not None else None,
             "config": self.config.model_dump(mode="json"),
         }
 
@@ -171,6 +190,68 @@ class Trainer:
         except OSError as exc: 
             print(f"Warning: failed to persist run summary at {summary_path}: {exc}")
             return None
+
+    def _persist_checkpoint_manifest(
+        self,
+        *,
+        metrics: Dict[str, float],
+        dataset: "PreparedDataset",
+        timestamp: str,
+        checkpoint_path: Optional[Path],
+        summary_path: Optional[Path],
+    ) -> Optional[Path]:
+        """Write a checkpoint-adjacent manifest mirroring the effective run contract."""
+
+        if checkpoint_path is None:
+            return None
+
+        manifest_path = checkpoint_path.with_suffix(".manifest.json")
+        payload = {
+            "experiment_name": self.config.trainer.experiment_name,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "random_seed": self.random_seed,
+            "device": self.device,
+            "checkpoint_path": str(checkpoint_path),
+            "summary_path": str(summary_path) if summary_path is not None else None,
+            "metrics": metrics,
+            "model_architecture": self.config.model.architecture_payload(),
+            "preprocessing": self._build_preprocessing_contract(dataset),
+            "config": self.config.model_dump(mode="json"),
+        }
+
+        try:
+            manifest_path.write_text(json.dumps(payload, indent=2, sort_keys=True))
+            return manifest_path
+        except OSError as exc:  # pragma: no cover - filesystem guard
+            print(f"Warning: failed to persist checkpoint manifest at {manifest_path}: {exc}")
+        return None
+
+    def _build_preprocessing_contract(self, dataset: "PreparedDataset") -> Dict[str, object]:
+        """Return the effective preprocessing contract and feature-space fingerprint."""
+
+        feature_names = list(dataset.feature_names or dataset.X_train.columns)
+        contract_payload = self.config.preprocessing.contract_payload()
+        fingerprint_source = {
+            "contract": contract_payload,
+            "feature_names": feature_names,
+            "feature_count": len(feature_names),
+            "recipe": dataset.recipe,
+        }
+        fingerprint = hashlib.sha256(
+            json.dumps(fingerprint_source, sort_keys=True).encode("utf-8")
+        ).hexdigest()
+        expected_fingerprint = self.config.preprocessing.expected_feature_fingerprint
+        if expected_fingerprint is not None and expected_fingerprint != fingerprint:
+            raise ValueError(
+                "The runtime preprocessing feature-space fingerprint does not match the "
+                "expected preprocessing contract."
+            )
+        return {
+            **contract_payload,
+            "feature_count": len(feature_names),
+            "feature_names": feature_names,
+            "feature_space_fingerprint": fingerprint,
+        }
 
     def _persist_checkpoint(self, model: PrudentialModel, timestamp: str) -> Optional[Path]:
         """Save a Torch checkpoint or a joblib pickle depending on model type."""
@@ -212,7 +293,7 @@ class Trainer:
         if dataset.X_eval is None or dataset.y_eval is None:
             return
         try:
-            from src.data.prudential_features import get_feature_lists
+            from src.preprocessing.prudential_features import get_feature_lists
             from src.interpretability.utils.paths import eval_run_dir
 
             eval_dir = eval_run_dir(
@@ -238,15 +319,20 @@ class Trainer:
             feat_lists = get_feature_lists(taxonomy_source)
             feature_type_map: dict[str, str] = {}
             for feat in feature_names:
+                base_feat = feat
+                for prefix in ("cb_", "qt_", "mm_"):
+                    if feat.startswith(prefix):
+                        base_feat = feat[len(prefix):]
+                        break
                 if feat.startswith("missing_"):
                     feature_type_map[feat] = "missing_indicator"
-                elif feat in feat_lists["categorical"]:
+                elif base_feat in feat_lists["categorical"]:
                     feature_type_map[feat] = "categorical"
-                elif feat in feat_lists["binary"]:
+                elif base_feat in feat_lists["binary"]:
                     feature_type_map[feat] = "binary"
-                elif feat in feat_lists["continuous"]:
+                elif base_feat in feat_lists["continuous"]:
                     feature_type_map[feat] = "continuous"
-                elif feat in feat_lists["ordinal"]:
+                elif base_feat in feat_lists["ordinal"]:
                     feature_type_map[feat] = "ordinal"
                 else:
                     feature_type_map[feat] = "unknown"

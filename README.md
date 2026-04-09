@@ -1,10 +1,12 @@
 # ParrotLabs
-Deep Learning course @ HSG
+
+Deep Learning course @ HSG.
 
 ## Dataset
-Download the competition data from https://www.kaggle.com/competitions/prudential-life-insurance-assessment/data and place the extracted files inside a `data` directory at the repository root:
 
-```
+Download the Prudential Kaggle data and place the extracted CSVs at:
+
+```text
 data/prudential-life-insurance-assessment/train.csv
 data/prudential-life-insurance-assessment/test.csv
 ```
@@ -15,60 +17,102 @@ data/prudential-life-insurance-assessment/test.csv
 uv sync
 ```
 
-## Preprocessing Methodology
-- Kaggle already separates `train.csv` (with `Response`) and `test.csv` (without labels). Use `split_prudential_training_df` or `load_and_prepare_prudential_training_data` to optionally carve out a *small* evaluation subset from `train.csv` only; the `eval_size` fraction is therefore relative to the Kaggle training file.
-- Instantiate either `PrudentialPaperPreprocessor` (paper baseline) or `PrudentialKANPreprocessor` (enhanced pipeline) and pass it into the splitter. The helper fits on the remaining training rows and reuses the learned state for the evaluation subset.
-- `PrudentialKANPreprocessor` performs stratified k-fold (default 5-fold) target encoding, minimizing categorical leakage while preserving class balance.
-- Treat the returned `PrudentialDataSplits` object as the canonical source for both raw and processed splits when training/evaluating models; never refit on evaluation data if you intend to publish the numbers.
+## Supported Orchestration
 
-## Running Experiments
+`main.py` is the only supported orchestration entrypoint for the current pipeline.
 
-- `main.py` is the single entrypoint for both training and tuning.
-- `main.py` is the single entrypoint for training, tuning, and interpretability.
-- Every run is driven from one YAML experiment config that contains trainer, preprocessing, and model settings.
-- Start from `configs/smoke_experiment.yaml`, `configs/experiments/kan_cheby_single.yaml`, or `configs/experiments/xgboost_paper_experiment.yaml` and adjust `trainer.train_csv` / `trainer.test_csv` for your machine.
+Supported stages:
 
-### Train
+- `train`
+- `tune`
+- `interpret`
+- `retrain`
+- `select`
+
+## Config Entry Points
+
+Model runs:
+
+- `configs/model/chebykan_experiment.yaml`
+- `configs/model/fourierkan_experiment.yaml`
+- `configs/model/glm_experiment.yaml`
+- `configs/model/xgboost_paper_experiment.yaml`
+
+Tune runs:
+
+- `configs/tune/kan_cheby/kan_cheby_tune.yaml`
+- `configs/tune/kan_fourier/kan_fourier_tune.yaml`
+- `configs/tune/xgboost_paper/xgboost_paper_tune.yaml`
+
+## Commands
+
+Train:
 
 ```bash
-uv run python main.py --stage train --config configs/smoke_experiment.yaml
-uv run python main.py --stage train --config configs/experiments/kan_cheby_single.yaml
-uv run python main.py --stage train --config configs/experiments/xgboost_paper_experiment.yaml
+uv run python main.py --stage train --config configs/model/chebykan_experiment.yaml
+uv run python main.py --stage train --config configs/model/fourierkan_experiment.yaml
+uv run python main.py --stage train --config configs/model/xgboost_paper_experiment.yaml
 ```
 
-### Tune
+Tune:
 
 ```bash
-uv run python main.py --stage tune --config configs/smoke_experiment.yaml --n-trials 20
-uv run python main.py --stage tune --config configs/experiments/xgboost_paper_experiment.yaml --n-trials 25 --timeout-tune 3600
+uv run python main.py --stage tune --config configs/tune/kan_cheby/kan_cheby_tune.yaml
+uv run python main.py --stage tune --config configs/tune/kan_fourier/kan_fourier_tune.yaml
+uv run python main.py --stage tune --config configs/tune/xgboost_paper/xgboost_paper_tune.yaml
 ```
 
-### Interpret
+Interpret:
 
 ```bash
-uv run python main.py --stage interpret --config configs/glm_experiment.yaml
-uv run python main.py --stage interpret --config configs/experiments/xgboost_paper_experiment.yaml
-uv run python main.py --stage interpret --config configs/experiments/kan_cheby_single.yaml
+uv run python main.py --stage interpret --config configs/model/glm_experiment.yaml
+uv run python main.py --stage interpret --config configs/model/xgboost_paper_experiment.yaml
+uv run python main.py --stage interpret --config configs/model/chebykan_experiment.yaml
 ```
 
-- Train runs now export eval artifacts under `outputs/eval/<preprocessing_recipe>/<experiment_name>/`.
-- Interpret runs write derived outputs under `outputs/interpretability/<preprocessing_recipe>/<experiment_name>/`.
-- If you need a specific checkpoint, pass `--checkpoint path/to/checkpoints/<experiment_name>/model-....{joblib,pt}`.
-
-- Tune runs use the same `Trainer` pipeline as train runs.
-- The Optuna study settings and hyperparameter intervals now live under the config file's top-level `tune:` block, especially `tune.search_space`.
-- The tuned config is written to `sweeps/*_best.yaml`; train it with `python main.py --stage train --config <that-file>.yaml`.
-- For the paper XGBoost model, all tuning now happens externally through `main.py --stage tune`; the model itself no longer runs its own sequential tuner.
-- A fixed global random seed from the config is applied automatically to numpy/scikit-learn and PyTorch when available.
-
-## Evaluate a Saved Checkpoint
+Retrain selected KAN candidates:
 
 ```bash
-uv run python src/evaluate.py --checkpoint path/to/model.ckpt --data_path data/prudential-life-insurance-assessment/train.csv --model_type chebykan
+uv run python main.py --stage retrain --candidate-manifest sweeps/kan-cheby-single-tune_candidates.json --seeds 13 29 47
 ```
 
-## Run Tests
+Select final KANs from retraining outputs:
 
 ```bash
-uv run python -m pytest tests/ -v
+uv run python main.py --stage select --retrain-manifest artifacts/retrain/chebykan/default-selection/manifest.json
+```
+
+## Artifact Layout
+
+Training artifacts:
+
+- `artifacts/<experiment>/run-summary-*.json`
+- `checkpoints/<experiment>/model-*.pt`
+- `checkpoints/<experiment>/model-*.joblib`
+- `checkpoints/<experiment>/model-*.manifest.json`
+
+Namespaced evaluation and interpretability outputs:
+
+- `outputs/eval/<recipe>/<experiment>/`
+- `outputs/interpretability/<recipe>/<experiment>/`
+
+Tune artifacts:
+
+- `sweeps/*_best.json`
+- `sweeps/*_best.yaml`
+- `sweeps/*_candidates.json`
+
+Retrain and selection artifacts:
+
+- `artifacts/retrain/<family>/<selection_name>/manifest.json`
+- `artifacts/selection/<family>_selection.json`
+
+## Legacy Scripts
+
+`src/evaluate.py` and `src/submit.py` are legacy entrypoints. They are intentionally not part of the supported workflow anymore. Use `main.py` instead.
+
+## Tests
+
+```bash
+uv run python -m pytest tests -v
 ```

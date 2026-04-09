@@ -412,12 +412,11 @@ def run(
     in_features = X_eval.shape[1]
 
     # Re-create module architecture and load pruned weights
+    widths = config.model.resolved_hidden_widths()
     if flavor == "chebykan":
-        widths = [config.model.width] * config.model.depth
         module = TabKAN(in_features=in_features, widths=widths, kan_type="chebykan",
                         degree=config.model.degree or 3)
     else:
-        widths = [config.model.width] * config.model.depth
         module = TabKAN(in_features=in_features, widths=widths, kan_type="fourierkan")
 
     module.load_state_dict(torch.load(pruned_checkpoint_path, map_location="cpu"))

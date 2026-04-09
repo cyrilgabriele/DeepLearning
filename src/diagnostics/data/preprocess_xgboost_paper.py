@@ -13,7 +13,7 @@ from typing import Dict, List, Tuple
 
 import pandas as pd
 
-from src.data.preprocess_paper_base import PaperPreprocessingBase, PreprocessorState
+from src.preprocessing.preprocess_paper_base import PaperPreprocessingBase, PreprocessorState
 
 TARGET_COLUMN = PaperPreprocessingBase.TARGET_COLUMN
 ID_COLUMN = PaperPreprocessingBase.ID_COLUMN

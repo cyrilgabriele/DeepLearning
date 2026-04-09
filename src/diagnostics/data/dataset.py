@@ -4,8 +4,8 @@ import pandas as pd
 import numpy as np
 import lightning as L
 
-from src.data import preprocess_kan_paper as kan_prep
-from src.data.prudential_features import get_feature_lists
+from src.preprocessing import preprocess_kan_paper as kan_prep
+from src.preprocessing.prudential_features import get_feature_lists
 
 
 class TabularDataset(Dataset):

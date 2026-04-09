@@ -22,6 +22,15 @@ def run(argv: Sequence[str] | None = None) -> None:
     if args.stage == "interpret" and args.config is None and args.checkpoint is None:
         parser.error("stage 'interpret' requires --checkpoint when --config is omitted.")
 
+    if args.stage == "retrain" and args.candidate_manifest is None:
+        parser.error("stage 'retrain' requires --candidate-manifest.")
+
+    if args.stage == "retrain" and not args.seeds:
+        parser.error("stage 'retrain' requires at least one seed via --seeds.")
+
+    if args.stage == "select" and args.retrain_manifest is None:
+        parser.error("stage 'select' requires --retrain-manifest.")
+
     if args.stage == "train":
         from configs import detect_device
         from configs import load_experiment_config
@@ -67,6 +76,35 @@ def run(argv: Sequence[str] | None = None) -> None:
         _print_interpret_summary(result)
         return
 
+    if args.stage == "retrain":
+        from configs import detect_device
+        from src.retrain import run_retrain
+
+        device = detect_device()
+        result = run_retrain(
+            args.candidate_manifest,
+            device=device,
+            seeds=args.seeds,
+            candidate_ids=args.candidate_ids,
+            top_k=args.top_k,
+            selection_name=args.selection_name,
+            experiment_prefix=args.output_experiment_prefix,
+        )
+        _print_retrain_summary(result)
+        return
+
+    if args.stage == "select":
+        from src.selection import run_select
+
+        result = run_select(
+            args.retrain_manifest,
+            qwk_tolerance=args.qwk_tolerance,
+            selection_output_root=Path("artifacts") / "selection",
+            output_root=args.output_root,
+        )
+        _print_selection_summary(result)
+        return
+
     raise ValueError(f"Unsupported stage: {args.stage}")
 
 
@@ -75,7 +113,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--stage",
         required=True,
-        choices=["train", "tune", "interpret"],
+        choices=["train", "tune", "interpret", "retrain", "select"],
         help="Experiment stage to run.",
     )
     parser.add_argument(
@@ -129,6 +167,50 @@ def _build_parser() -> argparse.ArgumentParser:
         default="scipy",
         help="Symbolic fitting backend for KAN interpretability.",
     )
+    parser.add_argument(
+        "--candidate-manifest",
+        type=Path,
+        default=None,
+        help="Top-k candidate manifest emitted by the tune stage for retraining.",
+    )
+    parser.add_argument(
+        "--retrain-manifest",
+        type=Path,
+        default=None,
+        help="Retraining manifest emitted by the retrain stage for final selection.",
+    )
+    parser.add_argument(
+        "--candidate-id",
+        dest="candidate_ids",
+        action="append",
+        default=None,
+        help="Candidate id to retrain. Repeat to retrain multiple explicit candidates.",
+    )
+    parser.add_argument(
+        "--top-k",
+        type=int,
+        default=None,
+        help="Limit the retrain stage to the first K candidates from the candidate manifest.",
+    )
+    parser.add_argument(
+        "--selection-name",
+        type=str,
+        default=None,
+        help="Logical label used under `artifacts/retrain/<family>/...`.",
+    )
+    parser.add_argument(
+        "--output-experiment-prefix",
+        type=str,
+        default=None,
+        help="Prefix used for the materialized experiment names during retraining.",
+    )
+    parser.add_argument(
+        "--seeds",
+        type=int,
+        nargs="+",
+        default=None,
+        help="Seed list for the retrain stage.",
+    )
     return parser
 
 
@@ -160,6 +242,25 @@ def _print_interpret_summary(result: dict[str, object]) -> None:
     if isinstance(artifacts, dict):
         for label, path in artifacts.items():
             print(f"  {label}: {path}")
+
+
+def _print_retrain_summary(result: dict[str, object]) -> None:
+    print("\nRetrain stage finished.")
+    print(f"Family: {result['model_family']}")
+    print(f"Selection: {result['selection_name']}")
+    print(f"Runs materialized: {len(result.get('runs', []))}")
+    print(f"Manifest: {result.get('manifest_path')}")
+
+
+def _print_selection_summary(result: dict[str, object]) -> None:
+    print("\nSelection stage finished.")
+    print(f"Family: {result['family']}")
+    print(f"Best performance: {result['best_performance_candidate']['candidate_id']}")
+    print(f"Best interpretable: {result['best_interpretable_candidate']['candidate_id']}")
+    manifest_path = result.get("selection_path") or (
+        Path("artifacts") / "selection" / f"{result['family']}_selection.json"
+    )
+    print(f"Manifest: {manifest_path}")
 
 
 def main() -> None:

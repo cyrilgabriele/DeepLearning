@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
@@ -121,11 +122,21 @@ def run_tune(
         )
     )
 
+    candidates_path = _SWEEP_DIR / f"{study_name}_candidates.json"
+    candidate_manifest = _build_candidate_manifest(
+        study=study,
+        base_config=base_config,
+        top_k=tune_config.top_k_candidates,
+        model_family=model_family,
+    )
+    candidates_path.write_text(json.dumps(candidate_manifest, indent=2, sort_keys=True))
+
     print(f"\n{'=' * 70}")
     print(f"TUNE COMPLETE — best QWK: {study.best_value:.4f}")
     print(f"Best params: {study.best_params}")
     print(f"Saved results: {results_path}")
     print(f"Saved config: {config_path}")
+    print(f"Saved candidates: {candidates_path}")
     print(f"Run with: python main.py --stage train --config {config_path}")
 
     top_trials = sorted(
@@ -138,6 +149,85 @@ def run_tune(
         print(f"  {rank}. qwk={trial.value:.4f} | params={trial.params}")
 
     return study
+
+
+def _build_candidate_manifest(
+    *,
+    study: optuna.Study,
+    base_config: ExperimentConfig,
+    top_k: int,
+    model_family: ModelFamily,
+) -> dict[str, Any]:
+    """Export the top completed trials into a retrain-friendly manifest."""
+
+    completed_trials = [
+        trial for trial in study.trials if trial.state == optuna.trial.TrialState.COMPLETE
+    ]
+    ranked_trials = sorted(
+        completed_trials,
+        key=lambda trial: trial.value if trial.value is not None else float("-inf"),
+        reverse=True,
+    )[:top_k]
+
+    candidates: list[dict[str, Any]] = []
+    for rank, trial in enumerate(ranked_trials, start=1):
+        trial_config = _build_trial_config(
+            base_config,
+            trial.params,
+            experiment_name=f"{base_config.trainer.experiment_name}-candidate-{trial.number:03d}",
+            include_test_csv=True,
+        )
+        model_params = dict(trial_config.model.params)
+        architecture = trial_config.model.architecture_payload()
+        candidates.append(
+            {
+                "candidate_id": f"{study.study_name}-trial-{trial.number:03d}",
+                "rank": rank,
+                "trial_number": trial.number,
+                "qwk": None if trial.value is None else round(float(trial.value), 6),
+                "metrics": dict(trial.user_attrs.get("metrics", {})),
+                "model_config": trial_config.model.model_dump(mode="json"),
+                "trainer_config": trial_config.trainer.model_dump(mode="json"),
+                "preprocessing_config": trial_config.preprocessing.model_dump(mode="json"),
+                "summary_path": trial.user_attrs.get("summary_path"),
+                "checkpoint_path": trial.user_attrs.get("checkpoint_path"),
+                "selection_metadata": {
+                    "architecture": architecture,
+                    "basis_parameters": _basis_parameters(trial_config),
+                    "sparsity_parameters": {
+                        key: model_params.get(key)
+                        for key in ("sparsity_lambda", "l1_weight", "entropy_weight")
+                        if key in model_params
+                    },
+                    "sampled_params": dict(trial.params),
+                    "notes": [
+                        f"Source experiment: {trial.user_attrs.get('experiment_name')}",
+                    ],
+                },
+            }
+        )
+
+    return {
+        "study_name": study.study_name,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "model_family": model_family,
+        "preprocessing_recipe": base_config.preprocessing.recipe,
+        "top_k": top_k,
+        "candidates": candidates,
+    }
+
+
+def _basis_parameters(config: ExperimentConfig) -> dict[str, Any]:
+    """Extract basis-defining parameters from the effective model config."""
+
+    basis_keys = ("degree", "grid_size", "spline_order")
+    model_params = dict(config.model.params)
+    basis = {key: model_params[key] for key in basis_keys if key in model_params}
+    if config.model.degree is not None:
+        basis.setdefault("degree", config.model.degree)
+    if config.model.flavor is not None:
+        basis["flavor"] = config.model.flavor
+    return basis
 
 
 def _require_tune_config(config: ExperimentConfig):
@@ -216,6 +306,8 @@ def _build_trial_config(
     for key, value in sampled_params.items():
         if key in {"depth", "width", "degree"}:
             model_payload[key] = None if value is None else int(value)
+            if key in {"depth", "width"}:
+                model_payload["hidden_widths"] = None
         else:
             model_params[key] = value
 
