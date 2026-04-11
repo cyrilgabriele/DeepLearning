@@ -356,6 +356,9 @@ def _plot_feature_ranking(
     coeff_df = coefficient_importance_from_layer(first_layer, feature_names)
     if coeff_df.empty:
         return
+    coeff_df = coeff_df[coeff_df["importance"] > 0]
+    if coeff_df.empty:
+        return
     sorted_feats = coeff_df["feature"].tolist()
 
     colors = [FEATURE_TYPE_COLORS.get(feat_types.get(f, "unknown"), "#AAAAAA") for f in sorted_feats]

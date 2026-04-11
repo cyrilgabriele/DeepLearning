@@ -159,8 +159,8 @@ def draw_kan_diagram(
                     if show_formulas:
                         fit_row = fit_lookup.get((h_idx, i_idx))
                         if fit_row is not None and fit_row["quality_tier"] in ("clean", "acceptable"):
-                            formula = str(fit_row["formula"])[:15]
-                            inset_ax.set_title(formula, fontsize=3, pad=1,
+                            formula = str(fit_row["formula"])
+                            inset_ax.set_title(formula, fontsize=2.5, pad=1,
                                                color="darkred", alpha=alpha)
                 except Exception:
                     pass
