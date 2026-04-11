@@ -6,12 +6,12 @@ trainer:
 
 preprocessing:
   contract_version: 1
-  recipe: xgboost_paper
+  recipe: kan_paper
 
 model:
-  name: tabkan-tiny
+  name: tabkan-small
   flavor: chebykan
-  depth: 2
-  width: 8
+  hidden_widths: [8, 4]
   degree: 3
-  params: {}
+  params:
+    max_epochs: 40
