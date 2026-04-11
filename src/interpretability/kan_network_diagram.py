@@ -72,7 +72,7 @@ def draw_kan_diagram(
 
     # Use first layer for the main diagram
     layer0 = kan_layers[0]
-    l0_scores = _compute_edge_l1(layer0).numpy()  # (hidden, inputs)
+    l0_scores = np.nan_to_num(_compute_edge_l1(layer0).numpy(), nan=0.0)  # (hidden, inputs)
 
     # Select top input features
     input_total = l0_scores.sum(axis=0)
@@ -115,7 +115,7 @@ def draw_kan_diagram(
         for hi, h_idx in enumerate(top_hid_idx):
             importance = float(l0_scores[h_idx, i_idx])
             w = importance / max_l0
-            if w < 0.03:
+            if not np.isfinite(w) or w < 0.03:
                 continue
 
             alpha = float(np.tanh(3 * w))
@@ -182,7 +182,7 @@ def draw_kan_diagram(
     # Draw second layer edges if present (simplified, no mini-plots)
     if len(kan_layers) >= 2:
         layer1 = kan_layers[1]
-        l1_scores = _compute_edge_l1(layer1).numpy()
+        l1_scores = np.nan_to_num(_compute_edge_l1(layer1).numpy(), nan=0.0)
         n_out = l1_scores.shape[0]
         out_ys = np.linspace(0.85, 0.15, n_out)
         max_l1 = l1_scores.max() + 1e-12
@@ -190,9 +190,9 @@ def draw_kan_diagram(
         for hi, h_idx in enumerate(top_hid_idx):
             for oi in range(n_out):
                 w = float(l1_scores[oi, h_idx]) / max_l1
-                if w < 0.05:
+                if w < 0.05 or not np.isfinite(w):
                     continue
-                alpha = float(np.tanh(3 * w))
+                alpha = float(np.clip(np.tanh(3 * w), 0.15, 0.9))
                 ax.plot(
                     [x_hid + 0.03, x_out_col - 0.03],
                     [hid_ys[hi], out_ys[oi]],

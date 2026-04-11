@@ -1,0 +1,17 @@
+trainer:
+  experiment_name: smoke-chebykan
+  train_csv: data/prudential-life-insurance-assessment/train.csv
+  test_csv: data/prudential-life-insurance-assessment/test.csv
+  seed: 42
+
+preprocessing:
+  contract_version: 1
+  recipe: xgboost_paper
+
+model:
+  name: tabkan-tiny
+  flavor: chebykan
+  depth: 2
+  width: 8
+  degree: 3
+  params: {}
