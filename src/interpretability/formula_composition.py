@@ -136,6 +136,7 @@ def compose_symbolic_model(
     *,
     min_r2: float = 0.90,
     n_samples: int = 1000,
+    max_edges_per_node: int = 10,
 ) -> dict:
     """Compose per-edge symbolic fits into end-to-end formulas per output node.
 
@@ -152,6 +153,9 @@ def compose_symbolic_model(
         Only include edges with R² >= min_r2 in the composition.
     n_samples : int
         Number of sample points for parameter refitting.
+    max_edges_per_node : int
+        Maximum incoming edges per node (top-K by R²).  Prevents expression
+        blowup in dense networks.
 
     Returns
     -------
@@ -193,11 +197,15 @@ def compose_symbolic_model(
         layer_fits = usable[usable["layer"] == layer_idx]
 
         for out_i in range(layer.out_features):
-            # Sum all incoming edge contributions to this output node
+            # Take only the top-K incoming edges by R² to keep expressions tractable
+            node_edges = layer_fits[layer_fits["edge_out"] == out_i]
+            if len(node_edges) > max_edges_per_node:
+                node_edges = node_edges.nlargest(max_edges_per_node, "r_squared")
+
             node_sum = sp.Integer(0)
             has_any_edge = False
 
-            for _, row in layer_fits[layer_fits["edge_out"] == out_i].iterrows():
+            for _, row in node_edges.iterrows():
                 in_i = int(row["edge_in"])
                 formula_name = str(row["formula"])
 
@@ -228,14 +236,23 @@ def compose_symbolic_model(
     output_layer_idx = n_layers
     output_exprs = node_exprs[output_layer_idx]
 
-    # Simplify each output expression
+    # Simplify each output expression (skip for very large expressions)
+    _MAX_OPS_FOR_SIMPLIFY = 500
     formulas = {}
     sympy_exprs = {}
     for out_i, expr in output_exprs.items():
-        try:
-            simplified = sp.nsimplify(expr, tolerance=1e-3, rational=False)
-            simplified = sp.simplify(simplified)
-        except Exception:
+        n_ops = expr.count_ops()
+        if n_ops <= _MAX_OPS_FOR_SIMPLIFY:
+            try:
+                simplified = sp.nsimplify(expr, tolerance=1e-3, rational=False)
+                simplified = sp.simplify(simplified)
+            except Exception:
+                simplified = expr
+        else:
+            print(
+                f"  Skipping simplify for output node {out_i} "
+                f"({n_ops} ops > {_MAX_OPS_FOR_SIMPLIFY} limit)"
+            )
             simplified = expr
         sympy_exprs[out_i] = simplified
         formulas[out_i] = str(simplified)

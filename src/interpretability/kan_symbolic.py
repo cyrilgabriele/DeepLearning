@@ -576,7 +576,8 @@ def run(
         module = TabKAN(in_features=in_features, widths=widths, kan_type="chebykan",
                         degree=config.model.degree or 3)
     else:
-        module = TabKAN(in_features=in_features, widths=widths, kan_type="fourierkan")
+        module = TabKAN(in_features=in_features, widths=widths, kan_type="fourierkan",
+                        grid_size=config.model.params.get("grid_size", 4))
 
     module.load_state_dict(torch.load(pruned_checkpoint_path, map_location="cpu"))
     module.eval()

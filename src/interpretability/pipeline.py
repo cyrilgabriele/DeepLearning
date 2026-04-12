@@ -249,6 +249,7 @@ def run_interpret(
     pruned_module = TabKAN(
         in_features=in_features, widths=widths, kan_type=flavor,
         degree=config.model.degree or 3,
+        grid_size=config.model.params.get("grid_size", 4),
     )
     pruned_module.load_state_dict(torch.load(pruned_checkpoint_path, map_location="cpu"))
     pruned_module.eval()

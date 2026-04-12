@@ -1,0 +1,24 @@
+trainer:
+  experiment_name: stage-c-xgboost-best
+  train_csv: data/prudential-life-insurance-assessment/train.csv
+  test_csv: data/prudential-life-insurance-assessment/test.csv
+  seed: 42
+
+preprocessing:
+  contract_version: 1
+  recipe: xgboost_paper
+
+model:
+  name: xgboost-paper
+  params:
+    n_estimators: 765
+    max_depth: 11
+    learning_rate: 0.012836785304264764
+    subsample: 0.620710169201981
+    colsample_bytree: 0.5071615942406114
+    min_child_weight: 8
+    reg_alpha: 0.12670481458419444
+    reg_lambda: 1.246619007860089
+    tree_method: hist
+    eval_metric: mlogloss
+    refit_full_training: true

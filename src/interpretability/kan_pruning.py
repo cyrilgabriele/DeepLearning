@@ -174,6 +174,7 @@ def run(
         depth=config.model.depth,
         width=config.model.width,
         degree=config.model.degree or 3,
+        grid_size=config.model.params.get("grid_size", 4),
     )
     widths = wrapper.widths
     wrapper.module = TabKAN(

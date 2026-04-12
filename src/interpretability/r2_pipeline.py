@@ -149,6 +149,7 @@ def run(
         widths=widths,
         kan_type=flavor,
         degree=config.model.degree or 3,
+        grid_size=config.model.params.get("grid_size", 4),
     )
     module.load_state_dict(torch.load(pruned_checkpoint_path, map_location="cpu"))
     module.eval()
