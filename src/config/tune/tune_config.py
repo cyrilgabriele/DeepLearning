@@ -54,6 +54,15 @@ class TuneConfig(BaseModel):
     )
     n_trials: int = Field(default=50, ge=1, description="Number of Optuna trials to run.")
     timeout: int | None = Field(default=None, ge=1, description="Study timeout in seconds.")
+    directions: list[Literal["maximize", "minimize"]] | None = Field(
+        default=None,
+        description=(
+            "Objective directions for multi-objective optimisation. "
+            "When set, enables Pareto-front search (e.g. ['maximize', 'maximize'] "
+            "for QWK + sparsity).  Leave unset for the default single-objective "
+            "maximize-QWK behaviour."
+        ),
+    )
     sampler: Literal["tpe", "random"] = Field(
         default="tpe",
         description="Optuna sampler to use for the study.",

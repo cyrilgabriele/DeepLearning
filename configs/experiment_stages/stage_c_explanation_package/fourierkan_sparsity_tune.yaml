@@ -1,0 +1,36 @@
+trainer:
+  experiment_name: stage-c-fourierkan-sparsity
+  train_csv: data/prudential-life-insurance-assessment/train.csv
+  test_csv: data/prudential-life-insurance-assessment/test.csv
+  seed: 42
+
+preprocessing:
+  contract_version: 1
+  recipe: kan_paper
+
+model:
+  name: tabkan-base
+  flavor: fourierkan
+  hidden_widths: [64, 256, 64]
+  params:
+    max_epochs: 100
+    grid_size: 8
+    lr: 0.0031887242971171403
+    weight_decay: 2.393884747850709e-05
+    batch_size: 256
+    sparsity_lambda: 0.01
+    l1_weight: 1.0
+    entropy_weight: 1.0
+
+tune:
+  name: stage-c-fourierkan-sparsity-tune
+  storage: sweeps/stage-c-fourierkan-sparsity-tune.db
+  n_trials: 30
+  directions: [maximize, maximize]   # QWK, sparsity_ratio
+  sampler: tpe
+  top_k_candidates: 5
+  search_space:
+    sparsity_lambda:
+      type: log_uniform
+      low: 0.001
+      high: 0.5

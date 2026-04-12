@@ -18,6 +18,42 @@ _SWEEP_DIR = Path("sweeps")
 ModelFamily = Literal["glm", "xgboost-paper", "chebykan", "fourierkan", "bsplinekan"]
 
 
+def _compute_sparsity(checkpoint_path: str, config: ExperimentConfig, flavor: str) -> float:
+    """Load a KAN checkpoint and return the sparsity ratio after pruning at threshold=0.01."""
+    import torch
+    from src.models.tabkan import TabKANClassifier, TabKAN
+    from src.interpretability.kan_pruning import prune_kan
+
+    manifest_path = Path(checkpoint_path).with_suffix(".manifest.json")
+    if manifest_path.exists():
+        manifest = json.loads(manifest_path.read_text())
+        in_features = manifest.get("in_features", 140)
+    else:
+        in_features = 140
+
+    wrapper = TabKANClassifier(
+        preset=config.model.name,
+        flavor=flavor,
+        hidden_widths=config.model.resolved_hidden_widths(),
+        depth=config.model.depth,
+        width=config.model.width,
+        degree=config.model.degree or 3,
+        grid_size=config.model.params.get("grid_size", 4),
+    )
+    wrapper.module = TabKAN(
+        in_features=in_features,
+        widths=wrapper.widths,
+        kan_type=flavor,
+        degree=wrapper.degree,
+        grid_size=wrapper.grid_size,
+    )
+    wrapper.module.load_state_dict(torch.load(checkpoint_path, map_location="cpu"))
+    wrapper.module.eval()
+
+    _, stats, _ = prune_kan(wrapper.module, threshold=0.01)
+    return stats.sparsity_ratio
+
+
 def run_tune(
     base_config: ExperimentConfig,
     *,
@@ -39,23 +75,36 @@ def run_tune(
 
     _SWEEP_DIR.mkdir(parents=True, exist_ok=True)
 
-    study = optuna.create_study(
-        study_name=study_name,
-        direction="maximize",
-        storage=storage,
-        load_if_exists=True,
-        sampler=_build_sampler(tune_config.sampler, seed=base_config.trainer.seed),
-    )
+    multi_objective = tune_config.directions is not None and len(tune_config.directions) > 1
+
+    if multi_objective:
+        study = optuna.create_study(
+            study_name=study_name,
+            directions=tune_config.directions,
+            storage=storage,
+            load_if_exists=True,
+            sampler=optuna.samplers.NSGAIISampler(seed=base_config.trainer.seed),
+        )
+    else:
+        study = optuna.create_study(
+            study_name=study_name,
+            direction="maximize",
+            storage=storage,
+            load_if_exists=True,
+            sampler=_build_sampler(tune_config.sampler, seed=base_config.trainer.seed),
+        )
 
     print(f"\nStarting tune stage for '{base_config.trainer.experiment_name}'")
     print(f"Model family: {model_family}")
+    if multi_objective:
+        print(f"Mode: multi-objective (directions={tune_config.directions})")
     print(f"Trials: {n_trials}")
     if timeout is not None:
         print(f"Timeout: {timeout}s")
     print(f"Storage: {db_path}")
     print("=" * 70)
 
-    def objective(trial: optuna.Trial) -> float:
+    def objective(trial: optuna.Trial) -> float | tuple[float, float]:
         sampled_params = _sample_trial_params(trial, search_space=tune_config.search_space)
         trial_config = _build_trial_config(
             base_config,
@@ -79,6 +128,17 @@ def run_tune(
         if artifacts.checkpoint_path is not None:
             trial.set_user_attr("checkpoint_path", str(artifacts.checkpoint_path))
 
+        if multi_objective and artifacts.checkpoint_path is not None:
+            sparsity = _compute_sparsity(
+                str(artifacts.checkpoint_path), trial_config, model_family,
+            )
+            trial.set_user_attr("sparsity_ratio", sparsity)
+            print(
+                f"Trial {trial.number}: qwk={qwk:.4f}  sparsity={sparsity:.4f} | "
+                f"params={sampled_params}"
+            )
+            return qwk, sparsity
+
         print(f"Trial {trial.number}: qwk={qwk:.4f} | params={sampled_params}")
         return qwk
 
@@ -89,6 +149,99 @@ def run_tune(
     ]
     if not completed_trials:
         raise RuntimeError("Tune stage finished without any completed trials.")
+
+    if multi_objective:
+        _report_pareto(study, base_config, model_family, study_name, tune_config)
+    else:
+        _report_single_objective(study, base_config, model_family, study_name, tune_config)
+
+    return study
+
+
+def _report_pareto(
+    study: optuna.Study,
+    base_config: ExperimentConfig,
+    model_family: ModelFamily,
+    study_name: str,
+    tune_config,
+) -> None:
+    """Report results for a multi-objective (Pareto) sweep."""
+    completed_trials = [
+        t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE
+    ]
+    pareto_trials = study.best_trials
+
+    pareto_entries = []
+    for trial in sorted(pareto_trials, key=lambda t: t.values[0], reverse=True):
+        qwk, sparsity = trial.values
+        entry = {
+            "trial_number": trial.number,
+            "qwk": round(qwk, 6),
+            "sparsity_ratio": round(sparsity, 4),
+            "params": trial.params,
+            "checkpoint_path": trial.user_attrs.get("checkpoint_path"),
+        }
+        pareto_entries.append(entry)
+
+    results_payload = {
+        "study_name": study.study_name,
+        "model_family": model_family,
+        "preprocessing_recipe": base_config.preprocessing.recipe,
+        "mode": "pareto",
+        "directions": list(tune_config.directions),
+        "objective_names": ["qwk", "sparsity_ratio"],
+        "search_space": {
+            name: spec.model_dump(mode="json") for name, spec in tune_config.search_space.items()
+        },
+        "total_trials": len(study.trials),
+        "completed_trials": len(completed_trials),
+        "pareto_front": pareto_entries,
+    }
+    results_path = _SWEEP_DIR / f"{study_name}_pareto.json"
+    results_path.write_text(json.dumps(results_payload, indent=2, sort_keys=True))
+
+    # Save configs for each Pareto trial
+    for entry in pareto_entries:
+        trial_obj = next(
+            t for t in pareto_trials if t.number == entry["trial_number"]
+        )
+        config = _build_trial_config(
+            base_config,
+            trial_obj.params,
+            experiment_name=(
+                f"{base_config.trainer.experiment_name}-pareto-"
+                f"q{entry['qwk']:.3f}-s{entry['sparsity_ratio']:.2f}"
+            ),
+            include_test_csv=True,
+        )
+        config_path = _SWEEP_DIR / (
+            f"{study_name}_pareto_trial{entry['trial_number']:03d}.yaml"
+        )
+        config_path.write_text(yaml.safe_dump(config.model_dump(mode="json"), sort_keys=False))
+
+    print(f"\n{'=' * 70}")
+    print(f"PARETO TUNE COMPLETE — {len(pareto_entries)} Pareto-optimal trials")
+    print(f"Saved results: {results_path}")
+    print(f"\nPareto front (sorted by QWK):")
+    for entry in pareto_entries:
+        print(
+            f"  trial {entry['trial_number']:3d}: "
+            f"qwk={entry['qwk']:.4f}  sparsity={entry['sparsity_ratio']:.4f}  "
+            f"λ={entry['params'].get('sparsity_lambda', '?'):.4f}"
+        )
+
+
+def _report_single_objective(
+    study: optuna.Study,
+    base_config: ExperimentConfig,
+    model_family: ModelFamily,
+    study_name: str,
+    tune_config,
+) -> None:
+    """Report results for a single-objective sweep (original behaviour)."""
+    completed_trials = [
+        t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE
+    ]
 
     best_config = _build_trial_config(
         base_config,
@@ -147,8 +300,6 @@ def run_tune(
     print("\nTop trials:")
     for rank, trial in enumerate(top_trials, start=1):
         print(f"  {rank}. qwk={trial.value:.4f} | params={trial.params}")
-
-    return study
 
 
 def _build_candidate_manifest(
