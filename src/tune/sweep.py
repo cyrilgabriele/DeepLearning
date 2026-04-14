@@ -224,10 +224,12 @@ def _report_pareto(
     print(f"Saved results: {results_path}")
     print(f"\nPareto front (sorted by QWK):")
     for entry in pareto_entries:
+        params_str = "  ".join(f"{k}={v:.4g}" if isinstance(v, float) else f"{k}={v}"
+                               for k, v in entry["params"].items())
         print(
             f"  trial {entry['trial_number']:3d}: "
             f"qwk={entry['qwk']:.4f}  sparsity={entry['sparsity_ratio']:.4f}  "
-            f"λ={entry['params'].get('sparsity_lambda', '?'):.4f}"
+            f"{params_str}"
         )
 
 
