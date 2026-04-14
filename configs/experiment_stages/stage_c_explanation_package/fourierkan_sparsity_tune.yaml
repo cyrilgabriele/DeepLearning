@@ -25,7 +25,7 @@ model:
 tune:
   name: stage-c-fourierkan-sparsity-tune
   storage: sweeps/stage-c-fourierkan-sparsity-tune.db
-  n_trials: 30
+  n_trials: 60
   directions: [maximize, maximize]   # QWK, sparsity_ratio
   sampler: tpe
   top_k_candidates: 5
@@ -34,3 +34,15 @@ tune:
       type: log_uniform
       low: 0.001
       high: 0.5
+    l1_weight:
+      type: log_uniform
+      low: 0.1
+      high: 10.0
+    entropy_weight:
+      type: log_uniform
+      low: 0.1
+      high: 10.0
+    grid_size:
+      type: int
+      low: 4
+      high: 12
