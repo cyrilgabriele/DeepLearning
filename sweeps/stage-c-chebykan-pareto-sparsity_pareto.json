@@ -1,0 +1,140 @@
+{
+  "completed_trials": 30,
+  "directions": [
+    "maximize",
+    "maximize"
+  ],
+  "mode": "pareto",
+  "model_family": "chebykan",
+  "objective_names": [
+    "qwk",
+    "sparsity_ratio"
+  ],
+  "pareto_front": [
+    {
+      "checkpoint_path": "checkpoints\\stage-c-chebykan-pareto-sparsity-trial-009\\model-20260415-161603.pt",
+      "params": {
+        "sparsity_lambda": 0.001
+      },
+      "qwk": 0.606061,
+      "sparsity_ratio": 0.8534,
+      "trial_number": 9
+    },
+    {
+      "checkpoint_path": "checkpoints\\stage-c-chebykan-pareto-sparsity-trial-019\\model-20260415-163527.pt",
+      "params": {
+        "sparsity_lambda": 0.00190197
+      },
+      "qwk": 0.601325,
+      "sparsity_ratio": 0.911,
+      "trial_number": 19
+    },
+    {
+      "checkpoint_path": "checkpoints\\stage-c-chebykan-pareto-sparsity-trial-012\\model-20260415-162149.pt",
+      "params": {
+        "sparsity_lambda": 0.00291971
+      },
+      "qwk": 0.601025,
+      "sparsity_ratio": 0.945,
+      "trial_number": 12
+    },
+    {
+      "checkpoint_path": "checkpoints\\stage-c-chebykan-pareto-sparsity-trial-029\\model-20260415-165438.pt",
+      "params": {
+        "sparsity_lambda": 0.00361749
+      },
+      "qwk": 0.58825,
+      "sparsity_ratio": 0.955,
+      "trial_number": 29
+    },
+    {
+      "checkpoint_path": "checkpoints\\stage-c-chebykan-pareto-sparsity-trial-004\\model-20260415-160640.pt",
+      "params": {
+        "sparsity_lambda": 0.0055532
+      },
+      "qwk": 0.583497,
+      "sparsity_ratio": 0.9687,
+      "trial_number": 4
+    },
+    {
+      "checkpoint_path": "checkpoints\\stage-c-chebykan-pareto-sparsity-trial-014\\model-20260415-162536.pt",
+      "params": {
+        "sparsity_lambda": 0.010562
+      },
+      "qwk": 0.581341,
+      "sparsity_ratio": 0.9855,
+      "trial_number": 14
+    },
+    {
+      "checkpoint_path": "checkpoints\\stage-c-chebykan-pareto-sparsity-trial-013\\model-20260415-162342.pt",
+      "params": {
+        "sparsity_lambda": 0.0162137
+      },
+      "qwk": 0.574062,
+      "sparsity_ratio": 0.9915,
+      "trial_number": 13
+    },
+    {
+      "checkpoint_path": "checkpoints\\stage-c-chebykan-pareto-sparsity-trial-015\\model-20260415-162728.pt",
+      "params": {
+        "sparsity_lambda": 0.111556
+      },
+      "qwk": 0.538552,
+      "sparsity_ratio": 0.9972,
+      "trial_number": 15
+    },
+    {
+      "checkpoint_path": "checkpoints\\stage-c-chebykan-pareto-sparsity-trial-023\\model-20260415-164310.pt",
+      "params": {
+        "sparsity_lambda": 0.5
+      },
+      "qwk": 0.512371,
+      "sparsity_ratio": 0.9988,
+      "trial_number": 23
+    }
+  ],
+  "preprocessing_recipe": "kan_paper",
+  "search_space": {
+    "sparsity_lambda": {
+      "choices": null,
+      "high": null,
+      "low": null,
+      "step": null,
+      "type": "grid",
+      "values": [
+        0.001,
+        0.00123899,
+        0.0015351,
+        0.00190197,
+        0.00235652,
+        0.00291971,
+        0.00361749,
+        0.00448204,
+        0.0055532,
+        0.00688036,
+        0.0085247,
+        0.010562,
+        0.0130862,
+        0.0162137,
+        0.0200887,
+        0.0248897,
+        0.030838,
+        0.038208,
+        0.0473394,
+        0.0586531,
+        0.0726706,
+        0.0900381,
+        0.111556,
+        0.138217,
+        0.17125,
+        0.212177,
+        0.262885,
+        0.325712,
+        0.403554,
+        0.5
+      ]
+    }
+  },
+  "study_name": "stage-c-chebykan-pareto-sparsity",
+  "total_trials": 30
+}
