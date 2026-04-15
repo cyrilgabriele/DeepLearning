@@ -17,6 +17,21 @@ Track what was changed, why it was changed, and any important notes.
 - Optional notes, issues, or future work
 ```
 
+### [2026-04-15] - Christof Steiner
+
+#### What
+- Added `grid` search-space type and `grid` sampler to the tuning layer (`src/config/tune/tune_config.py`, `src/tune/sweep.py`), and fixed the sampler-selection rule so explicit `sampler: grid` is honoured for multi-objective studies.
+- Added `chebykan_pareto_sparsity.yaml` and `fourierkan_pareto_sparsity.yaml` under `configs/experiment_stages/stage_c_explanation_package/`: freeze Stage A winners, sweep only `sparsity_lambda` over a 30-point geometric grid in `[1e-3, 0.5]`, directions `[maximize, maximize]` (QWK, sparsity_ratio).
+- Ran both sweeps and committed the Pareto manifests + per-trial configs under `sweeps/`.
+
+#### Why
+- Stage A winners trained at `sparsity_lambda = 0`, so pruning at threshold 0.01 removed <1% of edges. A dense KAN is not a defensible base for the interpretability story.
+- Single-objective tuning would drive λ to 0; the tradeoff only surfaces as a multi-objective problem. A deterministic grid is preferred over NSGA-II for bit-reproducibility of the paper figure.
+- The frontier itself is the contribution, it lets us claim "X% prunable at <Y% QWK drop" rather than picking one λ by hand.
+
+#### Remarks
+
+
 ### [2026-04-09] - Cyril Gabriele
 
 #### What
