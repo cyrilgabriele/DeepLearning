@@ -78,12 +78,12 @@ def run_tune(
     multi_objective = tune_config.directions is not None and len(tune_config.directions) > 1
 
     # Sampler selection rule:
-    #   - If the user explicitly chose `grid` or `nsga2`, honour it as-is.
-    #   - If the user left the default (`tpe`) or chose `random`, AND this is a
-    #     multi-objective study, promote to NSGA-II. This preserves backward-compat
-    #     with existing multi-objective configs that omit `sampler`, since
-    #     TPE/random are not meaningful choices for Pareto search.
-    if tune_config.sampler in {"tpe", "random"} and multi_objective:
+    #   - If the user explicitly chose `grid`, honour it — even for multi-objective.
+    #   - Otherwise, if the study is multi-objective, fall back to NSGA-II.
+    #     TPE/random are single-objective only and Optuna rejects them for
+    #     Pareto studies, so this keeps legacy configs that set sampler=tpe
+    #     (the default) with multiple directions working.
+    if tune_config.sampler != "grid" and multi_objective:
         sampler = optuna.samplers.NSGAIISampler(seed=base_config.trainer.seed)
     else:
         sampler = _build_sampler(
@@ -417,8 +417,6 @@ def _build_sampler(
         return optuna.samplers.TPESampler(seed=seed)
     if sampler_name == "random":
         return optuna.samplers.RandomSampler(seed=seed)
-    if sampler_name == "nsga2":
-        return optuna.samplers.NSGAIISampler(seed=seed)
     if sampler_name == "grid":
         if not search_space:
             raise ValueError("Grid sampler requires a non-empty search_space.")

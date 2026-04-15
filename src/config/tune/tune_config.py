@@ -69,7 +69,7 @@ class TuneConfig(BaseModel):
             "maximize-QWK behaviour."
         ),
     )
-    sampler: Literal["tpe", "random", "grid", "nsga2"] = Field(
+    sampler: Literal["tpe", "random", "grid"] = Field(
         default="tpe",
         description="Optuna sampler to use for the study.",
     )

@@ -74,18 +74,6 @@ def test_tune_config_accepts_grid_sampler():
     assert cfg.sampler == "grid"
 
 
-def test_tune_config_accepts_nsga2_sampler():
-    cfg = TuneConfig(
-        n_trials=3,
-        sampler="nsga2",
-        directions=["maximize", "maximize"],
-        search_space={
-            "sparsity_lambda": SearchParamConfig(type="log_uniform", low=0.001, high=0.5),
-        },
-    )
-    assert cfg.sampler == "nsga2"
-
-
 def test_sample_trial_params_uses_configured_search_space():
     trial = optuna.trial.FixedTrial(
         {
@@ -160,12 +148,6 @@ def test_build_sampler_returns_grid_sampler():
     }
     sampler = _build_sampler("grid", seed=42, search_space=search_space)
     assert isinstance(sampler, optuna.samplers.GridSampler)
-
-
-def test_build_sampler_returns_nsga2_sampler():
-    from src.tune.sweep import _build_sampler
-    sampler = _build_sampler("nsga2", seed=42, search_space={})
-    assert isinstance(sampler, optuna.samplers.NSGAIISampler)
 
 
 def test_build_sampler_tpe_still_works():
