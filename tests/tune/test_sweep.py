@@ -50,6 +50,42 @@ def _base_cheby_config(tmp_path: Path, *, include_tune: bool) -> ExperimentConfi
     )
 
 
+def test_search_param_config_accepts_grid_type():
+    cfg = SearchParamConfig(type="grid", values=[0.001, 0.01, 0.1])
+    assert cfg.type == "grid"
+    assert cfg.values == [0.001, 0.01, 0.1]
+
+
+def test_search_param_config_grid_requires_non_empty_values():
+    with pytest.raises(ValueError):
+        SearchParamConfig(type="grid", values=[])
+    with pytest.raises(ValueError):
+        SearchParamConfig(type="grid")
+
+
+def test_tune_config_accepts_grid_sampler():
+    cfg = TuneConfig(
+        n_trials=3,
+        sampler="grid",
+        search_space={
+            "sparsity_lambda": SearchParamConfig(type="grid", values=[0.001, 0.01, 0.1]),
+        },
+    )
+    assert cfg.sampler == "grid"
+
+
+def test_tune_config_accepts_nsga2_sampler():
+    cfg = TuneConfig(
+        n_trials=3,
+        sampler="nsga2",
+        directions=["maximize", "maximize"],
+        search_space={
+            "sparsity_lambda": SearchParamConfig(type="log_uniform", low=0.001, high=0.5),
+        },
+    )
+    assert cfg.sampler == "nsga2"
+
+
 def test_sample_trial_params_uses_configured_search_space():
     trial = optuna.trial.FixedTrial(
         {
@@ -79,6 +115,17 @@ def test_sample_trial_params_uses_configured_search_space():
     }
 
 
+def test_sample_trial_params_handles_grid_type():
+    trial = optuna.trial.FixedTrial({"sparsity_lambda": 0.01})
+    search_space = {
+        "sparsity_lambda": SearchParamConfig(
+            type="grid", values=[0.001, 0.01, 0.1]
+        ),
+    }
+    sampled = _sample_trial_params(trial, search_space=search_space)
+    assert sampled == {"sparsity_lambda": 0.01}
+
+
 def test_build_trial_config_applies_sampled_params(tmp_path):
     base_config = _base_cheby_config(tmp_path, include_tune=True)
 
@@ -104,6 +151,27 @@ def test_build_trial_config_applies_sampled_params(tmp_path):
     assert trial_config.model.params["sparsity_lambda"] == 1e-4
     assert trial_config.model.params["l1_weight"] == 1.0
     assert trial_config.model.params["entropy_weight"] == 1.0
+
+
+def test_build_sampler_returns_grid_sampler():
+    from src.tune.sweep import _build_sampler
+    search_space = {
+        "sparsity_lambda": SearchParamConfig(type="grid", values=[0.001, 0.01, 0.1]),
+    }
+    sampler = _build_sampler("grid", seed=42, search_space=search_space)
+    assert isinstance(sampler, optuna.samplers.GridSampler)
+
+
+def test_build_sampler_returns_nsga2_sampler():
+    from src.tune.sweep import _build_sampler
+    sampler = _build_sampler("nsga2", seed=42, search_space={})
+    assert isinstance(sampler, optuna.samplers.NSGAIISampler)
+
+
+def test_build_sampler_tpe_still_works():
+    from src.tune.sweep import _build_sampler
+    sampler = _build_sampler("tpe", seed=42, search_space={})
+    assert isinstance(sampler, optuna.samplers.TPESampler)
 
 
 def test_run_tune_requires_tune_block(tmp_path):
@@ -156,3 +224,59 @@ def test_run_tune_exports_candidate_manifest(tmp_path, monkeypatch):
     assert best_candidate["preprocessing_config"]["recipe"] == "kan_paper"
     assert best_candidate["selection_metadata"]["architecture"]["hidden_widths"] == [128, 128]
     assert best_candidate["summary_path"].endswith("summary-2.json")
+
+
+def test_run_tune_honours_explicit_grid_sampler_for_multi_objective(tmp_path, monkeypatch):
+    """Regression test: sampler='grid' with multi-objective directions must NOT be upgraded to NSGA-II."""
+    from unittest.mock import patch
+    import optuna
+
+    tune = TuneConfig(
+        name="grid-multi-obj",
+        storage=tmp_path / "sweeps" / "grid-multi-obj.db",
+        n_trials=1,
+        sampler="grid",
+        directions=["maximize", "maximize"],
+        search_space={
+            "sparsity_lambda": SearchParamConfig(
+                type="grid", values=[0.001, 0.01, 0.1]
+            ),
+        },
+    )
+    config = ExperimentConfig(
+        trainer=TrainerConfig(
+            experiment_name="grid-multi-obj",
+            train_csv=tmp_path / "train.csv",
+            test_csv=tmp_path / "test.csv",
+            seed=7,
+        ),
+        preprocessing=PreprocessingConfig(recipe="kan_paper"),
+        model=ModelConfig(
+            name="tabkan-base",
+            flavor="chebykan",
+            depth=1,
+            width=32,
+            degree=3,
+            params={},
+        ),
+        tune=tune,
+    )
+
+    created_samplers = []
+
+    original_create_study = optuna.create_study
+
+    def capture_create_study(*args, **kwargs):
+        created_samplers.append(kwargs.get("sampler"))
+        # Return a dummy study that terminates immediately to skip actual optimization
+        raise RuntimeError("stop-after-create-study")
+
+    with patch("src.tune.sweep.optuna.create_study", side_effect=capture_create_study):
+        with pytest.raises(RuntimeError, match="stop-after-create-study"):
+            run_tune(config, device="cpu")
+
+    assert len(created_samplers) == 1
+    assert isinstance(created_samplers[0], optuna.samplers.GridSampler), (
+        f"Expected GridSampler, got {type(created_samplers[0]).__name__}. "
+        "Explicit sampler='grid' must not be upgraded to NSGA-II."
+    )

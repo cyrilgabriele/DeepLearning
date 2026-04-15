@@ -77,13 +77,28 @@ def run_tune(
 
     multi_objective = tune_config.directions is not None and len(tune_config.directions) > 1
 
+    # Sampler selection rule:
+    #   - If the user explicitly chose `grid` or `nsga2`, honour it as-is.
+    #   - If the user left the default (`tpe`) or chose `random`, AND this is a
+    #     multi-objective study, promote to NSGA-II. This preserves backward-compat
+    #     with existing multi-objective configs that omit `sampler`, since
+    #     TPE/random are not meaningful choices for Pareto search.
+    if tune_config.sampler in {"tpe", "random"} and multi_objective:
+        sampler = optuna.samplers.NSGAIISampler(seed=base_config.trainer.seed)
+    else:
+        sampler = _build_sampler(
+            tune_config.sampler,
+            seed=base_config.trainer.seed,
+            search_space=tune_config.search_space,
+        )
+
     if multi_objective:
         study = optuna.create_study(
             study_name=study_name,
             directions=tune_config.directions,
             storage=storage,
             load_if_exists=True,
-            sampler=optuna.samplers.NSGAIISampler(seed=base_config.trainer.seed),
+            sampler=sampler,
         )
     else:
         study = optuna.create_study(
@@ -91,7 +106,7 @@ def run_tune(
             direction="maximize",
             storage=storage,
             load_if_exists=True,
-            sampler=_build_sampler(tune_config.sampler, seed=base_config.trainer.seed),
+            sampler=sampler,
         )
 
     print(f"\nStarting tune stage for '{base_config.trainer.experiment_name}'")
@@ -392,11 +407,34 @@ def _require_tune_config(config: ExperimentConfig):
     return config.tune
 
 
-def _build_sampler(sampler_name: str, *, seed: int) -> optuna.samplers.BaseSampler:
+def _build_sampler(
+    sampler_name: str,
+    *,
+    seed: int,
+    search_space: dict[str, Any] | None = None,
+) -> optuna.samplers.BaseSampler:
     if sampler_name == "tpe":
         return optuna.samplers.TPESampler(seed=seed)
     if sampler_name == "random":
         return optuna.samplers.RandomSampler(seed=seed)
+    if sampler_name == "nsga2":
+        return optuna.samplers.NSGAIISampler(seed=seed)
+    if sampler_name == "grid":
+        if not search_space:
+            raise ValueError("Grid sampler requires a non-empty search_space.")
+        grid: dict[str, list[Any]] = {}
+        for name, spec in search_space.items():
+            resolved = spec.model_dump() if hasattr(spec, "model_dump") else dict(spec)
+            if resolved["type"] == "grid":
+                grid[name] = list(resolved["values"])
+            elif resolved["type"] == "categorical":
+                grid[name] = list(resolved["choices"])
+            else:
+                raise ValueError(
+                    f"Grid sampler requires all search-space entries to be type=grid "
+                    f"or type=categorical; got type={resolved['type']} for '{name}'."
+                )
+        return optuna.samplers.GridSampler(grid, seed=seed)
     raise ValueError(f"Unsupported Optuna sampler: {sampler_name}")
 
 
@@ -435,6 +473,8 @@ def _sample_trial_params(
             params[name] = trial.suggest_int(name, resolved["low"], resolved["high"], **kwargs)
         elif spec_type == "categorical":
             params[name] = trial.suggest_categorical(name, resolved["choices"])
+        elif spec_type == "grid":
+            params[name] = trial.suggest_categorical(name, resolved["values"])
         else:  # pragma: no cover - validated by SearchParamConfig
             raise ValueError(f"Unknown search space type: {spec_type}")
     return params
