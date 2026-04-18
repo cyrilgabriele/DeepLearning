@@ -17,6 +17,100 @@ Track what was changed, why it was changed, and any important notes.
 - Optional notes, issues, or future work
 ```
 
+### [2026-04-18] - Gian Seifert
+
+#### What
+- Ran a narrow-architecture experiment to test whether reducing first-layer width enables feature elimination via edge pruning. Trained 3 ChebyKAN variants at `sparsity_lambda=0.01`, `degree=6`, 100 epochs, then pruned at threshold=0.01:
+  - **[140→16→8→1]**: QWK=0.556, pruned QWK=0.529, 88.6% sparsity, **107/140 features survive**
+  - **[140→32→16→1]**: QWK=0.592, pruned QWK=0.559, 94.0% sparsity, **112/140 features survive**
+  - **[140→64→32→1]**: QWK=0.565, pruned QWK=0.568, 97.9% sparsity, **111/140 features survive**
+- **Key finding**: even with only 16 neurons in the first hidden layer (giving each feature just 16 edges instead of 128), 107 of 140 features survive pruning. Feature elimination via edge pruning is not viable for this 140-feature dataset at any reasonable architecture width.
+- The narrow models lose 8–13% QWK compared to the wide [140→128→64→1] reference (QWK=0.605) without achieving meaningful feature reduction. This is a dataset property, not an architecture limitation.
+
+#### Why
+- The wide [140→128→64→1] Pareto sweep (2026-04-17) showed that even at 99.9% edge sparsity, 28+ features survive because each input gets 128 chances to keep one edge. The hypothesis was that narrowing the first layer would force the model to be selective. The data disproves this: the Prudential dataset genuinely distributes signal across most of its 140 features.
+- This result strengthens the paper's "glass box" narrative: KAN interpretability on high-dimensional tabular data comes from coefficient importance rankings and activation curve inspection, not from feature elimination or symbolic formula extraction.
+
+#### Remarks
+- Configs saved under `configs/experiment_stages/stage_c_explanation_package/chebykan_narrow_{16_8,32_16,64_32}.yaml`.
+- Results saved to `outputs/narrow_architecture_experiment.json`.
+- Runner script: `scripts/run_narrow_experiment.py`.
+
+### [2026-04-17] - Gian Seifert
+
+#### What
+- Ran the full interpretability pipeline (`kan_pruning` → `kan_symbolic` → `r2_pipeline` → `formula_composition` → `kan_network_diagram` → `feature_validation`) on all 8 selected Pareto trials (4 ChebyKAN, 4 FourierKAN).
+- 2/8 completed fully (ChebyKAN trial 4/μ, FourierKAN trial 18/μ-1σ). The other 6 completed through R² reports but stalled in SymPy formula composition due to high edge counts (228–16,823 edges). Killed after 6+ hours; core artifacts (pruning, coefficient importance, symbolic fits, activation curves, feature ranking, R² reports, pruned checkpoints) were preserved for all 8.
+- **Key interpretability findings that change the paper narrative**:
+  1. **Edge pruning ≠ feature elimination**: even at 99.9% edge sparsity, 28+ of 140 input features retain at least one active edge. The [140→128→64] architecture gives each feature 128 chances to survive.
+  2. **Symbolic fits are poor at scale**: 82.8% of edges have R² < 0.90 for symbolic approximation. The composed SymPy formulas are page-long expressions with 50-digit coefficients — not human-readable.
+  3. **The model genuinely needs many features**: feature validation (TabKAN §5.7) shows QWK ≈ 0 with 5–25 features, ~0.25 at 50, and full performance only at 140. There is no small interpretable core.
+  4. **The original KAN interpretability promise (prune → symbolify → extract formulas) does not scale** from the 2–5 input problems in Liu et al. (2024) to 140-feature tabular insurance data.
+- **Revised interpretability framing for the paper**: KANs provide a "glass box" rather than a "white box" for high-dimensional tabular data:
+  - **Native feature importance** from Chebyshev coefficient magnitudes (no post-hoc SHAP needed)
+  - **Inspectable per-feature activation curves** showing the learned nonlinear relationship
+  - **Sparsity-accuracy Pareto front** demonstrating architectural robustness (ChebyKAN) vs fragility (FourierKAN)
+  - But NOT closed-form symbolic formulas or feature-count reduction
+
+#### Why
+- The formula composition step is O(edges²) or worse due to SymPy simplification of multi-layer composed expressions. With 795 edges (trial 4) it took ~5 min; with 1,443+ edges the remaining runs exceeded 6 hours without completing. This is a fundamental scalability limitation of the symbolification approach, not a bug.
+- The honest finding — that KAN interpretability degrades with input dimensionality — is more valuable to the paper than forcing clean formulas. It positions our contribution as: "KANs on real-world high-dimensional tabular data: what works (native importance, activation curves, sparsity robustness) and what doesn't (symbolic reduction, feature elimination)."
+- Deprioritizing formula composition, network diagrams, and feature validation for the 6 incomplete runs. The core artifacts (importance rankings, activation curves, R² reports) are sufficient for the paper figures.
+
+#### Remarks
+- Saved artifacts per run: `{data,figures,models,reports}/` under `outputs/interpretability/kan_paper/stage-c-{chebykan,fourierkan}-pareto-sparsity-pareto-*/`.
+- The 2 fully complete runs (ChebyKAN trial 4, FourierKAN trial 18) have all 15 artifacts including network diagram, R² distribution plot, and feature validation curves. The other 6 have 9 artifacts each (everything except formula composition and downstream).
+
+### [2026-04-17] - Gian Seifert
+
+#### What
+- Retrained all 9 ChebyKAN and 10 FourierKAN Pareto-optimal trials locally via `src/interpretability/pareto_select.py`, pruning each at threshold=0.01 and counting surviving input features.
+- **Key finding**: edge pruning at threshold=0.01 does not eliminate input features — even at 99.9% edge sparsity, 28+ of 140 features survive because each feature only needs one edge above the threshold into any of the 128 first-layer hidden neurons. The pruning removes redundant edges *within* features, not features themselves.
+- **Revised interpretability approach**: feature-count cutoffs (5/10/15/20) are not achievable through sparsity regularization alone with this architecture. Instead, interpretability is delivered through the existing `kan_symbolic.py` pipeline: rank features by coefficient importance, visualize the top-k learned activation curves, and fit symbolic expressions. The sparsity sweep demonstrates the accuracy-sparsity tradeoff, not the accuracy-interpretability tradeoff directly.
+- Selected 4 representative points per model spread across the Pareto front using mean ± 1σ and +2σ of pruned QWK to show the full tradeoff curve:
+  - **ChebyKAN** (SD=0.027, tight — robust to pruning):
+    - μ+2σ: trial 12, λ=0.0029, QWK=0.596, sparsity=94.5%, 1443 edges, 132 features
+    - μ+1σ: trial 19, λ=0.0019, QWK=0.578, sparsity=91.3%, 2272 edges, 135 features
+    - μ:    trial 4,  λ=0.0056, QWK=0.562, sparsity=97.0%, 795 edges, 130 features
+    - μ-1σ: trial 13, λ=0.0162, QWK=0.534, sparsity=99.1%, 228 edges, 109 features
+  - **FourierKAN** (SD=0.087, wide — collapses under pruning):
+    - μ+2σ: trial 29, λ=0.0036, QWK=0.481, sparsity=59.7%, 16823 edges, 140 features
+    - μ+1σ: trial 26, λ=0.0085, QWK=0.380, sparsity=71.9%, 11745 edges, 134 features
+    - μ:    trial 1,  λ=0.025,  QWK=0.309, sparsity=91.1%, 3734 edges, 129 features
+    - μ-1σ: trial 18, λ=0.212,  QWK=0.022, sparsity=99.7%, 137 edges, 55 features
+- Results saved to `outputs/interpretability/kan_paper/pareto-select-{chebykan,fourierkan}/reports/`.
+
+#### Why
+- The initial plan assumed that high edge sparsity would translate to few surviving input features, making a "how many features can the actuary review" cutoff viable. The data shows this assumption was wrong for the [140→128→64→8] architecture: the wide first hidden layer (128 neurons) means each input feature has 128 chances to keep at least one edge above the pruning threshold.
+- The feature-count-based selection was replaced with a statistical spread (mean ± SD) across the Pareto front. This gives 4 evenly distributed points that capture the full tradeoff curve without requiring an arbitrary cutoff.
+- ChebyKAN is confirmed as the stronger interpretability candidate: its QWK degrades gracefully under pruning (SD=0.027 across the front), while FourierKAN collapses rapidly (SD=0.087, with most trials producing near-zero QWK after pruning).
+
+#### Remarks
+- ChebyKAN's best pruned variant (trial 12, λ=0.0029) retains 94.5% sparsity with only 1.6% relative QWK drop — this is the recommended starting point for the full interpretability pipeline (symbolic fitting, activation curve visualization, feature ranking).
+- FourierKAN's best pruned variant (trial 29, λ=0.0036) only achieves 59.7% sparsity and still loses 12.2% QWK — significantly worse than ChebyKAN at every point on the frontier.
+
+### [2026-04-17] - Gian Seifert
+
+#### What
+- Defined the Pareto tradeoff selection criterion for "best interpretable" KAN variant: instead of a fixed sparsity percentage, select the highest-QWK trial where the number of surviving input features after pruning is small enough for manual actuarial review.
+- Added `src/interpretability/pareto_select.py`: script that takes a Pareto JSON manifest, loads each trial checkpoint, prunes at threshold=0.01, counts surviving input features (features with ≥1 active edge into the first hidden layer), and outputs a ranked table plus per-trial pruned checkpoints for actuary review.
+- Target range for surviving input features: 5–20, derived from cognitive science and actuarial practice literature (see references below).
+
+#### Why
+- The original 50% sparsity threshold was arbitrary and not grounded in what actuaries actually need. An actuary must be able to review each surviving feature's learned activation curve and confirm it is "actuarially reasonable."
+- Literature basis for the feature-count criterion:
+  - **Miller (1956)** "The Magical Number Seven, Plus or Minus Two" — human working memory holds ~7 items. **Cowan (2001)** revised this to ~3–5 chunks.
+  - **Lage et al. (2019)** "Human Evaluation of Models Built for Interpretability" (AAAI HCOMP) — explicitly connects Miller's law to ML model interpretability; fewer features = better human simulatability.
+  - **Liu et al. (2024)** "KAN: Kolmogorov-Arnold Networks" (ICLR 2025, arXiv:2404.19756) — defines the L1+entropy pruning procedure; in KAN 2.0 (arXiv:2408.10205), `prune_input` on 100 features retained only 5.
+  - **Zhang & Zhuang (2026)** "What KAN Mortality Say" (ASTIN Bulletin 56(1), doi:10.1017/asb.2025.10079) — validates KANs for actuarial modeling with intrinsic interpretability through smooth activation curves. Uses architectural interpretability (shallow KAN[2,1]) rather than pruning, but confirms that inspectable univariate activation functions are the right unit of explanation for actuaries.
+  - **Rudin (2019)** "Stop Explaining Black Box ML Models for High Stakes Decisions" (Nature Machine Intelligence, doi:10.1038/s42256-019-0048-x) — for high-stakes domains, use inherently interpretable models; the Rashomon set argument shows the accuracy/interpretability tradeoff is often a false dilemma.
+  - **ASOP No. 56** (Actuarial Standards Board, 2020) — requires model documentation sufficient for "another actuary qualified in the same practice area" to assess reasonableness.
+  - **Kuo & Lupton (2023)** "Towards Explainability of ML Models in Insurance Pricing" (Variance 16(1), doi:10.66573/001c.68374) — ML adoption in P&C ratemaking is limited by lack of transparency vs GLMs; variable importance + response curves are the minimum explanation.
+- The selection logic: filter Pareto trials to those with ≤N surviving input features, then pick max QWK among those. Multiple N values (5, 10, 15, 20) are generated so an actuary can review and state which level is still interpretable.
+
+#### Remarks
+- The Zhang & Zhuang paper uses a fundamentally different approach (architectural interpretability with 2 input features) vs our pruning-based approach (140 input features pruned down). Both are valid KAN interpretability strategies for different problem scales.
+
 ### [2026-04-15] - Christof Steiner
 
 #### What
