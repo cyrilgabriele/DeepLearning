@@ -115,6 +115,7 @@ def run_interpret(
     pruning_threshold: float = 0.01,
     qwk_tolerance: float = 0.01,
     candidate_library: str = "scipy",
+    max_features: int | None = None,
 ) -> dict[str, object]:
     """Run the model-appropriate interpretability workflow for one experiment."""
 
@@ -206,6 +207,48 @@ def run_interpret(
     pruning_summary_path = reports_dir(interpret_dir) / f"{flavor}_pruning_summary.json"
     pruned_checkpoint_path = models_dir(interpret_dir) / f"{flavor}_pruned_module.pt"
 
+    # ── Optional feature restriction ─────────────────────────────────────────
+    if max_features is not None:
+        import torch
+        from src.models.tabkan import TabKAN
+        from src.interpretability.utils.kan_coefficients import (
+            coefficient_importance_from_module,
+            get_first_kan_layer,
+        )
+        from src.interpretability.kan_pruning import _compute_edge_l1
+
+        _X_tmp = pd.read_parquet(eval_features_path)
+        _feature_names = list(_X_tmp.columns)
+        _widths = config.model.resolved_hidden_widths()
+        _mod = TabKAN(
+            in_features=_X_tmp.shape[1], widths=_widths, kan_type=flavor,
+            degree=config.model.degree or 3,
+            grid_size=config.model.params.get("grid_size", 4),
+        )
+        _mod.load_state_dict(torch.load(pruned_checkpoint_path, map_location="cpu"))
+        _mod.eval()
+
+        ranking = coefficient_importance_from_module(_mod, _feature_names)
+        top_feats = set(ranking.head(max_features).index.tolist())
+        drop_indices = [i for i, f in enumerate(_feature_names) if f not in top_feats]
+
+        first_layer = get_first_kan_layer(_mod)
+        with torch.no_grad():
+            for in_i in drop_indices:
+                if hasattr(first_layer, "cheby_coeffs"):
+                    first_layer.cheby_coeffs[:, in_i, :] = 0.0
+                elif hasattr(first_layer, "fourier_a"):
+                    first_layer.fourier_a[:, in_i, :] = 0.0
+                    first_layer.fourier_b[:, in_i, :] = 0.0
+                first_layer.base_weight[:, in_i] = 0.0
+
+        torch.save(_mod.state_dict(), pruned_checkpoint_path)
+        kept = [f for f in _feature_names if f in top_feats]
+        print(f"Feature restriction: kept top {max_features} features, "
+              f"zeroed {len(drop_indices)} input edges.")
+        print(f"Top features: {kept[:10]}{'...' if len(kept) > 10 else ''}")
+        del _X_tmp, _mod
+
     feat_types = (
         json.loads(feature_types_path.read_text())
         if feature_types_path.exists()
@@ -276,12 +319,24 @@ def run_interpret(
         symbolic_fits=fits_df if not fits_df.empty else None,
     )
 
+    # Partial dependence plots (input → output effect)
+    from src.interpretability.partial_dependence import plot_partial_dependence
+    from src.interpretability.utils.kan_coefficients import (
+        coefficient_importance_from_module,
+        top_features_by_coefficients,
+    )
+    pdp_n = max_features or 20
+    pdp_feats = top_features_by_coefficients(pruned_module, feature_names, top_n=pdp_n)
+    plot_partial_dependence(
+        pruned_module, X_eval, pdp_feats, interpret_dir, flavor,
+        X_raw=X_raw, feat_types=feat_types,
+    )
+
     # Feature subset validation (TabKAN Section 5.7)
     from src.interpretability.feature_validation import (
         compute_feature_validation_curves,
         plot_feature_validation_curves,
     )
-    from src.interpretability.utils.kan_coefficients import coefficient_importance_from_module
 
     y_eval = pd.read_parquet(eval_labels_path).iloc[:, 0]
     ranking = coefficient_importance_from_module(pruned_module, feature_names)
