@@ -89,7 +89,11 @@ def _r2(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     return float(1 - ss_res / ss_tot) if ss_tot > 1e-12 else 1.0
 
 
-def _fit_scipy_candidates(x: np.ndarray, y: np.ndarray) -> tuple[str, float]:
+def _fit_scipy_candidates(
+    x: np.ndarray,
+    y: np.ndarray,
+    max_poly_degree: int = 3,
+) -> tuple[str, float]:
     """Fit a library of candidate formulas using scipy and return (formula, r²).
 
     Selection uses a BIC-penalised score (Smits & Kotanchek 2005, Springer GPTP-II):
@@ -101,34 +105,68 @@ def _fit_scipy_candidates(x: np.ndarray, y: np.ndarray) -> tuple[str, float]:
     Candidate library includes Fourier harmonic pairs (k=1..4) recommended by
     Cranmer (2023) arXiv:2305.01582 and Liu et al. (2024) arXiv:2404.19756 to
     improve symbolic fit quality for FourierKAN edges.
+
+    Parameters
+    ----------
+    max_poly_degree : int
+        Maximum polynomial degree to include in the candidate library.
+        Should match the KAN layer's degree so that higher-degree models
+        get appropriately expressive polynomial candidates.
     """
     from scipy.optimize import curve_fit
 
-    # (name, function, p0, n_params)
-    candidates: list[tuple[str, object, list, int]] = [
-        ("a*x + b",                  lambda x, a, b: a * x + b,                               [1., 0.],         2),
-        ("a*x^2 + b*x + c",          lambda x, a, b, c: a * x**2 + b * x + c,                 [1., 0., 0.],     3),
-        ("a*x^3 + b*x^2 + c*x + d",  lambda x, a, b, c, d: a*x**3 + b*x**2 + c*x + d,         [1., 0., 0., 0.], 4),
-        ("a*|x| + b",                lambda x, a, b: a * np.abs(x) + b,                        [1., 0.],         2),
-        ("a*sqrt(|x|) + b",          lambda x, a, b: a * np.sqrt(np.abs(x)) + b,               [1., 0.],         2),
-        ("a*log(|x|+1) + b",         lambda x, a, b: a * np.log(np.abs(x) + 1) + b,            [1., 0.],         2),
-        ("a*exp(x) + b",             lambda x, a, b: a * np.exp(np.clip(x, -5, 5)) + b,        [1., 0.],         2),
-        ("a*sin(x) + b",             lambda x, a, b: a * np.sin(x) + b,                        [1., 0.],         2),
-        ("a*sin(2*x) + b",           lambda x, a, b: a * np.sin(2 * x) + b,                    [1., 0.],         2),
-        ("a*cos(x) + b",             lambda x, a, b: a * np.cos(x) + b,                        [1., 0.],         2),
-        ("a (constant)",             lambda x, a: np.full_like(x, a),                           [0.],             1),
+    # Polynomial candidate names by degree
+    _poly_names = {
+        1: "a*x + b",
+        2: "a*x^2 + b*x + c",
+        3: "a*x^3 + b*x^2 + c*x + d",
+        4: "a*x^4 + b*x^3 + c*x^2 + d*x + e",
+        5: "a*x^5 + b*x^4 + c*x^3 + d*x^2 + e*x + f",
+        6: "a*x^6 + b*x^5 + c*x^4 + d*x^3 + e*x^2 + f*x + g",
+    }
+
+    # Non-polynomial candidates: (name, function, p0, n_params)
+    nonpoly_candidates: list[tuple[str, object, list, int]] = [
+        ("a*|x| + b",                lambda x, a, b: a * np.abs(x) + b,                        [1., 0.],  2),
+        ("a*sqrt(|x|) + b",          lambda x, a, b: a * np.sqrt(np.abs(x)) + b,               [1., 0.],  2),
+        ("a*log(|x|+1) + b",         lambda x, a, b: a * np.log(np.abs(x) + 1) + b,            [1., 0.],  2),
+        ("a*exp(x) + b",             lambda x, a, b: a * np.exp(np.clip(x, -5, 5)) + b,        [1., 0.],  2),
+        ("a*sin(x) + b",             lambda x, a, b: a * np.sin(x) + b,                        [1., 0.],  2),
+        ("a*sin(2*x) + b",           lambda x, a, b: a * np.sin(2 * x) + b,                    [1., 0.],  2),
+        ("a*cos(x) + b",             lambda x, a, b: a * np.cos(x) + b,                        [1., 0.],  2),
+        ("a (constant)",             lambda x, a: np.full_like(x, a),                           [0.],      1),
         # Fourier harmonic pairs k=1..4 (Cranmer 2023 / Liu et al. 2024)
-        ("a*sin(x) + b*cos(x)",      lambda x, a, b: a * np.sin(x) + b * np.cos(x),            [1., 1.],         2),
-        ("a*sin(2*x) + b*cos(2*x)",  lambda x, a, b: a * np.sin(2*x) + b * np.cos(2*x),        [1., 1.],         2),
-        ("a*sin(3*x) + b*cos(3*x)",  lambda x, a, b: a * np.sin(3*x) + b * np.cos(3*x),        [1., 1.],         2),
-        ("a*sin(4*x) + b*cos(4*x)",  lambda x, a, b: a * np.sin(4*x) + b * np.cos(4*x),        [1., 1.],         2),
+        ("a*sin(x) + b*cos(x)",      lambda x, a, b: a * np.sin(x) + b * np.cos(x),            [1., 1.],  2),
+        ("a*sin(2*x) + b*cos(2*x)",  lambda x, a, b: a * np.sin(2*x) + b * np.cos(2*x),        [1., 1.],  2),
+        ("a*sin(3*x) + b*cos(3*x)",  lambda x, a, b: a * np.sin(3*x) + b * np.cos(3*x),        [1., 1.],  2),
+        ("a*sin(4*x) + b*cos(4*x)",  lambda x, a, b: a * np.sin(4*x) + b * np.cos(4*x),        [1., 1.],  2),
     ]
 
     n = len(x)
     log_n_over_n = np.log(n) / n  # BIC penalty scale factor
 
     best_formula, best_bic, best_r2 = "a (constant)", -np.inf, 0.0
-    for name, func, p0, k in candidates:
+
+    # Fit polynomial candidates using np.polyfit (exact least-squares)
+    for deg in range(1, max_poly_degree + 1):
+        name = _poly_names.get(deg)
+        if name is None:
+            continue
+        k = deg + 1  # number of coefficients
+        try:
+            coeffs = np.polyfit(x, y, deg)
+            y_pred = np.polyval(coeffs, x)
+            r2 = _r2(y, y_pred)
+            bic_score = r2 - k * log_n_over_n
+            if bic_score > best_bic:
+                best_bic = bic_score
+                best_r2 = r2
+                best_formula = name
+        except Exception:
+            continue
+
+    # Fit non-polynomial candidates using curve_fit
+    for name, func, p0, k in nonpoly_candidates:
         try:
             popt, _ = curve_fit(func, x, y, p0=p0, maxfev=2000)
             y_pred = func(x, *popt)
@@ -144,12 +182,12 @@ def _fit_scipy_candidates(x: np.ndarray, y: np.ndarray) -> tuple[str, float]:
     return best_formula, best_r2
 
 
-def _fit_pysr(x: np.ndarray, y: np.ndarray) -> tuple[str, float]:
+def _fit_pysr(x: np.ndarray, y: np.ndarray, max_poly_degree: int = 3) -> tuple[str, float]:
     """Fit using PySR (requires Julia). Falls back to scipy if unavailable."""
     try:
         from pysr import PySRRegressor
     except ImportError:
-        return _fit_scipy_candidates(x, y)
+        return _fit_scipy_candidates(x, y, max_poly_degree=max_poly_degree)
 
     model = PySRRegressor(
         niterations=40,
@@ -168,7 +206,7 @@ def _fit_pysr(x: np.ndarray, y: np.ndarray) -> tuple[str, float]:
         r2 = _r2(y, y_pred)
         return formula, r2
     except Exception:
-        return _fit_scipy_candidates(x, y)
+        return _fit_scipy_candidates(x, y, max_poly_degree=max_poly_degree)
 
 
 def fit_symbolic_edge(
@@ -176,6 +214,7 @@ def fit_symbolic_edge(
     y: np.ndarray,
     use_pysr: bool = False,
     pysr_fallback_threshold: float = 0.95,
+    max_poly_degree: int = 3,
 ) -> tuple[str, float]:
     """Fit a symbolic formula to edge samples, returning (formula, r²).
 
@@ -184,10 +223,16 @@ def fit_symbolic_edge(
     approach follows Cranmer (2023) arXiv:2305.01582: fixed libraries are
     cost-efficient when the functional form is anticipated; PySR is reserved for
     genuinely complex edges.
+
+    Parameters
+    ----------
+    max_poly_degree : int
+        Maximum polynomial degree for the candidate library.
+        Should match the KAN layer's degree.
     """
-    formula, r2 = _fit_scipy_candidates(x, y)
+    formula, r2 = _fit_scipy_candidates(x, y, max_poly_degree=max_poly_degree)
     if use_pysr and r2 < pysr_fallback_threshold:
-        pysr_formula, pysr_r2 = _fit_pysr(x, y)
+        pysr_formula, pysr_r2 = _fit_pysr(x, y, max_poly_degree=max_poly_degree)
         if pysr_r2 > r2:
             return pysr_formula, pysr_r2
     return formula, r2
@@ -406,6 +451,12 @@ _FORMULA_FUNCTIONS: dict[str, tuple] = {
     "a*x + b":                  (lambda x, a, b: a * x + b,                                    2),
     "a*x^2 + b*x + c":         (lambda x, a, b, c: a * x**2 + b * x + c,                      3),
     "a*x^3 + b*x^2 + c*x + d": (lambda x, a, b, c, d: a*x**3 + b*x**2 + c*x + d,             4),
+    "a*x^4 + b*x^3 + c*x^2 + d*x + e":
+        (lambda x, a, b, c, d, e: a*x**4 + b*x**3 + c*x**2 + d*x + e,                         5),
+    "a*x^5 + b*x^4 + c*x^3 + d*x^2 + e*x + f":
+        (lambda x, a, b, c, d, e, f: a*x**5 + b*x**4 + c*x**3 + d*x**2 + e*x + f,             6),
+    "a*x^6 + b*x^5 + c*x^4 + d*x^3 + e*x^2 + f*x + g":
+        (lambda x, a, b, c, d, e, f, g: a*x**6 + b*x**5 + c*x**4 + d*x**3 + e*x**2 + f*x + g, 7),
     "a*|x| + b":                (lambda x, a, b: a * np.abs(x) + b,                            2),
     "a*sqrt(|x|) + b":          (lambda x, a, b: a * np.sqrt(np.abs(x)) + b,                   2),
     "a*log(|x|+1) + b":         (lambda x, a, b: a * np.log(np.abs(x) + 1) + b,                2),
@@ -607,14 +658,16 @@ def run(
         from src.interpretability.kan_pruning import _compute_edge_l1
         variances = _compute_edge_l1(layer)
         n_active = int((variances >= threshold).sum().item())
-        print(f"Layer {layer_idx}: {layer.in_features}→{layer.out_features} edges, {n_active} active")
+        layer_degree = getattr(layer, "degree", 3)
+        print(f"Layer {layer_idx}: {layer.in_features}→{layer.out_features} edges, {n_active} active (degree={layer_degree})")
         for out_i in range(layer.out_features):
             for in_i in range(layer.in_features):
                 if variances[out_i, in_i].item() < threshold:
                     continue
 
                 x_vals, y_vals = sample_edge(layer, out_i, in_i, n=n_samples)
-                formula, r2 = fit_symbolic_edge(x_vals, y_vals, use_pysr=use_pysr)
+                formula, r2 = fit_symbolic_edge(x_vals, y_vals, use_pysr=use_pysr,
+                                                max_poly_degree=layer_degree)
 
                 input_feat = feature_names[in_i] if layer_idx == 0 and in_i < len(feature_names) else f"h{in_i}"
                 records.append({

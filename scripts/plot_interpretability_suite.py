@@ -127,7 +127,8 @@ def setup():
                 comp_y += w * yv
         if comp_y is not None:
             composites[feat] = (x_ref, comp_y)
-            fname, r2 = fit_symbolic_edge(x_ref, comp_y)
+            fname, r2 = fit_symbolic_edge(x_ref, comp_y,
+                                            max_poly_degree=getattr(first_layer, "degree", 3))
             popt = None
             if fname in CANDIDATES:
                 func, n_p = CANDIDATES[fname]

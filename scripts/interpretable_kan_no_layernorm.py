@@ -168,7 +168,8 @@ def compose_input_to_output(module, feature_names, pruning_threshold=0.005):
             continue
 
         # Fit symbolic formula to the composite function
-        formula, r2 = fit_symbolic_edge(x_ref, composite_y)
+        formula, r2 = fit_symbolic_edge(x_ref, composite_y,
+                                        max_poly_degree=getattr(first_layer, "degree", 3))
 
         # Refit to get actual parameters
         candidates = {

@@ -74,6 +74,7 @@ def evaluate_symbolic_fit(
         # Precompute all edge L1 scores once per layer
         l1_scores = _compute_edge_l1(layer)
         total_before += l1_scores.numel()
+        layer_degree = getattr(layer, "degree", 3)
 
         for out_i in range(layer.out_features):
             for in_i in range(layer.in_features):
@@ -82,7 +83,8 @@ def evaluate_symbolic_fit(
                 total_after += 1
 
                 x_vals, y_vals = sample_edge(layer, out_i, in_i, n=n_samples)
-                formula, r2 = fit_symbolic_edge(x_vals, y_vals, use_pysr=use_pysr)
+                formula, r2 = fit_symbolic_edge(x_vals, y_vals, use_pysr=use_pysr,
+                                                max_poly_degree=layer_degree)
                 input_feat = (
                     feature_names[in_i]
                     if layer_idx == 0 and in_i < len(feature_names)

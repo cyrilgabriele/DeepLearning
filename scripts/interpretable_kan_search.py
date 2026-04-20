@@ -184,38 +184,42 @@ def run_symbolic_analysis(
     feature_names: list[str],
     pruning_threshold: float = 0.01,
 ) -> pd.DataFrame:
-    """Run pruning + symbolic regression on the first KAN layer."""
-    first_layer = None
-    for layer in module.kan_layers:
-        if isinstance(layer, ChebyKANLayer):
-            first_layer = layer
-            break
-
-    if first_layer is None:
-        return pd.DataFrame()
-
-    l1_scores = _compute_edge_l1(first_layer)
+    """Run pruning + symbolic regression on all KAN layers."""
     records = []
+    layer_idx = 0
 
-    for out_i in range(first_layer.out_features):
-        for in_i in range(first_layer.in_features):
-            if l1_scores[out_i, in_i].item() < pruning_threshold:
-                continue
+    for layer in module.kan_layers:
+        if not isinstance(layer, ChebyKANLayer):
+            continue
 
-            x_vals, y_vals = sample_edge(first_layer, out_i, in_i, n=1000)
-            formula, r2 = fit_symbolic_edge(x_vals, y_vals)
+        l1_scores = _compute_edge_l1(layer)
+        layer_degree = getattr(layer, "degree", 3)
 
-            feat_name = feature_names[in_i] if in_i < len(feature_names) else f"h{in_i}"
-            records.append({
-                "layer": 0,
-                "edge_in": in_i,
-                "edge_out": out_i,
-                "input_feature": feat_name,
-                "formula": formula,
-                "r_squared": round(r2, 6),
-                "quality_tier": _quality_tier(r2),
-                "l1_norm": round(l1_scores[out_i, in_i].item(), 6),
-            })
+        for out_i in range(layer.out_features):
+            for in_i in range(layer.in_features):
+                if l1_scores[out_i, in_i].item() < pruning_threshold:
+                    continue
+
+                x_vals, y_vals = sample_edge(layer, out_i, in_i, n=1000)
+                formula, r2 = fit_symbolic_edge(x_vals, y_vals,
+                                                max_poly_degree=layer_degree)
+
+                if layer_idx == 0 and in_i < len(feature_names):
+                    feat_name = feature_names[in_i]
+                else:
+                    feat_name = f"h{in_i}"
+                records.append({
+                    "layer": layer_idx,
+                    "edge_in": in_i,
+                    "edge_out": out_i,
+                    "input_feature": feat_name,
+                    "formula": formula,
+                    "r_squared": round(r2, 6),
+                    "quality_tier": _quality_tier(r2),
+                    "l1_norm": round(l1_scores[out_i, in_i].item(), 6),
+                })
+
+        layer_idx += 1
 
     return pd.DataFrame(records)
 
@@ -256,8 +260,10 @@ def run_experiment(cfg: ExperimentConfig, data: dict) -> ExperimentResult:
     n_acceptable = int((fits_df["quality_tier"] == "acceptable").sum())
     n_flagged = int((fits_df["quality_tier"] == "flagged").sum())
 
-    first_layer = next(l for l in module.kan_layers if isinstance(l, ChebyKANLayer))
-    total_edges = first_layer.out_features * first_layer.in_features
+    total_edges = sum(
+        l.out_features * l.in_features
+        for l in module.kan_layers if isinstance(l, ChebyKANLayer)
+    )
 
     pct_clean = n_clean / n_total * 100 if n_total > 0 else 0
     pct_interp = (n_clean + n_acceptable) / n_total * 100 if n_total > 0 else 0
