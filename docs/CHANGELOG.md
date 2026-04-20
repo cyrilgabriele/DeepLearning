@@ -17,6 +17,38 @@ Track what was changed, why it was changed, and any important notes.
 - Optional notes, issues, or future work
 ```
 
+### [2026-04-20] - Gian Seifert
+
+#### What
+- Added `use_layer_norm` parameter to `TabKAN` and `TabKANClassifier` to allow training without LayerNorm, enabling exact mathematical composition of edge functions into closed-form input→output formulas.
+- Ran a systematic interpretable KAN search across 66 configurations (2 sweeps): varied feature counts (5–20), hidden widths ([4]–[32]), degrees (3–4), and sparsity regularization (0–0.01). Key findings:
+  - **Degree 3 is critical** for interpretability — degree 4 drops symbolic fit quality from 100% to 65–84%.
+  - **Sparsity regularization (λ=0.005)** boosts clean symbolic fits from ~16% to ~88% with minimal QWK loss.
+  - **[4,2] depth-2 architectures always collapse** (QWK=0).
+  - Best with LayerNorm: 20 features, width [16], degree 3, λ=0.005 → QWK=0.466, 88% clean edges.
+- Trained the final interpretable model **without LayerNorm** (20 features, width [8], degree 3, λ=0.005), producing a pure **generalized additive model (GAM)**: `prediction = 0.30 + Σ fᵢ(tanh(xᵢ))` where each fᵢ is a closed-form function (cubic polynomial, exponential, or trigonometric). QWK=0.427 with 19 active features and 0 flagged edges (all R² > 0.97).
+- Verified that symbolic formula predictions match the KAN model (QWK gap of only 0.007 when applying tanh normalization correctly).
+- Generated a full interpretability plot suite:
+  - Per-feature risk contribution functions (input→output, 4×5 grid)
+  - Individual prediction decomposition (patient-level waterfall charts)
+  - Binary keyword toggle effects (present vs absent bar chart)
+  - Symbolic fit fidelity (exact curve vs formula overlay)
+  - Prediction distribution by risk class (violin + confusion matrix)
+  - Cumulative feature importance (QWK vs feature count)
+  - KAN network grid diagram (activation function per edge in matrix layout)
+  - Feature importance waterfall (average contributions)
+
+#### Why
+- The previous interpretability results (2026-04-17/18) showed that KAN symbolic formulas on the full [128,64] architecture were not human-readable — page-long expressions with hundreds of edges. The goal was to find the largest model that an actuary can actually inspect as closed-form equations.
+- Removing LayerNorm was necessary because it breaks the additive composition: with LayerNorm, edge functions cannot be collapsed into one formula per feature. Without it, the linear head weights directly compose with edge functions, giving exact input→output formulas.
+- This proves that KANs *can* deliver on their interpretability promise for tabular data, but only with narrow architectures (width ≤16), low degree (3), sparsity regularization, and no LayerNorm — at the cost of ~32% QWK relative to the black-box baseline (0.427 vs 0.625).
+
+#### Remarks
+- Scripts: `scripts/interpretable_kan_search.py` (sweep 1), `scripts/interpretable_kan_search_v2.py` (sweep 2), `scripts/interpretable_kan_no_layernorm.py` (no-LN training + formula extraction), `scripts/plot_input_to_output_formulas.py`, `scripts/plot_interpretability_suite.py`, `scripts/plot_network_diagram_v3.py`.
+- Config: `configs/experiment_stages/stage_c_explanation_package/chebykan_interpretable_best.yaml`.
+- Results: `outputs/interpretable_kan_search/`, `outputs/interpretable_kan_search_v2/`, `outputs/interpretable_kan_no_layernorm/`.
+- The `use_layer_norm` parameter defaults to `True` so existing models and checkpoints are unaffected.
+
 ### [2026-04-18] - Gian Seifert
 
 #### What
