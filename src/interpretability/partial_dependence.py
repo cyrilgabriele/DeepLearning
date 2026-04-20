@@ -73,7 +73,7 @@ def plot_partial_dependence(
 
     n = len(features)
     nrows = (n + ncols - 1) // ncols
-    fig, axes = plt.subplots(nrows, ncols, figsize=(4.2 * ncols, 3.5 * nrows))
+    fig, axes = plt.subplots(nrows, ncols, figsize=(4.0 * ncols, 3.2 * nrows))
     if nrows == 1:
         axes = axes[np.newaxis, :]
     axes_flat = axes.flatten()

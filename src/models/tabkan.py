@@ -40,6 +40,7 @@ class TabKAN(L.LightningModule):
         sparsity_lambda: float = 0.0,
         l1_weight: float = 1.0,
         entropy_weight: float = 1.0,
+        use_layer_norm: bool = True,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -61,7 +62,8 @@ class TabKAN(L.LightningModule):
         dims = [in_features] + widths
         for i in range(len(dims) - 1):
             layers.append(layer_cls(dims[i], dims[i + 1], **layer_kwargs))
-            layers.append(nn.LayerNorm(dims[i + 1]))
+            if use_layer_norm:
+                layers.append(nn.LayerNorm(dims[i + 1]))
 
         self.kan_layers = nn.Sequential(*layers)
         self.head = nn.Linear(widths[-1], 1)
@@ -183,6 +185,7 @@ class TabKANClassifier(PrudentialModel):
         sparsity_lambda: float = 0.0,
         l1_weight: float = 1.0,
         entropy_weight: float = 1.0,
+        use_layer_norm: bool = True,
         **extra_params,
     ) -> None:
         params = {
@@ -208,6 +211,7 @@ class TabKANClassifier(PrudentialModel):
         self.sparsity_lambda = sparsity_lambda
         self.l1_weight = l1_weight
         self.entropy_weight = entropy_weight
+        self.use_layer_norm = use_layer_norm
 
         base_widths = list(base["widths"])
         if hidden_widths is not None:
@@ -248,6 +252,7 @@ class TabKANClassifier(PrudentialModel):
             sparsity_lambda=self.sparsity_lambda,
             l1_weight=self.l1_weight,
             entropy_weight=self.entropy_weight,
+            use_layer_norm=self.use_layer_norm,
         )
 
         X_t = torch.tensor(X_values, dtype=torch.float32)

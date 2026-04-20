@@ -281,28 +281,30 @@ def _plot_activation_grid(
         has_raw = X_raw is not None and feat in X_raw.columns and is_numeric_raw
 
         active_edges = df[(df["layer"] == 0) & (df["input_feature"] == feat)]
-        best_r2_row = None
 
+        # Compute L1 norms for opacity scaling
+        from src.interpretability.kan_pruning import _compute_edge_l1
+        l1_scores = _compute_edge_l1(first_layer)
+        edge_l1s = {}
+        for _, erow in active_edges.iterrows():
+            out_i = int(erow["edge_out"])
+            edge_l1s[out_i] = float(l1_scores[out_i, feat_i].item())
+        max_l1 = max(edge_l1s.values()) if edge_l1s else 1.0
+
+        # Plot all edges with opacity proportional to L1 norm
         for _, erow in active_edges.iterrows():
             out_i = int(erow["edge_out"])
             x_norm, y_vals = sample_edge(first_layer, out_i, feat_i, n=300)
             x_plot = (encode_to_raw_lookup(feat, X_eval, X_raw, x_norm)
                       if (has_raw and not is_binary) else x_norm)
-            ax.plot(x_plot, y_vals, color="gray", alpha=0.3, lw=1)
-            if best_r2_row is None or erow["r_squared"] > best_r2_row["r_squared"]:
-                best_r2_row = erow
-
-        if best_r2_row is not None:
-            out_i = int(best_r2_row["edge_out"])
-            x_norm, y_vals = sample_edge(first_layer, out_i, feat_i, n=300)
-            x_plot = (encode_to_raw_lookup(feat, X_eval, X_raw, x_norm)
-                      if (has_raw and not is_binary) else x_norm)
-            ax.plot(x_plot, y_vals, color=model_color, lw=2,
-                    label=f"{best_r2_row['formula'][:20]}\nR²={best_r2_row['r_squared']:.3f}")
-            if is_binary:
+            rel_strength = edge_l1s[out_i] / max_l1 if max_l1 > 0 else 0.0
+            alpha = 0.1 + 0.8 * rel_strength
+            lw = 1.0 + 1.5 * rel_strength
+            ax.plot(x_plot, y_vals, color=model_color, lw=lw, alpha=alpha)
+            if is_binary and rel_strength > 0.8:
                 for enc_pos in [-1.0, 1.0]:
                     y_mark = float(np.interp(enc_pos, x_norm, y_vals))
-                    ax.axvline(enc_pos, color="gray", lw=1, ls="--", alpha=0.7)
+                    ax.axvline(enc_pos, color="gray", lw=1, ls="--", alpha=0.5)
                     ax.scatter([enc_pos], [y_mark], s=40, color="black", zorder=5)
 
         marker = FEATURE_TYPE_MARKERS.get(ftype, "")
@@ -310,16 +312,23 @@ def _plot_activation_grid(
         x_lbl = "Encoded [-1,1]" if is_binary else ("Original scale" if has_raw else "Encoded")
         ax.set_xlabel(x_lbl, fontsize=7)
         ax.set_ylabel("Edge output", fontsize=7)
-        if best_r2_row is not None:
-            ax.legend(fontsize=5, loc="best")
 
     for ax in axes_flat[len(top_feats):]:
         ax.set_visible(False)
 
+    # Single figure-level legend
+    from matplotlib.lines import Line2D
+    legend_handles = [
+        Line2D([0], [0], color=model_color, lw=2.5, alpha=0.9, label="strong edges (high L1 norm)"),
+        Line2D([0], [0], color=model_color, lw=1.0, alpha=0.15, label="weak edges (low L1 norm)"),
+    ]
+    fig.legend(handles=legend_handles, loc="lower center", ncol=2, fontsize=8,
+               frameon=True, bbox_to_anchor=(0.5, -0.02))
+
     plt.suptitle(
         f"{flavor.title()} — Learned Activation Functions (Top-10 Coefficient-Ranked Features)",
                  fontsize=12, fontweight="bold")
-    plt.tight_layout()
+    plt.tight_layout(rect=[0, 0.03, 1, 1])
     from src.interpretability.utils.paths import figures as fig_dir
     out = fig_dir(output_dir) / f"{flavor}_activations.pdf"
     savefig_pdf(fig, out)
