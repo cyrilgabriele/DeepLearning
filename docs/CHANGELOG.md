@@ -17,6 +17,29 @@ Track what was changed, why it was changed, and any important notes.
 - Optional notes, issues, or future work
 ```
 
+### [2026-04-21] - Codex
+
+#### What
+- Fixed the TabKAN wrapper in `src/models/tabkan.py` so config-provided `lr`, `weight_decay`, and `batch_size` are now actually used during training instead of silently falling back to wrapper defaults or hardcoded dataloader sizes.
+- Removed registry-side default hyperparameters for TabKAN, XGBoost, and GLM builders where the pipeline is expected to read concrete values from config files.
+- Tightened config validation in `src/config/model/model_config.py` and `src/config/config_loader.py`:
+  - unsupported `model.params` keys now fail loudly
+  - required model hyperparameters must be present in `model.params` or explicitly supplied by `tune.search_space`
+  - `Trainer.run()` now rejects train/retrain configs that still leave required model parameters unresolved
+- Updated the affected experiment YAMLs and regression tests so the config files remain the single source of truth for active model hyperparameters.
+- Updated TabKAN reconstruction sites (`src/tune/sweep.py`, `src/interpretability/kan_pruning.py`) to rebuild wrappers from the effective config payload instead of reintroducing ad-hoc defaults.
+
+#### Why
+- The previous TabKAN wrapper ignored some config values (`lr`, `weight_decay`) and hardcoded others (`batch_size=256`), which made older sweep results partly unreliable and allowed silent config drift.
+- Tune configs should be allowed to omit parameters only when those parameters are explicitly defined in `tune.search_space`; train/retrain configs must carry a complete concrete model contract.
+- The repo already moved toward strict config-driven orchestration; this change closes one of the remaining loopholes where model code could still override or invent hyperparameters at runtime.
+
+#### Remarks
+- Historical TabKAN sweeps produced before this fix should be treated cautiously, especially any result that depends on `lr`, `weight_decay`, or `batch_size`.
+- Verified with:
+  - `UV_CACHE_DIR=.uv-cache uv run pytest tests/models/test_tabkan.py tests/tune/test_sweep.py tests/training/test_trainer.py tests/test_pipeline_integration.py -q`
+  - `UV_CACHE_DIR=.uv-cache uv run pytest tests/interpretability/test_pipeline.py tests/test_main.py -q`
+
 ### [2026-04-18] - Gian Seifert
 
 #### What

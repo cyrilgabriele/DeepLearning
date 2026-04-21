@@ -44,7 +44,15 @@ def _base_cheby_config(tmp_path: Path, *, include_tune: bool) -> ExperimentConfi
             depth=2,
             width=128,
             degree=3,
-            params={},
+            params={
+                "max_epochs": 100,
+                "lr": 0.001,
+                "weight_decay": 1e-5,
+                "batch_size": 256,
+                "sparsity_lambda": 0.0,
+                "l1_weight": 1.0,
+                "entropy_weight": 1.0,
+            },
         ),
         tune=tune,
     )
@@ -239,7 +247,15 @@ def test_run_tune_honours_explicit_grid_sampler_for_multi_objective(tmp_path, mo
             depth=1,
             width=32,
             degree=3,
-            params={},
+            params={
+                "max_epochs": 75,
+                "lr": 0.001,
+                "weight_decay": 1e-5,
+                "batch_size": 256,
+                "sparsity_lambda": 0.0,
+                "l1_weight": 1.0,
+                "entropy_weight": 1.0,
+            },
         ),
         tune=tune,
     )

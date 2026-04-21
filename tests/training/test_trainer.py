@@ -71,7 +71,15 @@ def test_trainer_runs_on_mock_data(tmp_path):
             depth=2,
             width=32,
             degree=3,
-            params={},
+            params={
+                "max_epochs": 3,
+                "lr": 0.001,
+                "weight_decay": 1e-5,
+                "batch_size": 32,
+                "sparsity_lambda": 0.0,
+                "l1_weight": 1.0,
+                "entropy_weight": 1.0,
+            },
         ),
     )
 
@@ -106,7 +114,16 @@ def test_trainer_runs_xgboost_paper_model(tmp_path):
             params={
                 "n_estimators": 3,
                 "max_depth": 3,
+                "min_child_weight": 1.0,
                 "learning_rate": 0.3,
+                "subsample": 1.0,
+                "colsample_bytree": 1.0,
+                "reg_alpha": 0.0,
+                "reg_lambda": 1.0,
+                "num_classes": 8,
+                "tree_method": "hist",
+                "eval_metric": "mlogloss",
+                "refit_full_training": True,
             },
         ),
     )
@@ -142,7 +159,16 @@ def test_trainer_exports_eval_artifacts_under_recipe_namespace(tmp_path, monkeyp
             params={
                 "n_estimators": 3,
                 "max_depth": 3,
+                "min_child_weight": 1.0,
                 "learning_rate": 0.3,
+                "subsample": 1.0,
+                "colsample_bytree": 1.0,
+                "reg_alpha": 0.0,
+                "reg_lambda": 1.0,
+                "num_classes": 8,
+                "tree_method": "hist",
+                "eval_metric": "mlogloss",
+                "refit_full_training": True,
             },
         ),
     )
@@ -182,7 +208,16 @@ def test_trainer_persists_preprocessing_payload_without_fingerprint(tmp_path, mo
             params={
                 "n_estimators": 3,
                 "max_depth": 3,
+                "min_child_weight": 1.0,
                 "learning_rate": 0.3,
+                "subsample": 1.0,
+                "colsample_bytree": 1.0,
+                "reg_alpha": 0.0,
+                "reg_lambda": 1.0,
+                "num_classes": 8,
+                "tree_method": "hist",
+                "eval_metric": "mlogloss",
+                "refit_full_training": True,
             },
         ),
     )
@@ -214,7 +249,14 @@ model:
   depth: 2
   width: 64
   degree: 3
-  params: {}
+  params:
+    max_epochs: 5
+    lr: 0.001
+    weight_decay: 0.00001
+    batch_size: 32
+    sparsity_lambda: 0.0
+    l1_weight: 1.0
+    entropy_weight: 1.0
 tune:
   name: smoke-study
   storage: sweeps/smoke-study.db
@@ -258,7 +300,14 @@ model:
   depth: 2
   width: 64
   degree: 3
-  params: {}
+  params:
+    max_epochs: 5
+    lr: 0.001
+    weight_decay: 0.00001
+    batch_size: 32
+    sparsity_lambda: 0.0
+    l1_weight: 1.0
+    entropy_weight: 1.0
 """
     config_path = tmp_path / "bad-config.yaml"
     config_path.write_text(cfg_text)

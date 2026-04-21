@@ -168,13 +168,9 @@ def run(
     # Reconstruct the wrapper and load weights
     in_features = X_eval.shape[1]
     wrapper = TabKANClassifier(
-        preset=config.model.name,
-        flavor=flavor,
-        hidden_widths=config.model.resolved_hidden_widths(),
-        depth=config.model.depth,
-        width=config.model.width,
-        degree=config.model.degree or 3,
-        grid_size=config.model.params.get("grid_size", 4),
+        config.model.name,
+        random_state=config.trainer.seed,
+        **config.model.registry_kwargs(),
     )
     widths = wrapper.widths
     wrapper.module = TabKAN(
@@ -183,6 +179,12 @@ def run(
         kan_type=flavor,
         degree=wrapper.degree,
         grid_size=wrapper.grid_size,
+        spline_order=wrapper.spline_order,
+        lr=wrapper.lr,
+        weight_decay=wrapper.weight_decay,
+        sparsity_lambda=wrapper.sparsity_lambda,
+        l1_weight=wrapper.l1_weight,
+        entropy_weight=wrapper.entropy_weight,
     )
     wrapper.module.load_state_dict(torch.load(checkpoint_path, map_location="cpu"))
     wrapper.module.eval()

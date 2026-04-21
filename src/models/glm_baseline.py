@@ -17,7 +17,7 @@ class GLMBaseline(PrudentialModel):
     pipeline. Thresholds are fitted on the training set inside fit().
     """
 
-    def __init__(self, alpha: float = 1.0, random_state: int = 42, **kwargs) -> None:
+    def __init__(self, *, alpha: float, random_state: int = 42, **kwargs) -> None:
         super().__init__(alpha=alpha, random_state=random_state)
         self.model = Ridge(alpha=alpha, random_state=random_state)
         self.thresholds: np.ndarray | None = None
@@ -41,6 +41,6 @@ class GLMBaseline(PrudentialModel):
         return np.clip(_apply_thresholds(y_cont, self.thresholds), 1, 8).astype(int)
 
 
-def build_glm_model(*, random_state: int = 42, alpha: float = 1.0, **_kwargs) -> GLMBaseline:
+def build_glm_model(*, random_state: int = 42, alpha: float, **_kwargs) -> GLMBaseline:
     """Factory for the model registry. Ignores depth/width/device kwargs."""
     return GLMBaseline(alpha=alpha, random_state=random_state)

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Dict, MutableMapping
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .model.model_config import ModelConfig
 from .preprocessing.preprocessing_config import PreprocessingConfig
@@ -24,6 +24,12 @@ class ExperimentConfig(BaseModel):
         default=None,
         description="Optional Optuna sweep configuration for stage 'tune'.",
     )
+
+    @model_validator(mode="after")
+    def _validate_model_contract(self) -> "ExperimentConfig":
+        tune_param_names = set(self.tune.search_space.keys()) if self.tune is not None else set()
+        self.model.validate_registry_contract(tune_param_names=tune_param_names)
+        return self
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 

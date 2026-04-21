@@ -17,6 +17,23 @@ from src.models.mlp import MLPBaseline
 from src.metrics.qwk import quadratic_weighted_kappa, optimize_thresholds, _apply_thresholds
 
 
+def _tabkan_wrapper_kwargs(**overrides):
+    params = {
+        "flavor": "chebykan",
+        "hidden_widths": [32, 16],
+        "degree": 3,
+        "max_epochs": 2,
+        "lr": 1e-3,
+        "weight_decay": 1e-5,
+        "batch_size": 32,
+        "sparsity_lambda": 0.0,
+        "l1_weight": 1.0,
+        "entropy_weight": 1.0,
+    }
+    params.update(overrides)
+    return params
+
+
 def _synthetic_prudential(n=200, seed=42):
     """Minimal synthetic Prudential-like DataFrame."""
     rng = np.random.RandomState(seed)
@@ -220,7 +237,7 @@ class TestRegistryBridge:
     """Verify the build_tabkan_model factory works with PrudentialModel interface."""
 
     def test_build_and_predict(self):
-        model = build_tabkan_model("tabkan-tiny", random_state=42, flavor="chebykan")
+        model = build_tabkan_model("tabkan-tiny", random_state=42, **_tabkan_wrapper_kwargs())
         assert isinstance(model, TabKANClassifier)
 
         rng = np.random.RandomState(42)
@@ -235,9 +252,13 @@ class TestRegistryBridge:
 
     def test_all_presets(self):
         for preset in ["tabkan-tiny", "tabkan-small", "tabkan-base"]:
-            model = build_tabkan_model(preset, random_state=42)
+            model = build_tabkan_model(preset, random_state=42, **_tabkan_wrapper_kwargs())
             assert isinstance(model, TabKANClassifier)
 
     def test_depth_width_override(self):
-        model = build_tabkan_model("tabkan-base", random_state=42, depth=3, width=24)
+        model = build_tabkan_model(
+            "tabkan-base",
+            random_state=42,
+            **_tabkan_wrapper_kwargs(hidden_widths=None, depth=3, width=24),
+        )
         assert model.widths == [24, 24, 24]

@@ -15,6 +15,9 @@ model:
   degree: 3
   params:
     max_epochs: 100
+    lr: 0.001
+    weight_decay: 0.00001
+    batch_size: 256
     sparsity_lambda: 0.0
     l1_weight: 1.0
     entropy_weight: 1.0

@@ -42,6 +42,7 @@ class Trainer:
 
     def run(self) -> TrainingArtifacts:
         dataset = self._prepare_data()
+        self.config.model.assert_training_ready()
 
         model_kwargs = self.config.model.registry_kwargs()
         model_kwargs.setdefault("device", self.device)
