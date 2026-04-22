@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 from src.models.kan_layers import ChebyKANLayer, FourierKANLayer, BSplineKANLayer
-from src.metrics.qwk import quadratic_weighted_kappa
+from src.metrics.qwk import _apply_thresholds, optimize_thresholds, quadratic_weighted_kappa
 from src.models.base import PrudentialModel
 
 
@@ -40,6 +40,7 @@ class TabKAN(L.LightningModule):
         sparsity_lambda: float = 0.0,
         l1_weight: float = 1.0,
         entropy_weight: float = 1.0,
+        use_layernorm: bool = True,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -61,7 +62,8 @@ class TabKAN(L.LightningModule):
         dims = [in_features] + widths
         for i in range(len(dims) - 1):
             layers.append(layer_cls(dims[i], dims[i + 1], **layer_kwargs))
-            layers.append(nn.LayerNorm(dims[i + 1]))
+            if use_layernorm:
+                layers.append(nn.LayerNorm(dims[i + 1]))
 
         self.kan_layers = nn.Sequential(*layers)
         self.head = nn.Linear(widths[-1], 1)
@@ -186,6 +188,7 @@ class TabKANClassifier(PrudentialModel):
         sparsity_lambda: float,
         l1_weight: float,
         entropy_weight: float,
+        use_layernorm: bool = True,
         **extra_params,
     ) -> None:
         params = {
@@ -204,6 +207,7 @@ class TabKANClassifier(PrudentialModel):
             "sparsity_lambda": sparsity_lambda,
             "l1_weight": l1_weight,
             "entropy_weight": entropy_weight,
+            "use_layernorm": use_layernorm,
             "random_state": random_state,
         }
         params.update(extra_params)
@@ -222,6 +226,7 @@ class TabKANClassifier(PrudentialModel):
         self.sparsity_lambda = sparsity_lambda
         self.l1_weight = l1_weight
         self.entropy_weight = entropy_weight
+        self.use_layernorm = bool(use_layernorm)
 
         if self.kan_type == "chebykan" and self.degree is None:
             raise ValueError("ChebyKAN requires an explicit `degree`.")
@@ -243,6 +248,9 @@ class TabKANClassifier(PrudentialModel):
             self.widths = base_widths
 
         self.module: TabKAN | None = None
+        self.thresholds: np.ndarray | None = None
+        self.threshold_source_split: str | None = None
+        self.threshold_optimization_qwk: float | None = None
 
     def fit(
         self,
@@ -270,6 +278,7 @@ class TabKANClassifier(PrudentialModel):
             sparsity_lambda=self.sparsity_lambda,
             l1_weight=self.l1_weight,
             entropy_weight=self.entropy_weight,
+            use_layernorm=self.use_layernorm,
         )
 
         X_t = torch.tensor(X_values, dtype=torch.float32)
@@ -298,15 +307,53 @@ class TabKANClassifier(PrudentialModel):
             fit_kwargs["val_dataloaders"] = val_loader
         trainer.fit(self.module, **fit_kwargs)
 
-    def predict(self, X: pd.DataFrame) -> np.ndarray:
+        if validation_data is not None:
+            X_cal, y_cal = validation_data
+            self.calibrate_thresholds(X_cal, y_cal, source_split="inner_validation")
+        else:
+            self.calibrate_thresholds(X, y, source_split="training")
+
+    def predict_scores(self, X: pd.DataFrame) -> np.ndarray:
         if self.module is None:
-            raise RuntimeError("Call fit() before predict().")
+            raise RuntimeError("Call fit() before predict_scores().")
 
         self.module.eval()
         X_t = torch.tensor(self._to_numpy_features(X), dtype=torch.float32)
         with torch.no_grad():
             preds = self.module(X_t).cpu().numpy().flatten()
+        return np.asarray(preds, dtype=float)
+
+    def calibrate_thresholds(
+        self,
+        X: pd.DataFrame,
+        y: pd.Series,
+        *,
+        source_split: str,
+    ) -> None:
+        y_cont = self.predict_scores(X)
+        y_true = self._to_numpy_targets(y).astype(int)
+        self.thresholds, self.threshold_optimization_qwk = optimize_thresholds(y_true, y_cont)
+        self.threshold_source_split = source_split
+
+    def predict(self, X: pd.DataFrame) -> np.ndarray:
+        preds = self.predict_scores(X)
+        if self.thresholds is not None:
+            return np.clip(_apply_thresholds(preds, self.thresholds), 1, 8).astype(int)
         return np.clip(np.round(preds), 1, 8).astype(int)
+
+    def get_ordinal_calibration(self) -> dict[str, object] | None:
+        if self.thresholds is None:
+            return None
+        payload: dict[str, object] = {
+            "method": "optimized_thresholds",
+            "num_classes": 8,
+            "thresholds": [float(value) for value in self.thresholds],
+        }
+        if self.threshold_source_split is not None:
+            payload["source_split"] = self.threshold_source_split
+        if self.threshold_optimization_qwk is not None:
+            payload["optimized_qwk_on_source_split"] = float(self.threshold_optimization_qwk)
+        return payload
 
     @staticmethod
     def _to_numpy_features(X: pd.DataFrame | np.ndarray) -> np.ndarray:
@@ -330,6 +377,7 @@ def build_tabkan_model(
     depth: int | None = None,
     width: int | None = None,
     degree: int | None = None,
+    use_layernorm: bool = True,
     **extra_params,
 ) -> TabKANClassifier:
     """Factory function for the model registry."""
@@ -343,5 +391,6 @@ def build_tabkan_model(
         kwargs["width"] = width
     if degree is not None:
         kwargs["degree"] = degree
+    kwargs["use_layernorm"] = use_layernorm
     kwargs.update(extra_params)
     return TabKANClassifier(preset, **kwargs)

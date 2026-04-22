@@ -53,6 +53,10 @@ class ModelConfig(BaseModel):
         description="Canonical hidden-layer widths for KAN architectures.",
     )
     degree: Optional[PositiveInt] = Field(None, description="Polynomial degree for ChebyKAN flavors.")
+    use_layernorm: bool = Field(
+        default=True,
+        description="Whether TabKAN inserts LayerNorm after each hidden KAN layer.",
+    )
     params: Dict[str, Any] = Field(..., description="Free-form JSON payload forwarded to the registry.")
 
     @field_validator("params")
@@ -122,6 +126,7 @@ class ModelConfig(BaseModel):
             "width": widths[0] if widths and all(width == widths[0] for width in widths) else None,
             "hidden_widths": widths,
             "is_uniform": bool(widths) and all(width == widths[0] for width in widths),
+            "use_layernorm": self.use_layernorm,
         }
 
     def registry_kwargs(self) -> Dict[str, Any]:
@@ -139,6 +144,8 @@ class ModelConfig(BaseModel):
             kwargs.setdefault("flavor", self.flavor)
         if self.degree is not None:
             kwargs.setdefault("degree", self.degree)
+        if self.name.startswith("tabkan"):
+            kwargs.setdefault("use_layernorm", self.use_layernorm)
         return kwargs
 
     def allowed_param_keys(self) -> set[str]:

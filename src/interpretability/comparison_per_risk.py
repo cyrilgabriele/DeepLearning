@@ -253,6 +253,7 @@ def run(
                 kan_type=flavor,
                 degree=cfg.model.degree or 3,
                 grid_size=cfg.model.params.get("grid_size", 4),
+                use_layernorm=cfg.model.use_layernorm,
             )
             module.load_state_dict(torch.load(ckpt, map_location="cpu"))
             module.eval()

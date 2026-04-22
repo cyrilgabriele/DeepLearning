@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import torch
+import torch.nn as nn
 
 from src.preprocessing import preprocess_kan_paper as kan_prep
 from src.models.tabkan import TabKAN, TabKANClassifier, build_tabkan_model
@@ -262,3 +263,18 @@ class TestRegistryBridge:
             **_tabkan_wrapper_kwargs(hidden_widths=None, depth=3, width=24),
         )
         assert model.widths == [24, 24, 24]
+
+    def test_use_layernorm_toggle_round_trip(self):
+        model = build_tabkan_model(
+            "tabkan-tiny",
+            random_state=42,
+            **_tabkan_wrapper_kwargs(use_layernorm=False),
+        )
+        rng = np.random.RandomState(42)
+        X = pd.DataFrame(rng.uniform(-1, 1, (24, 8)), columns=[f"f{i}" for i in range(8)])
+        y = pd.Series(rng.choice(range(1, 9), 24))
+
+        model.fit(X, y)
+        assert model.use_layernorm is False
+        assert model.module is not None
+        assert not any(isinstance(layer, nn.LayerNorm) for layer in model.module.kan_layers)

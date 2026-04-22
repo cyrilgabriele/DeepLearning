@@ -108,6 +108,48 @@ class TestTabKAN:
         assert captured["train_batch_size"] == 19
         assert captured["val_batch_size"] == 19
 
+    def test_classifier_calibrates_thresholds_from_validation_split(self, monkeypatch):
+        class DummyTrainer:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+
+            def fit(self, module, **fit_kwargs):
+                return None
+
+        monkeypatch.setattr("src.models.tabkan.L.Trainer", DummyTrainer)
+
+        model = TabKANClassifier(
+            "tabkan-base",
+            random_state=11,
+            flavor="chebykan",
+            hidden_widths=[8, 4],
+            degree=3,
+            max_epochs=1,
+            lr=0.001,
+            weight_decay=0.0,
+            batch_size=16,
+            sparsity_lambda=0.0,
+            l1_weight=1.0,
+            entropy_weight=1.0,
+        )
+
+        rng = np.random.RandomState(11)
+        X = pd.DataFrame(rng.randn(48, 5), columns=[f"f{i}" for i in range(5)])
+        y = pd.Series(np.tile(np.arange(1, 9), 6)[:48])
+        X_val = X.iloc[:24].copy()
+        y_val = y.iloc[:24].copy()
+
+        model.fit(X, y, validation_data=(X_val, y_val))
+
+        assert model.thresholds is not None
+        assert model.threshold_source_split == "inner_validation"
+        assert len(model.thresholds) == 7
+        assert np.all(np.diff(model.thresholds) >= 0)
+        calibration = model.get_ordinal_calibration()
+        assert calibration is not None
+        assert calibration["method"] == "optimized_thresholds"
+        assert calibration["source_split"] == "inner_validation"
+
     def test_experiment_config_rejects_missing_tabkan_lr(self, tmp_path):
         with pytest.raises(ValueError, match="missing required training parameter\\(s\\): lr"):
             ExperimentConfig(

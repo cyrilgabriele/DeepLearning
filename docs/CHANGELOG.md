@@ -17,7 +17,140 @@ Track what was changed, why it was changed, and any important notes.
 - Optional notes, issues, or future work
 ```
 
-### [2026-04-21] - Codex
+### [2026-04-22] - Cyril Gabriele
+
+#### What
+- Fixed `src/interpretability/kan_pruning.py` so pruning-stage QWK now reuses the stored ordinal-threshold contract from the corresponding training run instead of silently falling back to naive rounded scores.
+- The pruning step now:
+  - first looks for `outputs/eval/<recipe>/<experiment>/ordinal_thresholds.json`
+  - falls back to the matching `artifacts/<experiment>/run-summary-<timestamp>.json` `ordinal_calibration` payload when the eval sidecar is absent
+  - hydrates the reconstructed `TabKANClassifier` wrapper with those thresholds before computing `qwk_before` / `qwk_after`
+  - records the active QWK contract in `chebykan_pruning_summary.json` via `qwk_metric` and `qwk_metric_source_split`
+- Added regression coverage in `tests/interpretability/test_kan_pruning.py` for:
+  - run-summary fallback loading
+  - pruning-stage QWK evaluation using the stored threshold sidecar
+
+#### Why
+- After threshold calibration was introduced in training, the interpret/pruning stage was still reconstructing a fresh wrapper with no thresholds attached.
+- That caused a metric-contract mismatch:
+  - training summary QWK was threshold-calibrated
+  - pruning summary QWK was still based on `round(score)`
+- The result was misleading comparisons such as `train qwk = 0.5464` versus `pruning qwk = 0.4930`, where most of the apparent gap came from different class-mapping rules rather than pruning damage.
+- Rehydrating the stored thresholds makes training, pruning, and the later underwriter-facing artifact speak the same ordinal-class language.
+
+#### Remarks
+- Verified with:
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest -q tests/interpretability/test_kan_pruning.py`
+  - Result: `2 passed`
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest -q tests/interpretability/test_pipeline.py tests/test_pipeline_integration.py`
+  - Result: `21 passed`
+- This change does not alter the pruning criterion itself. It fixes how pruning-stage performance is reported.
+
+### [2026-04-22] - Cyril Gabriele
+
+#### What
+- Added explicit ordinal-threshold persistence to the training artifact contract.
+- Updated `src/models/tabkan.py` so `TabKANClassifier` now:
+  - keeps the continuous score path available internally
+  - calibrates optimized ordinal thresholds after fit
+  - uses the inner validation split as the preferred threshold-calibration source when available, otherwise falls back to the training split
+  - predicts ordinal classes via stored optimized thresholds instead of naive rounded scores for newly trained runs
+- Added shared ordinal-calibration hooks in `src/models/base.py` and exposed threshold metadata from the threshold-based baseline wrappers as well.
+- Updated `src/training/trainer.py` so newly trained runs now persist the threshold contract in three places:
+  - `artifacts/<experiment>/run-summary-<timestamp>.json`
+  - `checkpoints/<experiment>/model-<timestamp>.manifest.json`
+  - `outputs/eval/<recipe>/<experiment>/ordinal_thresholds.json`
+- Added regression coverage for:
+  - TabKAN validation-split threshold calibration in `tests/models/test_tabkan.py`
+  - trainer-level threshold persistence and eval-export sidecar emission in `tests/training/test_trainer.py`
+
+#### Why
+- The underwriter-facing artifact needs a stable class-definition contract if it is going to report threshold-based classes and margins to neighboring class boundaries.
+- Thresholds are not preprocessing state. They are post-fit ordinal calibration metadata derived from model scores, so they belong in run/eval artifacts, not in the preprocessing pipeline itself.
+- Persisting the thresholds directly alongside the saved run and eval artifacts removes the ambiguity where older no-`LayerNorm` KAN reports had exact symbolic score behavior available but no durable threshold metadata to map those scores back to ordinal classes.
+- Because there is no production contract to preserve yet, it is cleaner to fix the KAN training/evaluation contract now rather than keep propagating rounded-score fallback behavior.
+
+#### Remarks
+- Verified with:
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest -q tests/models/test_tabkan.py tests/training/test_trainer.py`
+  - Result: `19 passed`
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest -q tests/interpretability/test_pipeline.py tests/test_pipeline_integration.py`
+  - Result: `21 passed`
+- New runs will carry optimized threshold metadata. Older already-materialized artifacts remain valid as historical outputs, but they do not gain the new threshold sidecars until the corresponding training/eval pipeline is rerun.
+
+### [2026-04-22] - Cyril Gabriele
+
+#### What
+- Added a standalone exact-partials and discrete-effects generator in `src/interpretability/exact_partials.py` for the no-`LayerNorm` ChebyKAN target.
+- The generator reconstructs the run-specific preprocessed outer training split under `kan_paper` using the config seed and selected-feature list, then uses that split to derive:
+  - exact partial-derivative traces for the 4 continuous selected features
+  - exact reference-based discrete effects for the 16 discrete selected features
+  - modal reference states and observed-state counts from the reconstructed outer training split after feature subsetting
+- Emitted the new run-scoped reports for `stage-c-chebykan-pareto-q0583-top20-noln`:
+  - `outputs/interpretability/kan_paper/stage-c-chebykan-pareto-q0583-top20-noln/reports/chebykan_exact_partials.json`
+  - `outputs/interpretability/kan_paper/stage-c-chebykan-pareto-q0583-top20-noln/reports/chebykan_exact_partials.md`
+- Added regression coverage in `tests/interpretability/test_exact_partials.py` for:
+  - exact nested graph evaluation
+  - continuous partials against autograd
+  - discrete substitution-effect contracts
+  - report persistence
+
+#### Why
+- The exact closed-form export proved the no-`LayerNorm` ChebyKAN is symbolically exact, but the fully expanded formula is too large to serve as a practical insurance-facing artifact.
+- A nested symbolic derivative/effect representation preserves exactness while staying traceable back to hidden nodes and layer structure.
+- Discrete selected features should not be forced into a classical derivative framing; reference-based exact state contrasts are the mathematically correct and operationally cleaner representation.
+
+#### Remarks
+- Verified with:
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest -q tests/interpretability/test_formula_composition.py tests/interpretability/test_exact_partials.py`
+  - Result: `22 passed`
+- The standalone generator was also executed on the real target config:
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run python -m src.interpretability.exact_partials --config configs/experiment_stages/stage_c_explanation_package/chebykan_pareto_q0583_top20_noln.yaml`
+- TODO:
+  - the exact-partials generator is not yet wired into the main interpretability stage / pipeline
+  - the current JSON/Markdown artifact is still backend-facing and should be used as the source for a client-facing underwriting artifact rather than served directly
+
+### [2026-04-21] - Cyril Gabriele
+
+#### What
+- Added config-driven train-time feature subsetting through `preprocessing.selected_features_path` in `src/config/preprocessing/preprocessing_config.py` and `src/training/trainer.py`.
+- Added config-driven `use_layernorm` support for TabKAN in `src/config/model/model_config.py` and `src/models/tabkan.py`, and propagated that flag through all downstream TabKAN reconstruction sites used by tuning and interpretability.
+- Extended the interpretability pipeline to export stable KAN-native feature rankings and materialized top-k feature lists, including:
+  - repo-tracked lists under `configs/experiment_stages/stage_c_explanation_package/feature_lists/`
+  - run artifacts under `outputs/interpretability/.../data/{chebykan_feature_ranking,chebykan_top20_features,chebykan_top12_features}.json/csv`
+- Added exact end-to-end closed-form export for no-`LayerNorm` ChebyKAN models in `src/interpretability/formula_composition.py`, including the final linear head and explicit refusal metadata when exact export is structurally unavailable.
+- Added local applicant-level finite-difference and what-if explanations in `src/interpretability/local_case_explanations.py`.
+- Added a closed-form surrogate fallback in `src/interpretability/closed_form_surrogate.py`, wired so it is emitted only when the exact closed-form report is unavailable.
+- Added the new stage configs:
+  - `configs/experiment_stages/stage_c_explanation_package/chebykan_pareto_q0583_top20_noln.yaml`
+  - `configs/experiment_stages/stage_c_explanation_package/chebykan_pareto_q0583_top12_noln.yaml`
+- Added regression coverage for the new feature-subset, no-`LayerNorm`, exact-export, local-explanation, and surrogate-fallback paths.
+
+#### Why
+- The previous repo state could not actually train the intended reduced-feature symbolic candidates because feature restriction existed only as an interpret-time knob (`--max-features`), not as a train-time contract.
+- `LayerNorm` blocked exact end-to-end symbolic composition. Making it optional was required before a mathematically exact deployed ChebyKAN variant could exist.
+- The project objective was narrowed to a business-auditable model artifact, not just visual interpretability. That required three new deliverables:
+  - an exact closed-form report when structurally possible
+  - a clearly labeled fallback surrogate only when exact export is unavailable
+  - case-level sensitivities and what-if outputs in business-facing terms
+- The feature-list configs and stage YAMLs keep `main.py` and the config system as the single source of truth instead of introducing one-off scripts or hardcoded experiment branches.
+
+#### Remarks
+- Verified with:
+  - `UV_CACHE_DIR=.uv-cache uv run pytest tests/training/test_trainer.py tests/test_pipeline_integration.py tests/interpretability/test_pipeline.py tests/interpretability/test_formula_composition.py tests/interpretability/test_local_case_explanations.py tests/interpretability/test_closed_form_surrogate.py -q`
+  - Result: `46 passed`
+- Real-data stage runs were also executed through `main.py`:
+  - `stage-c-chebykan-pareto-q0583-top20-noln`: train QWK `0.5048`, pruned QWK `0.5119`, active edges `651`
+  - `stage-c-chebykan-pareto-q0583-top12-noln`: train QWK `0.4792`, pruned QWK `0.4739`, active edges `459`
+- The no-`LayerNorm` candidates now produce mathematically exact end-to-end formulas, but both are still operationally unusable as business artifacts under the current report thresholds:
+  - top-20 exact formula: `707824` symbolic operations, `6568142` characters
+  - top-12 exact formula: `343941` symbolic operations, `2986921` characters
+- In this changelog and the corresponding reports, "too large" means the formula is exact but too big to be realistically read, reviewed, documented, or manually reasoned about by a human user. SymPy can still differentiate it in principle (`sympy_derivable=true`), but it is not a practical insurance-facing artifact in its current expanded form.
+- The surrogate fallback is now correctly gated:
+  - emitted for the old LayerNorm baseline because exact export is unavailable
+  - not emitted for the no-`LayerNorm` candidates because exact export exists, even when that exact formula is still marked `usable=false`
+
+### [2026-04-21] - Cyril Gabriele
 
 #### What
 - Fixed the TabKAN wrapper in `src/models/tabkan.py` so config-provided `lr`, `weight_decay`, and `batch_size` are now actually used during training instead of silently falling back to wrapper defaults or hardcoded dataloader sizes.

@@ -7,10 +7,12 @@ import sympy as sp
 import torch
 
 from src.interpretability.formula_composition import (
+    _build_exact_closed_form_report,
     _build_templates,
     _fit_params,
     compose_symbolic_model,
     formula_to_sympy,
+    run,
 )
 from src.models.tabkan import TabKAN
 
@@ -143,3 +145,67 @@ class TestComposeSymbolicModel:
         )
         for name in feature_names:
             assert name in result["feature_symbols"]
+
+
+def test_exact_closed_form_report_matches_no_layernorm_module(tmp_path):
+    module = TabKAN(in_features=2, widths=[2, 2], kan_type="chebykan", degree=2, use_layernorm=False)
+    with torch.no_grad():
+        for layer in module.kan_layers:
+            if hasattr(layer, "cheby_coeffs"):
+                layer.cheby_coeffs.zero_()
+                layer.base_weight.zero_()
+        first_layer = module.kan_layers[0]
+        second_layer = module.kan_layers[1]
+        first_layer.cheby_coeffs[0, 0, 1] = 0.6
+        first_layer.base_weight[0, 1] = 0.25
+        first_layer.cheby_coeffs[1, 1, 2] = -0.4
+        second_layer.cheby_coeffs[0, 0, 1] = 0.8
+        second_layer.base_weight[0, 1] = -0.3
+        module.head.weight.zero_()
+        module.head.weight[0, 0] = 1.2
+        module.head.weight[0, 1] = -0.5
+        module.head.bias[0] = 0.1
+
+    X_eval = pd.DataFrame(
+        [
+            {"feat_a": -0.5, "feat_b": 0.2},
+            {"feat_a": 0.1, "feat_b": -0.3},
+            {"feat_a": 0.9, "feat_b": 0.7},
+        ]
+    )
+    report = _build_exact_closed_form_report(
+        module=module,
+        feature_names=["feat_a", "feat_b"],
+        flavor="chebykan",
+        X_eval=X_eval,
+    )
+    assert report["exact_available"] is True
+    assert report["sympy_derivable"] is True
+    assert report["formula"] is not None
+    assert report["end_to_end_r2"] == pytest.approx(1.0, abs=1e-5)
+
+    fits_csv = tmp_path / "fits.csv"
+    fits_csv.write_text("layer,edge_in,edge_out,input_feature,formula,r_squared,quality_tier\n")
+    output_dir = tmp_path / "interpretability"
+    persisted = run(
+        fits_csv,
+        module,
+        ["feat_a", "feat_b"],
+        output_dir,
+        "chebykan",
+        X_eval=X_eval,
+    )
+    assert persisted["exact_available"] is True
+    assert (output_dir / "reports" / "chebykan_exact_closed_form.json").exists()
+
+
+def test_exact_closed_form_report_refuses_layernorm():
+    module = TabKAN(in_features=2, widths=[2, 1], kan_type="chebykan", degree=2, use_layernorm=True)
+    report = _build_exact_closed_form_report(
+        module=module,
+        feature_names=["feat_a", "feat_b"],
+        flavor="chebykan",
+        X_eval=None,
+    )
+    assert report["exact_available"] is False
+    assert report["reason"] == "layernorm_present"

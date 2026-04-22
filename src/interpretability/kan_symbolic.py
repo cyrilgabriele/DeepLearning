@@ -574,10 +574,12 @@ def run(
     widths = config.model.resolved_hidden_widths()
     if flavor == "chebykan":
         module = TabKAN(in_features=in_features, widths=widths, kan_type="chebykan",
-                        degree=config.model.degree or 3)
+                        degree=config.model.degree or 3,
+                        use_layernorm=config.model.use_layernorm)
     else:
         module = TabKAN(in_features=in_features, widths=widths, kan_type="fourierkan",
-                        grid_size=config.model.params.get("grid_size", 4))
+                        grid_size=config.model.params.get("grid_size", 4),
+                        use_layernorm=config.model.use_layernorm)
 
     module.load_state_dict(torch.load(pruned_checkpoint_path, map_location="cpu"))
     module.eval()

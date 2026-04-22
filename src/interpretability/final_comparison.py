@@ -165,6 +165,7 @@ def _compute_qwk_retention_curve(
             kan_type=flavor,
             degree=cfg.model.degree or 3,
             grid_size=cfg.model.params.get("grid_size", 4),
+            use_layernorm=cfg.model.use_layernorm,
         )
         module.load_state_dict(torch.load(ckpt, map_location="cpu"))
         module.eval()
@@ -693,6 +694,7 @@ def run(
                 kan_type="chebykan",
                 degree=_cheby_degree if _cheby_degree is not None else 3,
                 grid_size=cheby_cfg_loaded.model.params.get("grid_size", 4),
+                use_layernorm=cheby_cfg_loaded.model.use_layernorm,
             )
             cheby_module_pg.load_state_dict(torch.load(cheby_ckpt, map_location="cpu"))
             cheby_module_pg.eval()
@@ -716,6 +718,7 @@ def run(
                 widths=fourier_cfg_loaded.model.resolved_hidden_widths(),
                 kan_type="fourierkan",
                 grid_size=fourier_cfg_loaded.model.params.get("grid_size", 4),
+                use_layernorm=fourier_cfg_loaded.model.use_layernorm,
             )
             fourier_module_pg.load_state_dict(torch.load(fourier_ckpt, map_location="cpu"))
             fourier_module_pg.eval()

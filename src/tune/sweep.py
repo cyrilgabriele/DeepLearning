@@ -48,6 +48,7 @@ def _compute_sparsity(checkpoint_path: str, config: ExperimentConfig, flavor: st
         sparsity_lambda=wrapper.sparsity_lambda,
         l1_weight=wrapper.l1_weight,
         entropy_weight=wrapper.entropy_weight,
+        use_layernorm=wrapper.use_layernorm,
     )
     wrapper.module.load_state_dict(torch.load(checkpoint_path, map_location="cpu"))
     wrapper.module.eval()

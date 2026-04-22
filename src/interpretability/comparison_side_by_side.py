@@ -273,7 +273,8 @@ def run(
     kan_type = "chebykan" if flavor == "chebykan" else "fourierkan"
     module = TabKAN(in_features=in_features, widths=widths, kan_type=kan_type,
                     degree=cfg.model.degree or 3,
-                    grid_size=cfg.model.params.get("grid_size", 4))
+                    grid_size=cfg.model.params.get("grid_size", 4),
+                    use_layernorm=cfg.model.use_layernorm)
     module.load_state_dict(torch.load(kan_checkpoint_path, map_location="cpu"))
     module.eval()
 

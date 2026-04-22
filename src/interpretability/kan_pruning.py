@@ -17,7 +17,7 @@ import argparse
 import copy
 import json
 from pathlib import Path
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 import numpy as np
 import pandas as pd
@@ -142,6 +142,64 @@ def prune_kan(model, threshold: float = 0.01) -> tuple:
 
 # ── QWK evaluation ────────────────────────────────────────────────────────────
 
+def _summary_for_checkpoint(checkpoint_path: Path) -> Path | None:
+    stem = checkpoint_path.stem
+    if not stem.startswith("model-"):
+        return None
+
+    timestamp = stem.removeprefix("model-")
+    experiment_name = checkpoint_path.parent.name
+    summary_path = Path("artifacts") / experiment_name / f"run-summary-{timestamp}.json"
+    if not summary_path.exists():
+        return None
+    return summary_path
+
+
+def _load_ordinal_calibration(
+    *,
+    eval_features_path: Path,
+    checkpoint_path: Path,
+) -> dict[str, Any] | None:
+    sidecar_path = eval_features_path.with_name("ordinal_thresholds.json")
+    if sidecar_path.exists():
+        payload = json.loads(sidecar_path.read_text())
+        if isinstance(payload, dict) and payload.get("thresholds"):
+            return payload
+
+    summary_path = _summary_for_checkpoint(checkpoint_path)
+    if summary_path is None:
+        return None
+
+    summary_payload = json.loads(summary_path.read_text())
+    calibration = summary_payload.get("ordinal_calibration")
+    if isinstance(calibration, dict) and calibration.get("thresholds"):
+        return calibration
+    return None
+
+
+def _attach_ordinal_calibration(model_wrapper, ordinal_calibration: dict[str, Any] | None) -> None:
+    if ordinal_calibration is None:
+        return
+
+    thresholds = ordinal_calibration.get("thresholds")
+    if not thresholds:
+        return
+
+    model_wrapper.thresholds = np.asarray(thresholds, dtype=float)
+    if hasattr(model_wrapper, "threshold_source_split"):
+        model_wrapper.threshold_source_split = ordinal_calibration.get("source_split")
+    if hasattr(model_wrapper, "threshold_optimization_qwk"):
+        optimized_qwk = ordinal_calibration.get("optimized_qwk_on_source_split")
+        model_wrapper.threshold_optimization_qwk = (
+            None if optimized_qwk is None else float(optimized_qwk)
+        )
+
+
+def _qwk_metric_label(ordinal_calibration: dict[str, Any] | None) -> str:
+    if ordinal_calibration is None or not ordinal_calibration.get("thresholds"):
+        return "rounded_scores"
+    return str(ordinal_calibration.get("method", "optimized_thresholds"))
+
 def _evaluate_qwk(model_wrapper, X_eval: pd.DataFrame, y_eval: pd.Series) -> float:
     preds = model_wrapper.predict(X_eval)
     from sklearn.metrics import cohen_kappa_score
@@ -185,11 +243,25 @@ def run(
         sparsity_lambda=wrapper.sparsity_lambda,
         l1_weight=wrapper.l1_weight,
         entropy_weight=wrapper.entropy_weight,
+        use_layernorm=wrapper.use_layernorm,
     )
     wrapper.module.load_state_dict(torch.load(checkpoint_path, map_location="cpu"))
     wrapper.module.eval()
+    ordinal_calibration = _load_ordinal_calibration(
+        eval_features_path=eval_features_path,
+        checkpoint_path=checkpoint_path,
+    )
+    _attach_ordinal_calibration(wrapper, ordinal_calibration)
+    qwk_metric = _qwk_metric_label(ordinal_calibration)
 
     qwk_before = _evaluate_qwk(wrapper, X_eval, y_eval)
+    if ordinal_calibration is not None and ordinal_calibration.get("source_split") is not None:
+        print(
+            "QWK metric:",
+            f"{qwk_metric} (source_split={ordinal_calibration['source_split']})",
+        )
+    else:
+        print(f"QWK metric: {qwk_metric}")
     print(f"QWK before pruning: {qwk_before:.4f}")
 
     # Sweep threshold until QWK drop ≤ tolerance
@@ -226,10 +298,13 @@ def run(
         "edges_before": stats.edges_before,
         "edges_after": stats.edges_after,
         "sparsity_ratio": stats.sparsity_ratio,
+        "qwk_metric": qwk_metric,
         "qwk_before": round(qwk_before, 6),
         "qwk_after": round(qwk_after, 6),
         "qwk_drop": round(qwk_drop, 6),
     }
+    if ordinal_calibration is not None and ordinal_calibration.get("source_split") is not None:
+        result["qwk_metric_source_split"] = str(ordinal_calibration["source_split"])
 
     from src.interpretability.utils.paths import reports as rep_dir, models as mod_dir
 

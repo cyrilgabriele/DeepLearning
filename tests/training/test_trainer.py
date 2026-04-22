@@ -92,6 +92,57 @@ def test_trainer_runs_on_mock_data(tmp_path):
     assert artifacts.test_predictions_path.exists()
 
 
+def test_trainer_persists_tabkan_ordinal_threshold_artifacts(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    train_csv = _write_mock_training_csv(tmp_path)
+    test_csv = _write_mock_test_csv(tmp_path)
+    config = ExperimentConfig(
+        trainer=TrainerConfig(
+            experiment_name="tabkan-threshold-artifacts",
+            train_csv=train_csv,
+            test_csv=test_csv,
+            seed=123,
+        ),
+        preprocessing=PreprocessingConfig(
+            recipe="xgboost_paper",
+        ),
+        model=ModelConfig(
+            name="tabkan-tiny",
+            flavor="chebykan",
+            depth=2,
+            width=16,
+            degree=3,
+            params={
+                "max_epochs": 1,
+                "lr": 0.001,
+                "weight_decay": 1e-5,
+                "batch_size": 32,
+                "sparsity_lambda": 0.0,
+                "l1_weight": 1.0,
+                "entropy_weight": 1.0,
+            },
+        ),
+    )
+
+    seed = set_global_seed(config.trainer.seed)
+    trainer = Trainer(config, device="cpu", random_seed=seed)
+    artifacts = trainer.run()
+
+    assert artifacts.ordinal_calibration is not None
+    assert artifacts.ordinal_calibration["method"] == "optimized_thresholds"
+    assert artifacts.ordinal_calibration["source_split"] == "inner_validation"
+    assert len(artifacts.ordinal_calibration["thresholds"]) == 7
+
+    summary_payload = json.loads(artifacts.summary_path.read_text())
+    checkpoint_manifest = json.loads(artifacts.checkpoint_path.with_suffix(".manifest.json").read_text())
+    eval_dir = tmp_path / "outputs" / "eval" / "xgboost_paper" / "tabkan-threshold-artifacts"
+    threshold_payload = json.loads((eval_dir / "ordinal_thresholds.json").read_text())
+
+    assert summary_payload["ordinal_calibration"] == artifacts.ordinal_calibration
+    assert checkpoint_manifest["ordinal_calibration"] == artifacts.ordinal_calibration
+    assert threshold_payload == artifacts.ordinal_calibration
+
+
 def test_trainer_runs_xgboost_paper_model(tmp_path):
     train_csv = _write_mock_training_csv(tmp_path)
     test_csv = _write_mock_test_csv(tmp_path)
@@ -235,7 +286,66 @@ def test_trainer_persists_preprocessing_payload_without_fingerprint(tmp_path, mo
     assert "feature_space_fingerprint" not in checkpoint_manifest["preprocessing"]
 
 
+def test_trainer_applies_selected_feature_subset_to_artifacts(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    train_csv = _write_mock_training_csv(tmp_path)
+    test_csv = _write_mock_test_csv(tmp_path)
+    selected_features_path = tmp_path / "selected-features.json"
+    selected_features_path.write_text(json.dumps(["BMI", "Medical_Keyword_1"], indent=2))
+
+    config = ExperimentConfig(
+        trainer=TrainerConfig(
+            experiment_name="xgb-selected-features",
+            train_csv=train_csv,
+            test_csv=test_csv,
+            seed=21,
+        ),
+        preprocessing=PreprocessingConfig(
+            recipe="xgboost_paper",
+            selected_features_path=selected_features_path,
+        ),
+        model=ModelConfig(
+            name="xgboost-paper",
+            flavor=None,
+            depth=1,
+            width=1,
+            degree=1,
+            params={
+                "n_estimators": 3,
+                "max_depth": 3,
+                "min_child_weight": 1.0,
+                "learning_rate": 0.3,
+                "subsample": 1.0,
+                "colsample_bytree": 1.0,
+                "reg_alpha": 0.0,
+                "reg_lambda": 1.0,
+                "num_classes": 8,
+                "tree_method": "hist",
+                "eval_metric": "mlogloss",
+                "refit_full_training": True,
+            },
+        ),
+    )
+
+    seed = set_global_seed(config.trainer.seed)
+    trainer = Trainer(config, device="cpu", random_seed=seed)
+    artifacts = trainer.run()
+
+    summary_payload = json.loads(artifacts.summary_path.read_text())
+    eval_dir = tmp_path / "outputs" / "eval" / "xgboost_paper" / "xgb-selected-features"
+    X_eval = pd.read_parquet(eval_dir / "X_eval.parquet")
+    X_eval_raw = pd.read_parquet(eval_dir / "X_eval_raw.parquet")
+
+    assert summary_payload["preprocessing"]["feature_names"] == ["BMI", "Medical_Keyword_1"]
+    assert summary_payload["preprocessing"]["feature_count"] == 2
+    assert list(X_eval.columns) == ["BMI", "Medical_Keyword_1"]
+    assert "Id" in X_eval_raw.columns
+    assert set(X_eval_raw.columns) == {"Id", "BMI", "Medical_Keyword_1"}
+
+
 def test_config_loader_reads_yaml(tmp_path):
+    feature_list_path = tmp_path / "features.json"
+    feature_list_path.write_text(json.dumps(["BMI", "Medical_Keyword_1"], indent=2))
     cfg_text = """
 trainer:
   experiment_name: base
@@ -243,12 +353,14 @@ trainer:
   seed: 11
 preprocessing:
   recipe: kan_paper
+  selected_features_path: {selected_features_path}
 model:
   name: tabkan-base
   flavor: chebykan
   depth: 2
   width: 64
   degree: 3
+  use_layernorm: false
   params:
     max_epochs: 5
     lr: 0.001
@@ -268,16 +380,19 @@ tune:
       type: int
       low: 2
       high: 6
-"""
+""".format(selected_features_path=feature_list_path)
     config_path = tmp_path / "config.yaml"
     config_path.write_text(cfg_text)
 
     config = load_experiment_config(config_path)
     assert config.preprocessing.recipe == "kan_paper"
+    assert config.preprocessing.selected_features_path == feature_list_path.resolve()
     params = config.model.registry_kwargs()
     assert params["flavor"] == "chebykan"
     assert params["depth"] == 2
     assert params["width"] == 64
+    assert params["use_layernorm"] is False
+    assert config.model.use_layernorm is False
     assert config.tune is not None
     assert config.tune.n_trials == 7
     assert config.tune.search_space["degree"].type == "int"
