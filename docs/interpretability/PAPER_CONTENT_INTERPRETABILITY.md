@@ -12,25 +12,37 @@ branch.
 
 ## 1. The headline claim
 
-> Both ChebyKAN and FourierKAN admit exact per-edge symbolic recovery
-> after sparsity-regularised training and L1 pruning. They occupy
-> distinct points on the accuracy/interpretability Pareto front:
-> FourierKAN keeps higher QWK (0.562) but produces a 12× larger and
-> structurally heavier explainable model; ChebyKAN trades 0.029 QWK
-> (0.533) for a network that is 12× sparser and admits a single
-> end-to-end closed-form polynomial. Neither dominates — the choice
-> depends on whether the use case prioritises predictive accuracy or
-> structural compactness.
+> All four TabKAN variants we evaluate (Cheby/Fourier × dense/sparse)
+> admit exact per-edge symbolic recovery (R² = 1.000 by construction
+> via the basis-native extractors). The accuracy–interpretability
+> trade-off is therefore not about *whether* edges are recoverable but
+> about *how many edges remain* and whether the composed model can be
+> written as a single expression. Dense ChebyKAN and FourierKAN reach
+> QWK 0.625 and 0.641 (within 0.03 of the XGBoost baseline at 0.655)
+> but produce networks of 17 920+ and 41 728+ active edges. The
+> sparse 20-feature, no-LayerNorm heroes trade ~0.08–0.09 QWK for
+> 12–30× fewer edges; ChebyKAN's polynomial basis additionally
+> collapses the entire pruned model into a single closed-form
+> polynomial in the 20 inputs. The Pareto trade-off is thus
+> well-characterised — TabKAN balances accuracy and interpretability,
+> with the choice of operating point (and basis) driven by deployment
+> needs rather than by any single dominating configuration.
 
-This frames TabKAN's interpretability as a *real Pareto choice*, which
-is the strongest available answer to the research question.
+This frames TabKAN's interpretability as a *real Pareto choice across
+four operating points* (two flavours × dense/sparse), which is the
+strongest available answer to the research question.
 
 ---
 
-## 2. Hero models (locked in)
+## 2. Models compared (locked in)
 
-Both trained on the same 20 input features, no LayerNorm, sparsity
-regularisation tuned per family, then L1-pruned with QWK tolerance ≤ 0.01.
+Four KAN configurations + two non-KAN baselines populate Table 1. The
+two **sparse hero variants** are trained on the same 20 input features,
+no LayerNorm, sparsity regularisation tuned per family, then L1-pruned
+with QWK tolerance ≤ 0.01. The **dense baselines** are the best Optuna
+trial per flavour at full feature count and standard LayerNorm.
+
+### Sparse interpretable heroes
 
 | Property | ChebyKAN hero | FourierKAN hero |
 |---|---|---|
@@ -45,6 +57,19 @@ regularisation tuned per family, then L1-pruned with QWK tolerance ≤ 0.01.
 | Per-edge formula form | polynomial in `tanh(x)` (≤ 7 terms) | 17-term Fourier sum in `cos/sin(kπ(tanh(x)+1))` |
 | End-to-end composed formula | exact polynomial | exact, but expansion of `sin/cos ∘ tanh ∘ sin/cos` is heavy |
 
+### Dense baselines (for Table 1 context, not hero status)
+
+| Property | ChebyKAN dense | FourierKAN dense |
+|---|---|---|
+| Config | `chebykan_best.yaml` | `fourierkan_best.yaml` |
+| Hidden widths | [128, 64], degree 6, with LN | [64, 256, 64], grid_size 8, with LN |
+| Sparsity λ | 0 | 0 |
+| Sweep best QWK (inner-val, opt. thresh.) | 0.625 | 0.641 |
+| Active edges (across all KAN layers) | 17 920+ (layer-0) / 26 112 (total) | 41 728+ (sum across layers) |
+| Per-edge R² with native extractors | 1.000 | 1.000 (after the FourierKAN-native fix on this branch) |
+| End-to-end composed formula | not exact (LayerNorm present) | not exact (LayerNorm present) and basis not closed under composition |
+| Headline role | strong-accuracy KAN baseline | strongest KAN baseline (within 0.014 of XGBoost) |
+
 Note on QWK: numbers above are inner-validation with optimised ordinal
 thresholds (the regime used elsewhere in the paper). The held-out outer
 test QWK (default `predict()`, no threshold optimisation) is reported
@@ -55,9 +80,17 @@ paper to stay consistent with the rest of the results section.
 
 ## 3. Suggested structure for the interpretability subsection
 
-Target: ≤ ½ page main body + 1 figure + 1 table.
+Target: ≤ ½ page main body + 1 figure + 1 table (Table 1, six rows).
 
-### Paragraph 1 — Setup (≈ 60 words)
+### Paragraph 0 — Dense baselines (≈ 40 words)
+
+> Dense ChebyKAN and FourierKAN reach QWK 0.625 and 0.641 respectively
+> — within 0.03 of the XGBoost baseline. Both admit exact per-edge
+> symbolic recovery from their basis coefficients; however, with
+> 17 920+ and 41 728+ active edges they cannot be written or read
+> end-to-end.
+
+### Paragraph 1 — Setup of the small interpretable variants (≈ 60 words)
 
 > We extract a small interpretable variant of each TabKAN flavour by
 > (i) selecting the top-20 features by coefficient-based importance
@@ -66,7 +99,7 @@ Target: ≤ ½ page main body + 1 figure + 1 table.
 > magnitude falls below a threshold tightened until QWK loss stays
 > within 0.01.
 
-### Paragraph 2 — Result (≈ 80 words)
+### Paragraph 2 — Per-edge recovery (≈ 80 words)
 
 > ChebyKAN tolerates aggressive pruning (94% of edges removed) at a
 > cost of 0.003 QWK; FourierKAN reaches a maximum sparsity of 79% under
@@ -76,17 +109,17 @@ Target: ≤ ½ page main body + 1 figure + 1 table.
 > harmonic pairs in `kπ(tanh(x)+1)`. Mean recovery R² = 1.000 across
 > all 597 / 7 158 active edges respectively.
 
-### Paragraph 3 — Trade-off (≈ 80 words)
+### Paragraph 3 — Trade-off and the Pareto picture (≈ 90 words)
 
-> ChebyKAN's polynomial basis is closed under composition, so the entire
-> pruned model collapses into a single closed-form polynomial in the
-> 20 input features. FourierKAN's basis is not closed under composition;
-> per-edge forms remain readable, but the composed network does not
-> simplify. The quantitative trade-off is therefore: FourierKAN keeps a
-> 0.029 QWK advantage at the cost of 12× more surviving edges and a
-> structurally heavier explanation. We position ChebyKAN as the
-> compact-explanation choice and FourierKAN as the high-accuracy choice;
-> both fall on the same Pareto front of accuracy vs. structural complexity.
+> The four TabKAN configurations occupy distinct points on the
+> accuracy–compactness frontier (Table 1). Going from dense to sparse
+> costs ~0.08–0.09 QWK in either flavour; within the sparse end,
+> FourierKAN keeps a 0.029 QWK advantage at the cost of 12× more
+> surviving edges. ChebyKAN's polynomial basis is additionally closed
+> under composition, so the pruned no-LayerNorm model collapses into a
+> single closed-form polynomial in the 20 input features; FourierKAN's
+> basis does not have this property, so per-edge forms remain readable
+> but the composed network does not simplify.
 
 ### Optional honest-limit sentence (1 line)
 
@@ -96,23 +129,29 @@ Target: ≤ ½ page main body + 1 figure + 1 table.
 
 ---
 
-## 4. Table 1 — recommended (lock this in)
+## 4. Table 1 — six-row Pareto comparison (lock this in)
 
-Target: 5 columns × 5 rows (compact). Caption emphasises *like-for-like
-comparison*.
+Target: 5 columns × 6 rows. Caption emphasises *like-for-like
+comparison across baselines, dense KANs, and sparse interpretable
+KANs*. Bolded rows are the small interpretable hero variants.
 
 | Model | QWK | # active edges / params | Explanation method | Per-edge R² |
 |---|---|---|---|---|
 | GLM (ridge) | *to fill* | 140 coefficients | linear coefficients | — |
 | XGBoost | 0.655 | ~ N trees | SHAP TreeExplainer (post-hoc) | — |
-| ChebyKAN, full (140 features, dense) | 0.625 | 17 920 edges | per-edge native | — |
-| **ChebyKAN, sparse (20 features, no LN)** | **0.533** | **597 edges (−94%)** | **closed form** | **1.000** |
-| FourierKAN, full (140 features, dense) | 0.641 | ≈ 41 728 edges | per-edge native | — |
-| **FourierKAN, sparse (20 features, no LN)** | **0.562** | **7 158 edges (−79%)** | **closed form** | **1.000** |
+| ChebyKAN, dense (140 ft, with LN) | 0.625 | 17 920+ edges | per-edge native (not composable) | 1.000 |
+| FourierKAN, dense (140 ft, with LN) | 0.641 | 41 728+ edges | per-edge native (not composable) | 1.000 |
+| **ChebyKAN, sparse (20 ft, no LN)** | **0.533** | **597 edges (−97%)** | **closed-form polynomial** | **1.000** |
+| **FourierKAN, sparse (20 ft, no LN)** | **0.562** | **7 158 edges (−83%)** | **per-edge closed form** | **1.000** |
 
-Two bolded rows = the hero variants. Their relationship to the dense
-baselines (rows 3 and 5) is the entire interpretability story — visible
-in one glance.
+The four KAN rows are the Pareto front the paper characterises:
+- **Dense rows (3–4)** show TabKAN is competitive with XGBoost and that
+  per-edge symbolic recovery already works at full scale — but the
+  network is too large to read.
+- **Sparse rows (5–6)** show what interpretability actually costs:
+  ~0.08–0.09 QWK in both flavours, in exchange for 12–30× fewer edges.
+- The **gap between rows 5 and 6** (0.029 QWK, 12× edge ratio)
+  characterises the basis-family choice within the interpretable end.
 
 **Open item**: the GLM row needs a real number. No GLM checkpoint
 exists in `checkpoints/`; the only number anywhere is the stale 0.568
@@ -124,13 +163,21 @@ Either retrain on the same split or drop the GLM row.
 are inner-val. Outer-test is systematically lower (e.g., ChebyKAN-best
 manifest reports 0.543 vs 0.625 sweep).
 
+**Note on edge counts**: the dense edge counts are layer-0 only
+(in × hidden_widths[0]). Total active edges across all KAN layers are
+larger; if reporting full counts, recompute from the model architecture
+(ChebyKAN dense: 140·128 + 128·64 = 26 112; FourierKAN dense:
+140·64 + 64·256 + 256·64 = 41 984). Pick one convention and apply
+uniformly.
+
 ---
 
 ## 5. Figure 1 — recommended (one figure only, ~⅓ column)
 
-A 4-panel grid showing 2 features × 2 flavours. Each panel: scatter of
-the learned activation (grey dots) overlaid with the recovered
-closed-form expression (coloured line), with R² annotated.
+A 4-panel grid showing 2 features × 2 flavours, drawn from the **sparse
+hero variants** (which is the regime the figure is illustrating). Each
+panel: scatter of the learned activation (grey dots) overlaid with the
+recovered closed-form expression (coloured line), with R² annotated.
 
 Suggested features (in the top-20 of *both* flavours): **BMI, Wt**.
 
@@ -141,15 +188,18 @@ ChebyKAN  ▢ poly(tanh)      ▢ poly(tanh)
 FourierKAN ▢ trig(tanh)     ▢ trig(tanh)
 ```
 
-This single figure simultaneously shows (a) both flavours admit
-recovery, (b) what the two formula classes *look like*, (c) why they
-behave differently in composition (polynomial vs trig).
+This figure shows (a) what closed-form edges look like in each basis
+family, (b) why the two basis classes behave differently in
+composition (polynomial vs trig). The dense baselines are not in the
+figure — readers see them as Table 1 rows; explicit per-edge plots
+would be too dense to read for the dense models.
 
 If forced to pick a *second* figure (only if space allows): the Pareto
 fronts of QWK vs sparsity for both flavours from
-`sweeps/stage-c-{cheby,fourier}kan-pareto-sparsity_pareto.json` —
-proves FourierKAN collapses faster under aggressive sparsity. But
-Table 1 already conveys the headline; the figure is optional.
+`sweeps/stage-c-{cheby,fourier}kan-pareto-sparsity_pareto.json`. This
+visualises the dense → sparse interpolation that Table 1 only samples
+at two endpoints. Useful but Table 1 already conveys the headline;
+keep in appendix unless space is plentiful.
 
 ---
 
@@ -203,40 +253,56 @@ All artifacts already exist under
 
 ## 8. What *not* to include
 
-- Dense / full-feature interpretability runs (too many edges to draw or
-  list). One sentence in setup is enough.
+- Per-edge enumeration of the dense models (17 920+ / 41 728+ rows).
+  They appear in Table 1 only as one row each, with the "not
+  composable, too many edges to read" qualifier.
 - Narrow-architecture experiments (140 → 16 → 8 → 1 etc.). Negative
   result; cut.
 - Closed-form polynomial *surrogate* (`closed_form_surrogate.py`). Only
   needed when exact composition is unavailable; for the no-LN ChebyKAN
   hero, exact composition exists, so the surrogate is redundant.
 - Per-risk-level comparison panels. Too dense for the page budget.
-- The twin-model (production + explainer) framing. Was tempting from
-  industry practice but adds an "agreement" experiment we don't have
-  data for. The Pareto framing is cleaner and supported by the data.
+- The twin-model (production + explainer) framing as the *primary*
+  paper narrative. It appears only as a single discussion sentence
+  (§9 below) connecting the Pareto result to actuarial practice; it
+  is not a methodological contribution.
 
 ---
 
-## 9. Sentence-level draft for the abstract / conclusion
+## 9. Sentence-level draft for the abstract / conclusion / discussion
 
 For the abstract:
 
-> We show that two TabKAN variants — Chebyshev and Fourier — achieve
-> exact per-edge symbolic recovery after sparsity-regularised training
-> and pruning. The variants occupy distinct points on the accuracy–
-> compactness frontier: FourierKAN reaches QWK 0.562 with 7 158 active
-> edges; ChebyKAN reaches QWK 0.533 with 597 active edges and a single
-> closed-form composed expression. The choice between flavours is
-> therefore application-driven, not architecture-dominated.
+> We characterise the accuracy–interpretability trade-off of TabKAN on
+> Prudential life-insurance risk grading. Across two basis families
+> (Chebyshev, Fourier) and two operating points (dense / sparse), all
+> four configurations admit exact per-edge symbolic recovery. Dense
+> ChebyKAN and FourierKAN reach QWK 0.625 and 0.641 respectively
+> (XGBoost: 0.655); sparse 20-feature, no-LayerNorm variants give up
+> ~0.08–0.09 QWK in exchange for 12–30× fewer active edges. ChebyKAN's
+> sparse variant additionally collapses into a single closed-form
+> polynomial in the inputs. The choice of operating point and basis is
+> therefore application-driven.
 
 For the conclusion:
 
-> TabKAN can balance accuracy and interpretability, but the choice of
-> basis dictates the *shape* of the trade-off rather than its
-> existence. Practitioners with a hard accuracy floor should prefer
-> the Fourier basis; those required to deliver compact closed-form
-> explanations to regulators or actuaries should prefer the Chebyshev
-> basis.
+> TabKAN can balance accuracy and interpretability: per-edge symbolic
+> recovery is available across the entire Pareto front. The cost of
+> compactness is a uniform ~0.08–0.09 QWK in either flavour; the
+> additional cost of end-to-end composability (achievable only with the
+> Chebyshev basis) is a further ~0.03 QWK. Practitioners with a hard
+> accuracy floor should prefer the Fourier basis at the dense end;
+> those required to deliver compact closed-form explanations to
+> regulators or actuaries should prefer the sparse Chebyshev variant.
+
+For a single discussion sentence connecting the result to actuarial
+practice (do not promote to abstract or conclusion):
+
+> In practice, an insurer may deploy the dense FourierKAN for
+> accuracy-critical underwriting and use the sparse ChebyKAN as a
+> transparent companion model for regulatory documentation and
+> actuarial review — pairing two configurations from the same TabKAN
+> family rather than the conventional GLM-plus-XGBoost split.
 
 ---
 
@@ -244,7 +310,8 @@ For the conclusion:
 
 | Item | Owner | Notes |
 |---|---|---|
-| Train GLM baseline on the same split | — | needed for Table 1 row |
-| Confirm QWK reporting convention (inner-val vs outer-test) | — | affects all numbers |
-| Build Figure 1 (2×2 panel) from existing `*_activations.pdf` data | — | scripted assembly |
-| Optional: compute prediction-agreement (Pearson r) between full and sparse hero of each flavour, in case a reviewer asks "does the small model still match the big one?" | — | one number per flavour |
+| Train GLM baseline on the same split | — | needed for Table 1 row 1; otherwise drop it |
+| Confirm QWK reporting convention (inner-val vs outer-test) | — | affects all six numbers in Table 1 |
+| Pick edge-count convention (layer-0 only vs total across layers) | — | affects rows 3–6 |
+| Build Figure 1 (2×2 panel: BMI/Wt × Cheby/Fourier sparse heroes) | — | scripted assembly from existing `*_activations.pdf` data |
+| Optional: compute prediction-agreement (Pearson r) between dense and sparse hero of each flavour | — | only needed if a reviewer asks "does the small model still match the big one?"; supports the §9 deployment sentence if included |
