@@ -17,6 +17,32 @@ Track what was changed, why it was changed, and any important notes.
 - Optional notes, issues, or future work
 ```
 
+### [2026-04-22] - Gian Seifert
+
+#### What
+- Replaced per-edge scipy candidate fitting with the native ChebyKAN extractor for the `symbolic_fits.csv` and `r2_report.json` artifacts.
+- Added `fit_symbolic_edge_chebykan_native` in `src/interpretability/kan_symbolic.py` — reuses `_compose_exact_chebykan_edge` to read `cheby_coeffs` and `base_weight` directly and emit the exact edge formula `base_weight·x + Σ_k c_k · T_k(tanh(x))`.
+- Extracted `_build_edge_records` so `kan_symbolic.run()` and `r2_pipeline.evaluate_symbolic_fit()` share a single per-edge dispatcher that branches ChebyKAN → native, FourierKAN → scipy.
+- Added a `fit_mode` column to `symbolic_fits.csv` and gated `lock_in_symbolic_edges` to skip `chebykan_native` rows (projection onto the same basis is a no-op).
+- Trained `stage-c-chebykan-pareto-q0583-top20-noln` — the no-LayerNorm variant referenced in `docs/interpretability/04_CLIENT_FACING_UNDERWRITING_ARTIFACT.md` — so the graph-level exact closed-form path (`compose_exact_chebykan_model`) becomes `exact_available=True`.
+- Added regression coverage in `tests/interpretability/test_kan_symbolic_native.py` for:
+  - native per-edge fit matches layer forward on an isolated edge
+  - zero-coefficient edge returns constant zero
+  - `_build_edge_records` is fully native for a ChebyKAN module
+  - `r2_pipeline.evaluate_symbolic_fit` reports R² ≈ 1 for all ChebyKAN edges
+
+#### Why
+- The scipy candidate library (polynomials up to cubic, sin/cos harmonics, exp/log/sqrt) cannot represent a ChebyKAN edge, which is a polynomial in `tanh(x)` with a `base_weight · x` residual. On the `stage-c-chebykan-pareto-q0583-top20` run only 97 of 589 active edges (16.5 %) reached R² ≥ 0.9 under the scipy path, and the reported mean per-edge R² was 0.47.
+- The exact form is already stored as trained parameters on the layer, so "fitting" is just reading the coefficients. That yields R² = 1 by construction and means every downstream consumer — the KAN network diagram, activation grid, quality-figure distribution, feature-risk influence, `r2_report.json`, and ultimately the underwriter-facing artifact — speaks the same exact-formula language.
+- Training `-noln` unblocks the graph-level exact closed-form report for the V1 artifact contract in `docs/interpretability/04_CLIENT_FACING_UNDERWRITING_ARTIFACT.md`; LayerNorm would otherwise short-circuit `compose_exact_chebykan_model` to `exact_available=False`.
+
+#### Remarks
+- Verified with:
+  - `uv run pytest tests/interpretability/` → `86 passed`
+  - Re-ran `--stage interpret` on `stage-c-chebykan-pareto-q0583-top20` (with LayerNorm): `symbolic_fits.csv` now reports mean R² = 1.0 across 976 edges (was 0.47 on the same run before). Graph-level exact correctly reports `exact_available=False, reason=layernorm_present` because composing through LayerNorm is not algebraic.
+  - Trained and interpreted `stage-c-chebykan-pareto-q0583-top20-noln`: `exact_available=True`, `has_layernorm=False`. The fully expanded closed form is 605 907 operations / 5.6 M characters, so the report flags `usable=False` (too large to display). The exact symbolic structure is materialized; `end_to_end_r2` is skipped for the same size reason — a numeric-only verification via layer re-evaluation is future work.
+- No change to the FourierKAN path: it still uses the scipy candidate library.
+
 ### [2026-04-22] - Cyril Gabriele
 
 #### What

@@ -55,51 +55,26 @@ def evaluate_symbolic_fit(
         symbolic_fits : list[dict] — layer, edge_in, edge_out, input_feature, formula, r_squared, flagged
         aggregate : dict  — mean_r2, median_r2, edges_below_090, edges_below_095
     """
-    import torch
     from src.models.kan_layers import ChebyKANLayer, FourierKANLayer
     from src.interpretability.kan_pruning import _compute_edge_l1
-    from src.interpretability.kan_symbolic import sample_edge, fit_symbolic_edge, _quality_tier
+    from src.interpretability.kan_symbolic import _build_edge_records
 
     use_pysr = candidate_library == "pysr"
 
     total_before = 0
-    total_after = 0
-    records = []
-    layer_idx = 0
-
     for layer in module.kan_layers:
         if not isinstance(layer, (ChebyKANLayer, FourierKANLayer)):
             continue
+        total_before += _compute_edge_l1(layer).numel()
 
-        # Precompute all edge L1 scores once per layer
-        l1_scores = _compute_edge_l1(layer)
-        total_before += l1_scores.numel()
-
-        for out_i in range(layer.out_features):
-            for in_i in range(layer.in_features):
-                if l1_scores[out_i, in_i].item() < threshold:
-                    continue
-                total_after += 1
-
-                x_vals, y_vals = sample_edge(layer, out_i, in_i, n=n_samples)
-                formula, r2 = fit_symbolic_edge(x_vals, y_vals, use_pysr=use_pysr)
-                input_feat = (
-                    feature_names[in_i]
-                    if layer_idx == 0 and in_i < len(feature_names)
-                    else f"h{in_i}"
-                )
-                records.append({
-                    "layer": layer_idx,
-                    "edge_in": in_i,
-                    "edge_out": out_i,
-                    "input_feature": input_feat,
-                    "formula": formula,
-                    "r_squared": round(r2, 6),
-                    "flagged": r2 < 0.90,
-                    "quality_tier": _quality_tier(r2),
-                })
-
-        layer_idx += 1
+    records = _build_edge_records(
+        module,
+        threshold=threshold,
+        feature_names=feature_names,
+        use_pysr=use_pysr,
+        n_samples=n_samples,
+    )
+    total_after = len(records)
 
     sparsity = 1.0 - (total_after / total_before) if total_before > 0 else 0.0
     r2_values = [r["r_squared"] for r in records] if records else [0.0]
