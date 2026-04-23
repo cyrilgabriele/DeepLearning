@@ -121,6 +121,15 @@ Target: ≤ ½ page main body + 1 figure + 1 table (Table 1, six rows).
 > basis does not have this property, so per-edge forms remain readable
 > but the composed network does not simplify.
 
+### Paragraph 3.5 — Exact Greeks (≈ 30 words, append to Paragraph 3 or stand alone)
+
+> Because the sparse no-LayerNorm ChebyKAN composes into a single
+> closed-form polynomial in the inputs, it also admits exact analytic
+> partial derivatives — actuarial "Greeks" computed by symbolic
+> differentiation rather than finite-differencing — enabling marginal-
+> sensitivity and second-order interaction reports per applicant
+> without numerical noise.
+
 ### Optional honest-limit sentence (1 line)
 
 > The model genuinely uses all retained features: in feature-validation
@@ -139,10 +148,10 @@ KANs*. Bolded rows are the small interpretable hero variants.
 |---|---|---|---|---|
 | GLM (ridge) | *to fill* | 140 coefficients | linear coefficients | — |
 | XGBoost | 0.655 | ~ N trees | SHAP TreeExplainer (post-hoc) | — |
-| ChebyKAN, dense (140 ft, with LN) | 0.625 | 17 920+ edges | per-edge native (not composable) | 1.000 |
-| FourierKAN, dense (140 ft, with LN) | 0.641 | 41 728+ edges | per-edge native (not composable) | 1.000 |
-| **ChebyKAN, sparse (20 ft, no LN)** | **0.533** | **597 edges (−97%)** | **closed-form polynomial** | **1.000** |
-| **FourierKAN, sparse (20 ft, no LN)** | **0.562** | **7 158 edges (−83%)** | **per-edge closed form** | **1.000** |
+| ChebyKAN, dense (140 ft, with LN) | 0.625 | 17 920+ edges | per-edge native; autograd Greeks | 1.000 |
+| FourierKAN, dense (140 ft, with LN) | 0.641 | 41 728+ edges | per-edge native; autograd Greeks | 1.000 |
+| **ChebyKAN, sparse (20 ft, no LN)** | **0.533** | **597 edges (−97%)** | **closed-form polynomial + exact symbolic Greeks** | **1.000** |
+| **FourierKAN, sparse (20 ft, no LN)** | **0.562** | **7 158 edges (−83%)** | **per-edge closed form; autograd Greeks** | **1.000** |
 
 The four KAN rows are the Pareto front the paper characterises:
 - **Dense rows (3–4)** show TabKAN is competitive with XGBoost and that
@@ -152,6 +161,12 @@ The four KAN rows are the Pareto front the paper characterises:
   ~0.08–0.09 QWK in both flavours, in exchange for 12–30× fewer edges.
 - The **gap between rows 5 and 6** (0.029 QWK, 12× edge ratio)
   characterises the basis-family choice within the interpretable end.
+- **Row 5 alone** has the additional property of admitting *exact
+  symbolic Greeks* (analytic ∂y/∂xᵢ, ∂²y/∂xᵢ∂xⱼ via SymPy chain rule)
+  — the same property that gives it end-to-end composability also
+  gives it actuarial-style sensitivities without finite-differencing.
+  All other rows must rely on autograd or finite-difference Greeks,
+  the same tools available for any black-box model.
 
 **Open item**: the GLM row needs a real number. No GLM checkpoint
 exists in `checkpoints/`; the only number anywhere is the stale 0.568
@@ -209,13 +224,26 @@ All artifacts already exist under
 `outputs/interpretability/kan_paper/stage-c-{chebykan,fourierkan}-pareto-…-top20-noln/`:
 
 - Full per-edge formula listings (`reports/*_symbolic_formulas.md`)
-- Composed end-to-end formula (ChebyKAN only; `reports/*_exact_closed_form.md`)
+- Composed end-to-end formula (ChebyKAN only; `reports/chebykan_exact_closed_form.md`)
+- **Exact symbolic Greeks** — ChebyKAN sparse no-LN only — analytic
+  ∂y/∂xᵢ traces and discrete-state effect deltas computed via SymPy
+  chain rule (`reports/chebykan_exact_closed_form.md` and
+  `reports/chebykan_exact_closed_form.json`, produced by
+  `src/interpretability/exact_partials.py`)
+- **Hessian / cross-Greeks** — autograd-based ∂²y/∂xᵢ∂xⱼ averaged
+  over the eval split, both signed and absolute, continuous-features
+  view recommended (`figures/chebykan_hessian_heatmap_continuous.png`,
+  `reports/chebykan_hessian_heatmap.md/json`,
+  produced by `src/interpretability/hessian_heatmap.py`)
+- Local case explanation for applicant 55728 — finite-difference
+  per-feature sensitivities and what-if class deltas
+  (`reports/*_case_summary_55728.0.md`,
+  `data/*_local_sensitivities_55728.0.csv`,
+  `data/*_case_what_if_55728.0.csv`)
 - Network-diagram PDF with mini-plots (`figures/*_kan_diagram.pdf`)
 - Per-feature activation grid (`figures/*_activations.pdf`)
 - R² distribution histogram (`figures/*_r2_distribution.pdf`)
-- Hessian heatmap, continuous features only (`figures/chebykan_hessian_heatmap_continuous.png`)
 - Feature-validation curves (`figures/feature_validation_curves.pdf`)
-- Local case explanation for applicant 55728 (`reports/*_case_summary_55728.0.md`)
 - Pareto fronts for both flavours
 - Hyperparameter and pruning configurations
 
@@ -248,6 +276,16 @@ All artifacts already exist under
    `Medical_History_5` second; FourierKAN ranks `Medical_History_11`
    second. Both rankings start with BMI. The lists are in
    `configs/.../feature_lists/`. Worth noting in a footnote.
+
+6. **Greeks scope.** The "exact Greeks" claim applies *only* to the
+   sparse no-LayerNorm ChebyKAN row. For all other rows we can compute
+   ∂y/∂xᵢ and ∂²y/∂xᵢ∂xⱼ via autograd or finite differences, but those
+   are tools available for any black-box model and do not constitute a
+   KAN-specific interpretability advantage. Be explicit about which
+   row earns the analytic-Greeks claim. The Black-Scholes analogy is
+   strongest there because both situations have a closed-form
+   expression admitting symbolic differentiation; do not extend the
+   analogy to the dense or FourierKAN rows.
 
 ---
 
