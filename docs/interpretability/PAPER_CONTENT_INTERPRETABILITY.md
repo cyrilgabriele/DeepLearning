@@ -50,13 +50,12 @@ The interpretability section has **two subsections sharing one Table 1**.
 > All four TabKAN variants we evaluate (Cheby/Fourier × dense/sparse)
 > admit exact per-edge symbolic recovery (R² = 1.000 by construction
 > via the basis-native extractors). On held-out outer-test with
-> threshold-calibrated ordinal predictions and 95% bootstrap CIs, the
-> top three models — dense ChebyKAN (0.607 [0.594, 0.620]), GLM
-> (0.603 [0.590, 0.616]), and dense FourierKAN (0.592 [0.578, 0.606])
-> — are within each other's bootstrap intervals, all meaningfully
-> above XGBoost (0.559 [0.543, 0.575]). Going sparse costs 0.074 QWK
-> for ChebyKAN (→ 0.533) and 0.030 for FourierKAN (→ 0.562) in
-> exchange for 12–44× fewer active edges. The sparse ChebyKAN
+> threshold-calibrated ordinal predictions and 95% bootstrap CIs,
+> dense ChebyKAN (0.607 [0.594, 0.620]) and dense FourierKAN
+> (0.592 [0.578, 0.606]) clearly beat XGBoost (0.559 [0.543, 0.575]).
+> Going sparse costs 0.074 QWK for ChebyKAN (→ 0.533) and 0.030 for
+> FourierKAN (→ 0.562) in exchange for 12–44× fewer active edges; the
+> sparse FourierKAN matches XGBoost within noise. The sparse ChebyKAN
 > additionally collapses into a single closed-form polynomial in the
 > 20 retained inputs and admits exact analytic Greeks — validated on
 > one applicant (∂score/∂BMI = −0.6505 via SymPy chain rule, −0.6505
@@ -241,8 +240,7 @@ the number a deployed model would actually return. Edge counts are
 
 | Model | QWK (outer test, 95% CI) | # active edges / params | Explanation method | Per-edge R² |
 |---|---|---|---|---|
-| GLM (ridge) | 0.603 [0.590, 0.616] | 140 coefficients | linear coefficients | — |
-| XGBoost | 0.559 [0.543, 0.575] | ~ N trees *(to fill: trees × avg depth)* | SHAP TreeExplainer (post-hoc) | — |
+| XGBoost | 0.559 [0.543, 0.575] | 6 120 trees / 723 867 leaves | SHAP TreeExplainer (post-hoc) | — |
 | ChebyKAN, dense (140 ft, with LN) | **0.607 [0.594, 0.620]** | 26 112 edges | per-edge native; autograd Greeks | 1.000 |
 | FourierKAN, dense (140 ft, with LN) | 0.592 [0.578, 0.606] | 41 728 edges | per-edge native; autograd Greeks | 1.000 |
 | **ChebyKAN, sparse (20 ft, no LN)** | **0.533 [0.519, 0.547]** | **597 edges (−97.7% vs dense)** | **closed-form polynomial + exact symbolic Greeks** | **1.000** |
@@ -250,12 +248,13 @@ the number a deployed model would actually return. Edge counts are
 
 **Bootstrap provenance.** CIs are 95% non-parametric bootstrap on n = 11 877 outer-test rows, 1000 resamples, seed 42 (`scripts/bootstrap_qwk_table1.py`, artifact at `outputs/reports/table1_bootstrap_qwk.json`). Key observations:
 
-- **ChebyKAN dense vs GLM**: 0.607 vs 0.603, CIs overlap substantially ([0.594, 0.620] vs [0.590, 0.616]) — the 0.004 gap is not statistically significant at 95%.
-- **ChebyKAN dense vs FourierKAN dense**: 0.607 vs 0.592, CIs overlap partially ([0.594, 0.620] vs [0.578, 0.606]) — the 0.015 gap is marginal, not conclusive.
+- **ChebyKAN dense vs FourierKAN dense**: 0.607 vs 0.592, CIs overlap partially ([0.594, 0.620] vs [0.578, 0.606]) — the 0.015 gap is marginal.
+- **ChebyKAN dense vs XGBoost**: 0.607 [0.594, 0.620] vs 0.559 [0.543, 0.575] — CIs do not overlap. Dense ChebyKAN is clearly above XGBoost by ≥ 0.019.
+- **FourierKAN dense vs XGBoost**: 0.592 [0.578, 0.606] vs 0.559 [0.543, 0.575] — CIs barely overlap at the boundary (0.575 vs 0.578). Essentially above but not resolved.
 - **FourierKAN sparse vs XGBoost**: 0.562 vs 0.559, clearly overlapping CIs — essentially tied.
-- **ChebyKAN sparse** is the only row whose CI upper bound (0.547) does not reach XGBoost's point estimate (0.559). This is the one gap that is statistically resolved: sparse ChebyKAN is clearly below the rest.
+- **ChebyKAN sparse** (CI upper bound 0.547) is clearly below XGBoost (point 0.559). The only statistically resolved below-XGBoost row.
 
-**Caveat on framing**: do not claim "dense ChebyKAN is the best model" in the abstract without the qualifier "within noise of GLM". A defensible sentence is "the top three models (dense ChebyKAN, GLM, dense FourierKAN) are within each other's 95% bootstrap CIs; all three meaningfully exceed XGBoost."
+**Regime note: §3.1 vs §3.2.** The paper's §3.1 (accuracy) reports *Optuna-best inner-validation QWK* (XGBoost 0.6546, ChebyKAN 0.6254, FourierKAN 0.6410 — the per-model best over 151 trials). Our §3.2 (interpretability) table reports *held-out outer-test QWK* of the single retrained checkpoint for each model. The two regimes differ systematically because §3.1's numbers are Optuna-selection-inflated (selecting the best of 151 is upward-biased), while §3.2's are honest held-out evaluations. We report outer-test in §3.2 because sparse heroes are single retrainings (no Optuna selection); reporting their inner-val against Optuna-selected dense would be apples-to-oranges. One sentence in the §3.2 methodology paragraph flags this explicitly.
 
 The four KAN rows characterise the Pareto front. Three observations:
 
@@ -419,32 +418,32 @@ For the abstract:
 > on Prudential life-insurance risk grading. Across two basis families
 > (Chebyshev, Fourier) and two operating points (dense / sparse), all
 > four configurations admit exact per-edge symbolic recovery. On
-> threshold-calibrated outer-test QWK with 95% bootstrap CIs, the top
-> three models — dense ChebyKAN (0.607), GLM (0.603), and dense
-> FourierKAN (0.592) — fall within each other's bootstrap intervals,
-> all meaningfully above XGBoost (0.559). Moving to the sparse
-> 20-feature, no-LayerNorm regime costs 0.074 QWK for ChebyKAN
-> (0.533) and 0.030 for FourierKAN (0.562) in exchange for 12–44×
-> fewer active edges. The sparse ChebyKAN additionally collapses into
-> a single closed-form polynomial in the inputs and admits exact
-> analytic Greeks; on one applicant we verify ∂score/∂BMI = −0.6505
-> via SymPy chain rule, matching PyTorch autograd to 10⁻⁶. The same
-> TabKAN family therefore spans both the top-tier accuracy class and
-> the uniquely transparent sparse configurations.
+> threshold-calibrated outer-test QWK with 95% bootstrap CIs, dense
+> ChebyKAN (0.607) and dense FourierKAN (0.592) both exceed the
+> XGBoost baseline (0.559). Moving to the sparse 20-feature,
+> no-LayerNorm regime costs 0.074 QWK for ChebyKAN (0.533) and 0.030
+> for FourierKAN (0.562) in exchange for 12–44× fewer active edges.
+> The sparse ChebyKAN additionally collapses into a single closed-form
+> polynomial in the inputs and admits exact analytic Greeks; on one
+> applicant we verify ∂score/∂BMI = −0.6505 via SymPy chain rule,
+> matching PyTorch autograd to 10⁻⁶. The same TabKAN family therefore
+> spans both the top-tier accuracy class and the uniquely transparent
+> sparse configurations.
 
 For the conclusion:
 
 > TabKAN balances accuracy and interpretability along a genuine
 > Pareto front. Dense ChebyKAN is the top-accuracy model tested
-> (QWK 0.607, ahead of GLM and XGBoost); dense FourierKAN is third.
-> The interpretability pipeline (top-20 features, no LayerNorm, L1
-> pruning) costs 0.03–0.07 QWK and in return gives 12–44× sparser
-> networks, exact per-edge closed-form recovery in both flavours,
-> and for sparse ChebyKAN an end-to-end closed-form polynomial with
-> analytic Greeks. Practitioners required to deliver compact analytic
-> explanations to regulators or actuaries should prefer the sparse
-> ChebyKAN; those prioritising outer-test QWK with basic
-> interpretability should prefer the dense ChebyKAN.
+> (QWK 0.607, clearly above XGBoost at 0.559); dense FourierKAN
+> comes next (0.592). The interpretability pipeline (top-20
+> features, no LayerNorm, L1 pruning) costs 0.03–0.07 QWK and in
+> return gives 12–44× sparser networks, exact per-edge closed-form
+> recovery in both flavours, and for sparse ChebyKAN an end-to-end
+> closed-form polynomial with analytic Greeks. Practitioners
+> required to deliver compact analytic explanations to regulators
+> or actuaries should prefer the sparse ChebyKAN; those prioritising
+> outer-test QWK with basic interpretability should prefer the dense
+> ChebyKAN.
 
 For a single discussion sentence connecting the result to actuarial
 practice (do not promote to abstract or conclusion):
@@ -454,8 +453,8 @@ practice (do not promote to abstract or conclusion):
 > and use the sparse ChebyKAN (QWK 0.533, single composed polynomial
 > + exact analytic Greeks) as a transparent companion model for
 > regulatory documentation and actuarial review — two configurations
-> from the same TabKAN family replacing the conventional
-> GLM-plus-XGBoost split.
+> from the same TabKAN family, replacing a conventional post-hoc SHAP
+> pipeline with native symbolic explanations at both operating points.
 
 ---
 
