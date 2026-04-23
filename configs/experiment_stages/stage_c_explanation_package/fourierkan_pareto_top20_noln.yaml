@@ -1,0 +1,25 @@
+trainer:
+  experiment_name: stage-c-fourierkan-pareto-top20-noln
+  train_csv: data/prudential-life-insurance-assessment/train.csv
+  test_csv: data/prudential-life-insurance-assessment/test.csv
+  seed: 42
+
+preprocessing:
+  contract_version: 1
+  recipe: kan_paper
+  selected_features_path: configs/experiment_stages/stage_c_explanation_package/feature_lists/fourierkan_pareto_top20_features.json
+
+model:
+  name: tabkan-base
+  flavor: fourierkan
+  hidden_widths: [64, 256, 64]
+  use_layernorm: false
+  params:
+    max_epochs: 100
+    grid_size: 8
+    lr: 0.0031887242971171403
+    weight_decay: 2.393884747850709e-05
+    batch_size: 256
+    sparsity_lambda: 0.0249
+    l1_weight: 1.0
+    entropy_weight: 1.0
