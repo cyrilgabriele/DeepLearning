@@ -2,11 +2,46 @@
 
 Scope: drives the interpretability content for the 6-page paper answering
 *"Can TabKAN models balance accuracy & interpretability in life insurance
-risk assessment?"*. Targets ≤ ½ page main body + table + figure, with
-appendix dump.
+risk assessment?"*.
 
 Status as of 2026-04-23. Hero models verified on `gian-interpretability`
 branch.
+
+---
+
+## 0. Division of labour — Gian vs Cyril
+
+The interpretability section has **two subsections sharing one Table 1**.
+
+### Gian — sparse / small interpretable regime
+**Owns:** §1–§10 of this document below. Specifically:
+- Sparse ChebyKAN + FourierKAN hero models (20 features, no LN, L1-pruned)
+- Pareto trade-off framing (rows 5–6 of Table 1)
+- Per-edge symbolic recovery for both sparse heroes (R² = 1.000 via basis-native extractors)
+- End-to-end closed-form composition (sparse no-LN ChebyKAN only)
+- Exact symbolic Greeks via SymPy chain rule (sparse no-LN ChebyKAN only)
+- Figure 1: 2×2 per-edge plots (BMI/Wt × Cheby/Fourier sparse heroes)
+- Paragraphs 1–3 of the suggested subsection structure (§3 below)
+
+### Cyril — dense / big interpretable regime + XGBoost-SHAP comparison
+**Owns:** §11 of this document (added below). Specifically:
+- Dense ChebyKAN + FourierKAN baselines (140 features, with LN; rows 3–4 of Table 1)
+- KAN-native coefficient-based feature importance vs XGBoost SHAP rankings
+- Per-feature curve comparison: KAN learned activation vs SHAP dependence plot
+- Per-risk-class consistency comparison (uses `comparison_per_risk.py`)
+- Figure 2: SHAP-vs-KAN comparison (recommended layout in §11)
+- Paragraph 0 of the suggested subsection structure (dense baselines)
+
+### Shared / requires coordination (read §11.4 before locking anything)
+- **Table 1** is one table across both subsections. Six rows, no parallel tables.
+- **QWK reporting convention** (inner-val opt. thresholds vs outer-test default
+  predict). Pick one for the entire paper. Recommendation in §11.4.
+- **GLM row** in Table 1: either Cyril trains it on the same recipe or both
+  subsections drop GLM. Don't mix.
+- **FourierKAN-native fitter** is on this branch (commit `dd690c1`). Cyril
+  must use it; without it, dense FourierKAN fits at R² ≈ 0.27 and the
+  comparison breaks.
+- **Discussion paragraph** (§9 deployment sentence) is jointly written.
 
 ---
 
@@ -344,12 +379,162 @@ practice (do not promote to abstract or conclusion):
 
 ---
 
-## 10. Open / required follow-ups
+## 10. Open / required follow-ups (Gian)
 
 | Item | Owner | Notes |
 |---|---|---|
-| Train GLM baseline on the same split | — | needed for Table 1 row 1; otherwise drop it |
-| Confirm QWK reporting convention (inner-val vs outer-test) | — | affects all six numbers in Table 1 |
-| Pick edge-count convention (layer-0 only vs total across layers) | — | affects rows 3–6 |
-| Build Figure 1 (2×2 panel: BMI/Wt × Cheby/Fourier sparse heroes) | — | scripted assembly from existing `*_activations.pdf` data |
-| Optional: compute prediction-agreement (Pearson r) between dense and sparse hero of each flavour | — | only needed if a reviewer asks "does the small model still match the big one?"; supports the §9 deployment sentence if included |
+| Confirm QWK reporting convention (inner-val vs outer-test) | Gian + Cyril | affects all six numbers in Table 1 |
+| Pick edge-count convention (layer-0 only vs total across layers) | Gian + Cyril | affects rows 3–6 |
+| Build Figure 1 (2×2 panel: BMI/Wt × Cheby/Fourier sparse heroes) | Gian | scripted assembly from existing `*_activations.pdf` data |
+| Compute one worked Greek for applicant 55728 (symbolic vs autograd vs finite-diff) | Gian | one-row example to back the "exact Greeks" claim with evidence |
+| Decompose 0.092 QWK gap into "sparsity cost" + "feature/LN cost" via the q0.583-s0.97 intermediate | Gian | reviewer-defence against selection-bias critique |
+| Bootstrap CI on QWK for the four KAN rows | Gian + Cyril | ~10 lines of code; addresses "is the gap real?" |
+
+---
+
+# PART II — Dense-regime interpretability (Cyril)
+
+This part of the doc is owned by **Cyril**. It defines the dense-baseline
+interpretability subsection that sits alongside Gian's sparse-regime
+subsection in the paper. They share Table 1 and the Discussion paragraph.
+
+## 11. The dense-regime narrative
+
+### 11.1 The headline claim (Cyril)
+
+> Dense ChebyKAN and FourierKAN match XGBoost on the standard
+> interpretability tasks performed via SHAP. Per-feature importance
+> rankings agree with XGBoost SHAP (Kendall τ ≈ to-fill); per-feature
+> behaviour curves agree visually. Crucially, KAN explanations are
+> *model-native* — read directly from the learned Chebyshev / Fourier
+> coefficients with no post-hoc approximation — whereas SHAP must
+> approximate XGBoost's behaviour with a separate linear surrogate
+> per prediction. We thus position dense TabKAN as a drop-in
+> replacement for XGBoost+SHAP in the standard insurer interpretability
+> stack: same accuracy class, same kinds of explanations, no
+> approximation gap.
+
+### 11.2 Suggested structure for the dense-regime subsection (≈ ⅓ page)
+
+#### Paragraph A — Setup (≈ 30 words)
+> We compare dense ChebyKAN and FourierKAN (140 features, with
+> LayerNorm, sparsity λ = 0) against XGBoost+SHAP and the GLM baseline
+> on three standard interpretability tasks: feature ranking, per-feature
+> behaviour, and per-risk-class importance.
+
+#### Paragraph B — Result (≈ 60 words)
+> KAN-native coefficient importance and XGBoost SHAP rank the top-15
+> features at Kendall τ = *to-fill*. Per-feature shape curves (Figure 2)
+> show qualitative agreement on continuous features (BMI, Ins_Age, Wt)
+> with KAN edges providing smoother, monotonic shapes vs SHAP's stepped
+> tree-based dependence. Per-risk-class importance (Appendix Y) shows
+> consistent top features across risk levels in all three models.
+
+#### Paragraph C — Distinction (≈ 50 words)
+> The dense KAN explanations are model-native: each per-feature curve
+> is the layer's learned activation function read directly from
+> Chebyshev / Fourier coefficients via the basis-native extractors
+> (R² = 1.000 by construction). SHAP, by contrast, must approximate
+> XGBoost's tree ensemble with a local linear model per prediction.
+> Dense TabKAN therefore matches XGBoost on accuracy *and* removes
+> the post-hoc approximation step.
+
+### 11.3 Figure 2 — recommended (Cyril)
+
+Two viable layouts; pick one:
+
+**Layout A: Feature-importance comparison.** Horizontal bar chart of
+the top-15 features ranked by, in 4 columns: GLM coefficient | XGBoost
+SHAP mean(|value|) | dense ChebyKAN coefficient importance | dense
+FourierKAN coefficient importance. Annotate Kendall τ between each
+KAN column and the SHAP column. Compact, high-information-density,
+single panel.
+
+**Layout B: Per-feature behaviour for one canonical feature (BMI).**
+Four side-by-side panels: GLM coefficient line | XGBoost SHAP
+dependence plot | ChebyKAN edge curve | FourierKAN edge curve. All on
+the same x-axis (BMI in raw units). Visually striking; makes the
+"smooth model-native vs stepped post-hoc" point clearly. Best if BMI
+is *the* feature you want the reader to remember.
+
+Recommendation: **Layout A** if you want to argue rank agreement;
+**Layout B** if you want to argue qualitative-shape transparency.
+Pick based on which claim is more central. Both are supported by
+existing artifacts in `outputs/interpretability/.../comparison_*`.
+
+### 11.4 Coordination with Gian's part (READ FIRST)
+
+Six items must be aligned before either subsection is locked:
+
+1. **Use the FourierKAN-native fitter on this branch.** Without it,
+   dense FourierKAN edge fits at R² ≈ 0.27 (the previous result). The
+   fix is in commits `dd690c1` on `gian-interpretability`. Use the
+   branch or cherry-pick the two source files
+   (`src/interpretability/kan_symbolic.py`,
+   `src/interpretability/formula_composition.py`).
+
+2. **Same train / test / inner-val split, same recipe.** Confirm by
+   checking that the dense KAN run-summaries cite `recipe: kan_paper`
+   and `seed: 42`. Existing dense baselines
+   (`stage-c-chebykan-best`, `stage-c-fourierkan-best`,
+   `stage-c-xgboost-best`) already match. Do not retrain on different
+   splits.
+
+3. **One QWK reporting convention across the paper.**
+   - Inner-validation with optimised ordinal thresholds (the Optuna
+     sweep number, e.g. ChebyKAN dense = 0.625).
+   - Held-out outer test with default `predict()` (the manifest
+     `metrics.qwk` field, e.g. ChebyKAN dense = 0.543).
+   These differ by ~0.05–0.08. **Recommendation: outer test.**
+   Reasoning: dense baselines were *selected* on inner-val (best of
+   151 Optuna trials); the sparse heroes are single retrainings.
+   Reporting inner-val for both creates an asymmetric selection-bias
+   that systematically over-states the dense-row QWK. Outer test
+   eliminates this asymmetry.
+
+4. **GLM row in Table 1.** Either you train a GLM on the same recipe
+   so row 1 has a real number, or both subsections drop the GLM row
+   entirely. Do not have one subsection cite GLM and the other not.
+   Config exists at `configs/.../glm_baseline.yaml`; one `main.py
+   --stage train` run takes < 1 min.
+
+5. **Single Table 1.** Do not introduce a parallel
+   "interpretability comparison" table for the dense regime. All
+   numbers go into the existing six-row Table 1 (defined in §4). The
+   dense subsection cites rows 3–4; the sparse subsection cites rows
+   5–6. The rest is text.
+
+6. **Discussion paragraph** (§9 deployment sentence) is jointly
+   written. Suggested: dense KANs replace XGBoost+SHAP for production
+   underwriting; sparse ChebyKAN replaces GLM for regulatory and
+   actuarial documentation. Do not promote this to abstract or
+   conclusion (per Gian's recommendation in §8).
+
+### 11.5 Existing artifacts Cyril can build on
+
+In `outputs/interpretability/kan_paper/stage-c-chebykan-best/` and
+`stage-c-fourierkan-best/` (run after applying the FourierKAN
+extractor fix from this branch):
+
+- `data/{cheby,fourier}kan_coefficient_importance.csv` — KAN-native
+  feature importance (`utils/kan_coefficients.py`)
+- `figures/comparison_per_risk_*.pdf` — per-risk-class panels (already
+  generated by `comparison_per_risk.py`)
+- `figures/side_by_side_*.pdf` — side-by-side per-feature comparisons
+  across all 4 models (`comparison_side_by_side.py`)
+- `figures/feature_risk_influence_*.pdf` — domain-aligned per-feature
+  curves (`feature_risk_influence.py`)
+
+In the existing XGBoost outputs (already in tree from earlier work):
+
+- SHAP TreeExplainer values — see `shap_xgboost.py`
+
+### 11.6 Open / required follow-ups (Cyril)
+
+| Item | Owner | Notes |
+|---|---|---|
+| Re-run dense ChebyKAN + FourierKAN interpret pipelines on this branch | Cyril | needed so dense FourierKAN edges fit R² = 1.000 instead of 0.27 |
+| Compute Kendall τ between KAN coefficient importance and XGBoost SHAP rankings, top-15 features | Cyril | one number per KAN flavour for §11.2 paragraph B |
+| Decide Figure 2 layout (A: importance bars, B: per-feature panels) | Cyril | drives narrative emphasis |
+| Train GLM baseline if Table 1 row 1 is to be filled | Cyril (or Gian) | ~ 1 min via existing config |
+| Confirm QWK convention with Gian | Cyril + Gian | recommendation: outer test (see §11.4 item 3) |
