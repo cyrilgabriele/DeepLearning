@@ -256,6 +256,49 @@ def fit_symbolic_edge_chebykan_native(
     return formula_str, float(_r2(y_edge, y_formula))
 
 
+def fit_symbolic_edge_fourierkan_native(
+    layer,
+    *,
+    out_idx: int,
+    in_idx: int,
+    variable_name: str = "x",
+    n_verify_samples: int = 1000,
+) -> tuple[str, float]:
+    """Extract the exact per-edge formula from a trained FourierKAN layer.
+
+    Reads ``fourier_a[out_idx, in_idx, :]``, ``fourier_b[out_idx, in_idx, :]`` and
+    ``base_weight[out_idx, in_idx]`` directly. The returned R² is the empirical
+    agreement between this formula and the layer's isolated edge output at
+    ``n_verify_samples`` points; it is ≈ 1 by construction.
+    """
+    from src.models.kan_layers import FourierKANLayer
+    from src.interpretability.formula_composition import _compose_exact_fourierkan_edge
+
+    if not isinstance(layer, FourierKANLayer):
+        raise TypeError(f"Expected FourierKANLayer, got {type(layer).__name__}")
+
+    import sympy as sp
+
+    x_sym = sp.Symbol(variable_name)
+    expr = _compose_exact_fourierkan_edge(
+        layer, out_idx=out_idx, in_idx=in_idx, input_expr=x_sym
+    )
+    formula_str = str(expr)
+
+    x_norm, y_edge = _sample_fourierkan_edge(layer, out_idx, in_idx, n=n_verify_samples)
+    x_pre = np.arctanh(np.clip(x_norm, -0.999999, 0.999999))
+
+    if expr == 0:
+        y_formula = np.zeros_like(y_edge)
+    else:
+        f = sp.lambdify(x_sym, expr, modules=["numpy"])
+        y_formula = np.asarray(f(x_pre), dtype=np.float64)
+        if y_formula.ndim == 0:
+            y_formula = np.full_like(y_edge, float(y_formula))
+
+    return formula_str, float(_r2(y_edge, y_formula))
+
+
 def fit_symbolic_edge(
     x: np.ndarray,
     y: np.ndarray,
@@ -581,7 +624,7 @@ def lock_in_symbolic_edges(
     if "fit_mode" in clean_df.columns:
         # Native-fit rows are already the exact layer parameters; projecting back
         # onto the same basis would be a no-op, so skip them.
-        clean_df = clean_df[clean_df["fit_mode"] != "chebykan_native"]
+        clean_df = clean_df[~clean_df["fit_mode"].isin({"chebykan_native", "fourierkan_native"})]
     if clean_df.empty:
         print("lock_in_symbolic_edges: no clean edges found. Skipping.")
         return module, []
@@ -692,6 +735,7 @@ def _build_edge_records(
         )
 
         is_chebykan = isinstance(layer, ChebyKANLayer)
+        is_fourierkan = isinstance(layer, FourierKANLayer)
 
         for out_i in range(layer.out_features):
             for in_i in range(layer.in_features):
@@ -703,6 +747,11 @@ def _build_edge_records(
                         layer, out_idx=out_i, in_idx=in_i, n_verify_samples=n_samples
                     )
                     fit_mode = "chebykan_native"
+                elif is_fourierkan:
+                    formula, r2 = fit_symbolic_edge_fourierkan_native(
+                        layer, out_idx=out_i, in_idx=in_i, n_verify_samples=n_samples
+                    )
+                    fit_mode = "fourierkan_native"
                 else:
                     x_vals, y_vals = sample_edge(layer, out_i, in_i, n=n_samples)
                     formula, r2 = fit_symbolic_edge(

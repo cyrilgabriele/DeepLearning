@@ -362,6 +362,35 @@ def _compose_exact_chebykan_edge(layer, *, out_idx: int, in_idx: int, input_expr
     return edge_expr
 
 
+def _compose_exact_fourierkan_edge(layer, *, out_idx: int, in_idx: int, input_expr: sp.Expr) -> sp.Expr:
+    """Build the exact symbolic edge for FourierKAN.
+
+    Mirrors the runtime forward pass in `_sample_fourierkan_edge`:
+        x_scaled = (tanh(x) + 1) * pi
+        y(x) = base_weight * x + Σₖ aₖ cos(k·x_scaled) + bₖ sin(k·x_scaled)
+    """
+    a_coeffs = layer.fourier_a.detach().cpu().numpy()[out_idx, in_idx]
+    b_coeffs = layer.fourier_b.detach().cpu().numpy()[out_idx, in_idx]
+    base_weight = float(layer.base_weight.detach().cpu().numpy()[out_idx, in_idx])
+    grid_size = int(layer.grid_size)
+
+    x_scaled = (sp.tanh(input_expr) + sp.Integer(1)) * sp.pi
+
+    edge_expr = sp.Integer(0)
+    if abs(base_weight) > _ZERO_TOL:
+        edge_expr += _float_expr(base_weight) * input_expr
+
+    for k_idx in range(grid_size):
+        k = k_idx + 1
+        a_value = float(a_coeffs[k_idx])
+        b_value = float(b_coeffs[k_idx])
+        if abs(a_value) > _ZERO_TOL:
+            edge_expr += _float_expr(a_value) * sp.cos(k * x_scaled)
+        if abs(b_value) > _ZERO_TOL:
+            edge_expr += _float_expr(b_value) * sp.sin(k * x_scaled)
+    return edge_expr
+
+
 def compose_exact_chebykan_model(
     module,
     feature_names: list[str],
