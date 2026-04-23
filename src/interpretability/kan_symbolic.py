@@ -89,7 +89,11 @@ def _r2(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     return float(1 - ss_res / ss_tot) if ss_tot > 1e-12 else 1.0
 
 
-def _fit_scipy_candidates(x: np.ndarray, y: np.ndarray) -> tuple[str, float]:
+def _fit_scipy_candidates(
+    x: np.ndarray,
+    y: np.ndarray,
+    max_poly_degree: int = 3,
+) -> tuple[str, float]:
     """Fit a library of candidate formulas using scipy and return (formula, r²).
 
     Selection uses a BIC-penalised score (Smits & Kotanchek 2005, Springer GPTP-II):
@@ -101,34 +105,68 @@ def _fit_scipy_candidates(x: np.ndarray, y: np.ndarray) -> tuple[str, float]:
     Candidate library includes Fourier harmonic pairs (k=1..4) recommended by
     Cranmer (2023) arXiv:2305.01582 and Liu et al. (2024) arXiv:2404.19756 to
     improve symbolic fit quality for FourierKAN edges.
+
+    Parameters
+    ----------
+    max_poly_degree : int
+        Maximum polynomial degree to include in the candidate library.
+        Should match the KAN layer's degree so that higher-degree models
+        get appropriately expressive polynomial candidates.
     """
     from scipy.optimize import curve_fit
 
-    # (name, function, p0, n_params)
-    candidates: list[tuple[str, object, list, int]] = [
-        ("a*x + b",                  lambda x, a, b: a * x + b,                               [1., 0.],         2),
-        ("a*x^2 + b*x + c",          lambda x, a, b, c: a * x**2 + b * x + c,                 [1., 0., 0.],     3),
-        ("a*x^3 + b*x^2 + c*x + d",  lambda x, a, b, c, d: a*x**3 + b*x**2 + c*x + d,         [1., 0., 0., 0.], 4),
-        ("a*|x| + b",                lambda x, a, b: a * np.abs(x) + b,                        [1., 0.],         2),
-        ("a*sqrt(|x|) + b",          lambda x, a, b: a * np.sqrt(np.abs(x)) + b,               [1., 0.],         2),
-        ("a*log(|x|+1) + b",         lambda x, a, b: a * np.log(np.abs(x) + 1) + b,            [1., 0.],         2),
-        ("a*exp(x) + b",             lambda x, a, b: a * np.exp(np.clip(x, -5, 5)) + b,        [1., 0.],         2),
-        ("a*sin(x) + b",             lambda x, a, b: a * np.sin(x) + b,                        [1., 0.],         2),
-        ("a*sin(2*x) + b",           lambda x, a, b: a * np.sin(2 * x) + b,                    [1., 0.],         2),
-        ("a*cos(x) + b",             lambda x, a, b: a * np.cos(x) + b,                        [1., 0.],         2),
-        ("a (constant)",             lambda x, a: np.full_like(x, a),                           [0.],             1),
+    # Polynomial candidate names by degree
+    _poly_names = {
+        1: "a*x + b",
+        2: "a*x^2 + b*x + c",
+        3: "a*x^3 + b*x^2 + c*x + d",
+        4: "a*x^4 + b*x^3 + c*x^2 + d*x + e",
+        5: "a*x^5 + b*x^4 + c*x^3 + d*x^2 + e*x + f",
+        6: "a*x^6 + b*x^5 + c*x^4 + d*x^3 + e*x^2 + f*x + g",
+    }
+
+    # Non-polynomial candidates: (name, function, p0, n_params)
+    nonpoly_candidates: list[tuple[str, object, list, int]] = [
+        ("a*|x| + b",                lambda x, a, b: a * np.abs(x) + b,                        [1., 0.],  2),
+        ("a*sqrt(|x|) + b",          lambda x, a, b: a * np.sqrt(np.abs(x)) + b,               [1., 0.],  2),
+        ("a*log(|x|+1) + b",         lambda x, a, b: a * np.log(np.abs(x) + 1) + b,            [1., 0.],  2),
+        ("a*exp(x) + b",             lambda x, a, b: a * np.exp(np.clip(x, -5, 5)) + b,        [1., 0.],  2),
+        ("a*sin(x) + b",             lambda x, a, b: a * np.sin(x) + b,                        [1., 0.],  2),
+        ("a*sin(2*x) + b",           lambda x, a, b: a * np.sin(2 * x) + b,                    [1., 0.],  2),
+        ("a*cos(x) + b",             lambda x, a, b: a * np.cos(x) + b,                        [1., 0.],  2),
+        ("a (constant)",             lambda x, a: np.full_like(x, a),                           [0.],      1),
         # Fourier harmonic pairs k=1..4 (Cranmer 2023 / Liu et al. 2024)
-        ("a*sin(x) + b*cos(x)",      lambda x, a, b: a * np.sin(x) + b * np.cos(x),            [1., 1.],         2),
-        ("a*sin(2*x) + b*cos(2*x)",  lambda x, a, b: a * np.sin(2*x) + b * np.cos(2*x),        [1., 1.],         2),
-        ("a*sin(3*x) + b*cos(3*x)",  lambda x, a, b: a * np.sin(3*x) + b * np.cos(3*x),        [1., 1.],         2),
-        ("a*sin(4*x) + b*cos(4*x)",  lambda x, a, b: a * np.sin(4*x) + b * np.cos(4*x),        [1., 1.],         2),
+        ("a*sin(x) + b*cos(x)",      lambda x, a, b: a * np.sin(x) + b * np.cos(x),            [1., 1.],  2),
+        ("a*sin(2*x) + b*cos(2*x)",  lambda x, a, b: a * np.sin(2*x) + b * np.cos(2*x),        [1., 1.],  2),
+        ("a*sin(3*x) + b*cos(3*x)",  lambda x, a, b: a * np.sin(3*x) + b * np.cos(3*x),        [1., 1.],  2),
+        ("a*sin(4*x) + b*cos(4*x)",  lambda x, a, b: a * np.sin(4*x) + b * np.cos(4*x),        [1., 1.],  2),
     ]
 
     n = len(x)
     log_n_over_n = np.log(n) / n  # BIC penalty scale factor
 
     best_formula, best_bic, best_r2 = "a (constant)", -np.inf, 0.0
-    for name, func, p0, k in candidates:
+
+    # Fit polynomial candidates using np.polyfit (exact least-squares)
+    for deg in range(1, max_poly_degree + 1):
+        name = _poly_names.get(deg)
+        if name is None:
+            continue
+        k = deg + 1  # number of coefficients
+        try:
+            coeffs = np.polyfit(x, y, deg)
+            y_pred = np.polyval(coeffs, x)
+            r2 = _r2(y, y_pred)
+            bic_score = r2 - k * log_n_over_n
+            if bic_score > best_bic:
+                best_bic = bic_score
+                best_r2 = r2
+                best_formula = name
+        except Exception:
+            continue
+
+    # Fit non-polynomial candidates using curve_fit
+    for name, func, p0, k in nonpoly_candidates:
         try:
             popt, _ = curve_fit(func, x, y, p0=p0, maxfev=2000)
             y_pred = func(x, *popt)
@@ -144,12 +182,12 @@ def _fit_scipy_candidates(x: np.ndarray, y: np.ndarray) -> tuple[str, float]:
     return best_formula, best_r2
 
 
-def _fit_pysr(x: np.ndarray, y: np.ndarray) -> tuple[str, float]:
+def _fit_pysr(x: np.ndarray, y: np.ndarray, max_poly_degree: int = 3) -> tuple[str, float]:
     """Fit using PySR (requires Julia). Falls back to scipy if unavailable."""
     try:
         from pysr import PySRRegressor
     except ImportError:
-        return _fit_scipy_candidates(x, y)
+        return _fit_scipy_candidates(x, y, max_poly_degree=max_poly_degree)
 
     model = PySRRegressor(
         niterations=40,
@@ -168,7 +206,54 @@ def _fit_pysr(x: np.ndarray, y: np.ndarray) -> tuple[str, float]:
         r2 = _r2(y, y_pred)
         return formula, r2
     except Exception:
-        return _fit_scipy_candidates(x, y)
+        return _fit_scipy_candidates(x, y, max_poly_degree=max_poly_degree)
+
+
+def fit_symbolic_edge_chebykan_native(
+    layer,
+    *,
+    out_idx: int,
+    in_idx: int,
+    variable_name: str = "x",
+    n_verify_samples: int = 1000,
+) -> tuple[str, float]:
+    """Extract the exact per-edge formula from a trained ChebyKAN layer.
+
+    Reads ``cheby_coeffs[out_idx, in_idx, :]`` and ``base_weight[out_idx, in_idx]``
+    directly and returns the exact SymPy string:
+
+        base_weight * x + sum_k cheby_coeffs[k] * T_k(tanh(x))
+
+    The returned R² is the empirical agreement between this formula and the
+    layer's isolated edge output at ``n_verify_samples`` points; it is ≈ 1 by
+    construction and serves as a guard against implementation drift.
+    """
+    from src.models.kan_layers import ChebyKANLayer
+    from src.interpretability.formula_composition import _compose_exact_chebykan_edge
+
+    if not isinstance(layer, ChebyKANLayer):
+        raise TypeError(f"Expected ChebyKANLayer, got {type(layer).__name__}")
+
+    import sympy as sp
+
+    x_sym = sp.Symbol(variable_name)
+    expr = _compose_exact_chebykan_edge(
+        layer, out_idx=out_idx, in_idx=in_idx, input_expr=x_sym
+    )
+    formula_str = str(expr)
+
+    x_norm, y_edge = _sample_chebykan_edge(layer, out_idx, in_idx, n=n_verify_samples)
+    x_pre = np.arctanh(np.clip(x_norm, -0.999999, 0.999999))
+
+    if expr == 0:
+        y_formula = np.zeros_like(y_edge)
+    else:
+        f = sp.lambdify(x_sym, expr, modules=["numpy"])
+        y_formula = np.asarray(f(x_pre), dtype=np.float64)
+        if y_formula.ndim == 0:
+            y_formula = np.full_like(y_edge, float(y_formula))
+
+    return formula_str, float(_r2(y_edge, y_formula))
 
 
 def fit_symbolic_edge(
@@ -176,6 +261,7 @@ def fit_symbolic_edge(
     y: np.ndarray,
     use_pysr: bool = False,
     pysr_fallback_threshold: float = 0.95,
+    max_poly_degree: int = 3,
 ) -> tuple[str, float]:
     """Fit a symbolic formula to edge samples, returning (formula, r²).
 
@@ -184,10 +270,16 @@ def fit_symbolic_edge(
     approach follows Cranmer (2023) arXiv:2305.01582: fixed libraries are
     cost-efficient when the functional form is anticipated; PySR is reserved for
     genuinely complex edges.
+
+    Parameters
+    ----------
+    max_poly_degree : int
+        Maximum polynomial degree for the candidate library.
+        Should match the KAN layer's degree.
     """
-    formula, r2 = _fit_scipy_candidates(x, y)
+    formula, r2 = _fit_scipy_candidates(x, y, max_poly_degree=max_poly_degree)
     if use_pysr and r2 < pysr_fallback_threshold:
-        pysr_formula, pysr_r2 = _fit_pysr(x, y)
+        pysr_formula, pysr_r2 = _fit_pysr(x, y, max_poly_degree=max_poly_degree)
         if pysr_r2 > r2:
             return pysr_formula, pysr_r2
     return formula, r2
@@ -281,28 +373,30 @@ def _plot_activation_grid(
         has_raw = X_raw is not None and feat in X_raw.columns and is_numeric_raw
 
         active_edges = df[(df["layer"] == 0) & (df["input_feature"] == feat)]
-        best_r2_row = None
 
+        # Compute L1 norms for opacity scaling
+        from src.interpretability.kan_pruning import _compute_edge_l1
+        l1_scores = _compute_edge_l1(first_layer)
+        edge_l1s = {}
+        for _, erow in active_edges.iterrows():
+            out_i = int(erow["edge_out"])
+            edge_l1s[out_i] = float(l1_scores[out_i, feat_i].item())
+        max_l1 = max(edge_l1s.values()) if edge_l1s else 1.0
+
+        # Plot all edges with opacity proportional to L1 norm
         for _, erow in active_edges.iterrows():
             out_i = int(erow["edge_out"])
             x_norm, y_vals = sample_edge(first_layer, out_i, feat_i, n=300)
             x_plot = (encode_to_raw_lookup(feat, X_eval, X_raw, x_norm)
                       if (has_raw and not is_binary) else x_norm)
-            ax.plot(x_plot, y_vals, color="gray", alpha=0.3, lw=1)
-            if best_r2_row is None or erow["r_squared"] > best_r2_row["r_squared"]:
-                best_r2_row = erow
-
-        if best_r2_row is not None:
-            out_i = int(best_r2_row["edge_out"])
-            x_norm, y_vals = sample_edge(first_layer, out_i, feat_i, n=300)
-            x_plot = (encode_to_raw_lookup(feat, X_eval, X_raw, x_norm)
-                      if (has_raw and not is_binary) else x_norm)
-            ax.plot(x_plot, y_vals, color=model_color, lw=2,
-                    label=f"{best_r2_row['formula'][:20]}\nR²={best_r2_row['r_squared']:.3f}")
-            if is_binary:
+            rel_strength = edge_l1s[out_i] / max_l1 if max_l1 > 0 else 0.0
+            alpha = 0.1 + 0.8 * rel_strength
+            lw = 1.0 + 1.5 * rel_strength
+            ax.plot(x_plot, y_vals, color=model_color, lw=lw, alpha=alpha)
+            if is_binary and rel_strength > 0.8:
                 for enc_pos in [-1.0, 1.0]:
                     y_mark = float(np.interp(enc_pos, x_norm, y_vals))
-                    ax.axvline(enc_pos, color="gray", lw=1, ls="--", alpha=0.7)
+                    ax.axvline(enc_pos, color="gray", lw=1, ls="--", alpha=0.5)
                     ax.scatter([enc_pos], [y_mark], s=40, color="black", zorder=5)
 
         marker = FEATURE_TYPE_MARKERS.get(ftype, "")
@@ -310,16 +404,23 @@ def _plot_activation_grid(
         x_lbl = "Encoded [-1,1]" if is_binary else ("Original scale" if has_raw else "Encoded")
         ax.set_xlabel(x_lbl, fontsize=7)
         ax.set_ylabel("Edge output", fontsize=7)
-        if best_r2_row is not None:
-            ax.legend(fontsize=5, loc="best")
 
     for ax in axes_flat[len(top_feats):]:
         ax.set_visible(False)
 
+    # Single figure-level legend
+    from matplotlib.lines import Line2D
+    legend_handles = [
+        Line2D([0], [0], color=model_color, lw=2.5, alpha=0.9, label="strong edges (high L1 norm)"),
+        Line2D([0], [0], color=model_color, lw=1.0, alpha=0.15, label="weak edges (low L1 norm)"),
+    ]
+    fig.legend(handles=legend_handles, loc="lower center", ncol=2, fontsize=8,
+               frameon=True, bbox_to_anchor=(0.5, -0.02))
+
     plt.suptitle(
         f"{flavor.title()} — Learned Activation Functions (Top-10 Coefficient-Ranked Features)",
                  fontsize=12, fontweight="bold")
-    plt.tight_layout()
+    plt.tight_layout(rect=[0, 0.03, 1, 1])
     from src.interpretability.utils.paths import figures as fig_dir
     out = fig_dir(output_dir) / f"{flavor}_activations.pdf"
     savefig_pdf(fig, out)
@@ -397,6 +498,12 @@ _FORMULA_FUNCTIONS: dict[str, tuple] = {
     "a*x + b":                  (lambda x, a, b: a * x + b,                                    2),
     "a*x^2 + b*x + c":         (lambda x, a, b, c: a * x**2 + b * x + c,                      3),
     "a*x^3 + b*x^2 + c*x + d": (lambda x, a, b, c, d: a*x**3 + b*x**2 + c*x + d,             4),
+    "a*x^4 + b*x^3 + c*x^2 + d*x + e":
+        (lambda x, a, b, c, d, e: a*x**4 + b*x**3 + c*x**2 + d*x + e,                         5),
+    "a*x^5 + b*x^4 + c*x^3 + d*x^2 + e*x + f":
+        (lambda x, a, b, c, d, e, f: a*x**5 + b*x**4 + c*x**3 + d*x**2 + e*x + f,             6),
+    "a*x^6 + b*x^5 + c*x^4 + d*x^3 + e*x^2 + f*x + g":
+        (lambda x, a, b, c, d, e, f, g: a*x**6 + b*x**5 + c*x**4 + d*x**3 + e*x**2 + f*x + g, 7),
     "a*|x| + b":                (lambda x, a, b: a * np.abs(x) + b,                            2),
     "a*sqrt(|x|) + b":          (lambda x, a, b: a * np.sqrt(np.abs(x)) + b,                   2),
     "a*log(|x|+1) + b":         (lambda x, a, b: a * np.log(np.abs(x) + 1) + b,                2),
@@ -471,6 +578,10 @@ def lock_in_symbolic_edges(
     from src.models.kan_layers import ChebyKANLayer, FourierKANLayer
 
     clean_df = fits_df[fits_df["quality_tier"] == "clean"].copy()
+    if "fit_mode" in clean_df.columns:
+        # Native-fit rows are already the exact layer parameters; projecting back
+        # onto the same basis would be a no-op, so skip them.
+        clean_df = clean_df[clean_df["fit_mode"] != "chebykan_native"]
     if clean_df.empty:
         print("lock_in_symbolic_edges: no clean edges found. Skipping.")
         return module, []
@@ -546,6 +657,81 @@ def lock_in_symbolic_edges(
     return symbolified, lockin_log
 
 
+# ── Per-edge record builder ───────────────────────────────────────────────────
+
+
+def _build_edge_records(
+    module,
+    *,
+    threshold: float,
+    feature_names: list[str],
+    use_pysr: bool = False,
+    n_samples: int = 1000,
+) -> list[dict]:
+    """Iterate active edges and emit one record per edge.
+
+    For ChebyKAN layers, uses the native coefficient-read path (R² ≈ 1 by
+    construction). For FourierKAN layers, falls back to scipy candidate fitting.
+    """
+    from src.models.kan_layers import ChebyKANLayer, FourierKANLayer
+    from src.interpretability.kan_pruning import _compute_edge_l1
+
+    records: list[dict] = []
+    layer_idx = 0
+
+    for layer in module.kan_layers:
+        if not isinstance(layer, (ChebyKANLayer, FourierKANLayer)):
+            continue
+
+        variances = _compute_edge_l1(layer)
+        n_active = int((variances >= threshold).sum().item())
+        layer_degree = getattr(layer, "degree", 3)
+        print(
+            f"Layer {layer_idx}: {layer.in_features}→{layer.out_features} edges, "
+            f"{n_active} active (degree={layer_degree})"
+        )
+
+        is_chebykan = isinstance(layer, ChebyKANLayer)
+
+        for out_i in range(layer.out_features):
+            for in_i in range(layer.in_features):
+                if variances[out_i, in_i].item() < threshold:
+                    continue
+
+                if is_chebykan:
+                    formula, r2 = fit_symbolic_edge_chebykan_native(
+                        layer, out_idx=out_i, in_idx=in_i, n_verify_samples=n_samples
+                    )
+                    fit_mode = "chebykan_native"
+                else:
+                    x_vals, y_vals = sample_edge(layer, out_i, in_i, n=n_samples)
+                    formula, r2 = fit_symbolic_edge(
+                        x_vals, y_vals, use_pysr=use_pysr, max_poly_degree=layer_degree
+                    )
+                    fit_mode = "scipy_candidate"
+
+                input_feat = (
+                    feature_names[in_i]
+                    if layer_idx == 0 and in_i < len(feature_names)
+                    else f"h{in_i}"
+                )
+                records.append({
+                    "layer": layer_idx,
+                    "edge_in": in_i,
+                    "edge_out": out_i,
+                    "input_feature": input_feat,
+                    "formula": formula,
+                    "r_squared": round(r2, 6),
+                    "flagged": r2 < 0.90,
+                    "quality_tier": _quality_tier(r2),
+                    "fit_mode": fit_mode,
+                })
+
+        layer_idx += 1
+
+    return records
+
+
 # ── Main per-model runner ─────────────────────────────────────────────────────
 
 def run(
@@ -574,10 +760,12 @@ def run(
     widths = config.model.resolved_hidden_widths()
     if flavor == "chebykan":
         module = TabKAN(in_features=in_features, widths=widths, kan_type="chebykan",
-                        degree=config.model.degree or 3)
+                        degree=config.model.degree or 3,
+                        use_layernorm=config.model.use_layernorm)
     else:
         module = TabKAN(in_features=in_features, widths=widths, kan_type="fourierkan",
-                        grid_size=config.model.params.get("grid_size", 4))
+                        grid_size=config.model.params.get("grid_size", 4),
+                        use_layernorm=config.model.use_layernorm)
 
     module.load_state_dict(torch.load(pruned_checkpoint_path, map_location="cpu"))
     module.eval()
@@ -587,39 +775,13 @@ def run(
         coefficient_importance_from_layer,
         get_first_kan_layer,
     )
-    records = []
-    layer_idx = 0
-
-    for layer in module.kan_layers:
-        if not isinstance(layer, (ChebyKANLayer, FourierKANLayer)):
-            continue
-
-        # Precompute all edge L1 norms once per layer (avoids O(n²) recomputation)
-        from src.interpretability.kan_pruning import _compute_edge_l1
-        variances = _compute_edge_l1(layer)
-        n_active = int((variances >= threshold).sum().item())
-        print(f"Layer {layer_idx}: {layer.in_features}→{layer.out_features} edges, {n_active} active")
-        for out_i in range(layer.out_features):
-            for in_i in range(layer.in_features):
-                if variances[out_i, in_i].item() < threshold:
-                    continue
-
-                x_vals, y_vals = sample_edge(layer, out_i, in_i, n=n_samples)
-                formula, r2 = fit_symbolic_edge(x_vals, y_vals, use_pysr=use_pysr)
-
-                input_feat = feature_names[in_i] if layer_idx == 0 and in_i < len(feature_names) else f"h{in_i}"
-                records.append({
-                    "layer": layer_idx,
-                    "edge_in": in_i,
-                    "edge_out": out_i,
-                    "input_feature": input_feat,
-                    "formula": formula,
-                    "r_squared": round(r2, 6),
-                    "flagged": r2 < 0.90,
-                    "quality_tier": _quality_tier(r2),
-                })
-
-        layer_idx += 1
+    records = _build_edge_records(
+        module,
+        threshold=threshold,
+        feature_names=feature_names,
+        use_pysr=use_pysr,
+        n_samples=n_samples,
+    )
 
     df = pd.DataFrame(records)
     from src.interpretability.utils.paths import data as data_dir, figures as fig_dir

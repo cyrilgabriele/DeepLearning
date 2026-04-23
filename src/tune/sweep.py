@@ -32,13 +32,9 @@ def _compute_sparsity(checkpoint_path: str, config: ExperimentConfig, flavor: st
         in_features = 140
 
     wrapper = TabKANClassifier(
-        preset=config.model.name,
-        flavor=flavor,
-        hidden_widths=config.model.resolved_hidden_widths(),
-        depth=config.model.depth,
-        width=config.model.width,
-        degree=config.model.degree or 3,
-        grid_size=config.model.params.get("grid_size", 4),
+        config.model.name,
+        random_state=config.trainer.seed,
+        **config.model.registry_kwargs(),
     )
     wrapper.module = TabKAN(
         in_features=in_features,
@@ -46,6 +42,13 @@ def _compute_sparsity(checkpoint_path: str, config: ExperimentConfig, flavor: st
         kan_type=flavor,
         degree=wrapper.degree,
         grid_size=wrapper.grid_size,
+        spline_order=wrapper.spline_order,
+        lr=wrapper.lr,
+        weight_decay=wrapper.weight_decay,
+        sparsity_lambda=wrapper.sparsity_lambda,
+        l1_weight=wrapper.l1_weight,
+        entropy_weight=wrapper.entropy_weight,
+        use_layernorm=wrapper.use_layernorm,
     )
     wrapper.module.load_state_dict(torch.load(checkpoint_path, map_location="cpu"))
     wrapper.module.eval()
@@ -77,13 +80,28 @@ def run_tune(
 
     multi_objective = tune_config.directions is not None and len(tune_config.directions) > 1
 
+    # Sampler selection rule:
+    #   - If the user explicitly chose `grid`, honour it — even for multi-objective.
+    #   - Otherwise, if the study is multi-objective, fall back to NSGA-II.
+    #     TPE/random are single-objective only and Optuna rejects them for
+    #     Pareto studies, so this keeps legacy configs that set sampler=tpe
+    #     (the default) with multiple directions working.
+    if tune_config.sampler != "grid" and multi_objective:
+        sampler = optuna.samplers.NSGAIISampler(seed=base_config.trainer.seed)
+    else:
+        sampler = _build_sampler(
+            tune_config.sampler,
+            seed=base_config.trainer.seed,
+            search_space=tune_config.search_space,
+        )
+
     if multi_objective:
         study = optuna.create_study(
             study_name=study_name,
             directions=tune_config.directions,
             storage=storage,
             load_if_exists=True,
-            sampler=optuna.samplers.NSGAIISampler(seed=base_config.trainer.seed),
+            sampler=sampler,
         )
     else:
         study = optuna.create_study(
@@ -91,7 +109,7 @@ def run_tune(
             direction="maximize",
             storage=storage,
             load_if_exists=True,
-            sampler=_build_sampler(tune_config.sampler, seed=base_config.trainer.seed),
+            sampler=sampler,
         )
 
     print(f"\nStarting tune stage for '{base_config.trainer.experiment_name}'")
@@ -392,11 +410,32 @@ def _require_tune_config(config: ExperimentConfig):
     return config.tune
 
 
-def _build_sampler(sampler_name: str, *, seed: int) -> optuna.samplers.BaseSampler:
+def _build_sampler(
+    sampler_name: str,
+    *,
+    seed: int,
+    search_space: dict[str, Any] | None = None,
+) -> optuna.samplers.BaseSampler:
     if sampler_name == "tpe":
         return optuna.samplers.TPESampler(seed=seed)
     if sampler_name == "random":
         return optuna.samplers.RandomSampler(seed=seed)
+    if sampler_name == "grid":
+        if not search_space:
+            raise ValueError("Grid sampler requires a non-empty search_space.")
+        grid: dict[str, list[Any]] = {}
+        for name, spec in search_space.items():
+            resolved = spec.model_dump() if hasattr(spec, "model_dump") else dict(spec)
+            if resolved["type"] == "grid":
+                grid[name] = list(resolved["values"])
+            elif resolved["type"] == "categorical":
+                grid[name] = list(resolved["choices"])
+            else:
+                raise ValueError(
+                    f"Grid sampler requires all search-space entries to be type=grid "
+                    f"or type=categorical; got type={resolved['type']} for '{name}'."
+                )
+        return optuna.samplers.GridSampler(grid, seed=seed)
     raise ValueError(f"Unsupported Optuna sampler: {sampler_name}")
 
 
@@ -435,6 +474,8 @@ def _sample_trial_params(
             params[name] = trial.suggest_int(name, resolved["low"], resolved["high"], **kwargs)
         elif spec_type == "categorical":
             params[name] = trial.suggest_categorical(name, resolved["choices"])
+        elif spec_type == "grid":
+            params[name] = trial.suggest_categorical(name, resolved["values"])
         else:  # pragma: no cover - validated by SearchParamConfig
             raise ValueError(f"Unknown search space type: {spec_type}")
     return params
@@ -463,10 +504,6 @@ def _build_trial_config(
                 model_payload["hidden_widths"] = None
         else:
             model_params[key] = value
-
-    if model_family in {"chebykan", "fourierkan", "bsplinekan"}:
-        model_params.setdefault("l1_weight", 1.0)
-        model_params.setdefault("entropy_weight", 1.0)
 
     model_payload["params"] = model_params
     payload["model"] = model_payload

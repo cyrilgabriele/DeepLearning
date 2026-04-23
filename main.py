@@ -72,6 +72,7 @@ def run(argv: Sequence[str] | None = None) -> None:
             pruning_threshold=args.pruning_threshold,
             qwk_tolerance=args.qwk_tolerance,
             candidate_library=args.candidate_library,
+            max_features=args.max_features,
         )
         _print_interpret_summary(result)
         return
@@ -185,6 +186,12 @@ def _build_parser() -> argparse.ArgumentParser:
         choices=["scipy", "pysr"],
         default="scipy",
         help="Symbolic fitting backend for KAN interpretability.",
+    )
+    parser.add_argument(
+        "--max-features",
+        type=int,
+        default=None,
+        help="Restrict interpretability to the top-N features by coefficient importance.",
     )
     parser.add_argument(
         "--candidate-manifest",

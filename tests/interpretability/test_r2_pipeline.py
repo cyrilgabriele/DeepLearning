@@ -135,6 +135,48 @@ class TestSymbolicFitting:
         formula, r2 = _fit_scipy_candidates(x, y)
         assert r2 >= 0.999, f"Constant function should have R²≈1.0, got {r2:.4f}"
 
+    def test_degree4_poly_needs_max_poly_degree_4(self):
+        """A quartic polynomial should only fit well when max_poly_degree >= 4."""
+        from src.interpretability.kan_symbolic import _fit_scipy_candidates
+
+        x = np.linspace(-1, 1, 500)
+        y = 2.0 * x**4 - 0.5 * x**2 + 0.1
+
+        # With default degree 3, the cubic can't capture x^4
+        _, r2_deg3 = _fit_scipy_candidates(x, y, max_poly_degree=3)
+        # With degree 4, the quartic candidate captures it perfectly
+        formula_deg4, r2_deg4 = _fit_scipy_candidates(x, y, max_poly_degree=4)
+        assert r2_deg4 > r2_deg3, (
+            f"degree-4 fit (R²={r2_deg4:.4f}) should beat degree-3 (R²={r2_deg3:.4f})")
+        assert r2_deg4 > 0.99, f"Expected R²>0.99 for quartic, got {r2_deg4:.4f}"
+        assert "x^4" in formula_deg4, f"Expected quartic formula, got {formula_deg4}"
+
+    def test_higher_max_poly_degree_never_degrades_r2(self):
+        """Increasing max_poly_degree should never produce a worse R²."""
+        from src.interpretability.kan_symbolic import _fit_scipy_candidates
+
+        x = np.linspace(-1, 1, 500)
+        y = 1.0 * x**6 - 0.3 * x**4 + 0.1 * x**2
+
+        _, r2_deg3 = _fit_scipy_candidates(x, y, max_poly_degree=3)
+        _, r2_deg4 = _fit_scipy_candidates(x, y, max_poly_degree=4)
+        _, r2_deg6 = _fit_scipy_candidates(x, y, max_poly_degree=6)
+        assert r2_deg4 >= r2_deg3 - 1e-6, "degree-4 should not degrade vs degree-3"
+        assert r2_deg6 >= r2_deg4 - 1e-6, "degree-6 should not degrade vs degree-4"
+        assert r2_deg6 > 0.98, f"degree-6 max should fit well, got R²={r2_deg6:.4f}"
+
+    def test_degree3_poly_unchanged_with_higher_max(self):
+        """A cubic should still be preferred over higher-degree polys (BIC penalty)."""
+        from src.interpretability.kan_symbolic import _fit_scipy_candidates
+
+        x = np.linspace(-1, 1, 500)
+        y = 1.5 * x**3 - 0.3 * x + 0.1
+
+        formula_deg3, _ = _fit_scipy_candidates(x, y, max_poly_degree=3)
+        formula_deg6, _ = _fit_scipy_candidates(x, y, max_poly_degree=6)
+        assert formula_deg3 == formula_deg6, (
+            f"BIC should prefer cubic for cubic data: deg3={formula_deg3}, deg6={formula_deg6}")
+
 
 class TestR2Pipeline:
     def test_pipeline_returns_expected_keys(self):

@@ -319,7 +319,20 @@ def stage_8_registry_bridge():
 
     from src.models.tabkan import build_tabkan_model
 
-    model = build_tabkan_model("tabkan-tiny", random_state=42, flavor="chebykan")
+    model = build_tabkan_model(
+        "tabkan-tiny",
+        random_state=42,
+        flavor="chebykan",
+        hidden_widths=[32, 16],
+        degree=3,
+        max_epochs=2,
+        lr=1e-3,
+        weight_decay=1e-5,
+        batch_size=32,
+        sparsity_lambda=0.0,
+        l1_weight=1.0,
+        entropy_weight=1.0,
+    )
     print(f"  Created: {type(model).__name__}")
     print(f"  Preset: tabkan-tiny, flavor: chebykan")
     print(f"  Widths: {model.widths}")

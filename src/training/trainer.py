@@ -32,6 +32,7 @@ class PreparedDataset:
     y_train_inner: Optional[pd.Series] = None
     X_val_inner: Optional[pd.DataFrame] = None
     y_val_inner: Optional[pd.Series] = None
+    all_feature_names: Optional[list[str]] = None
 
 
 @dataclass(frozen=True)
@@ -42,6 +43,7 @@ class Trainer:
 
     def run(self) -> TrainingArtifacts:
         dataset = self._prepare_data()
+        self.config.model.assert_training_ready()
 
         model_kwargs = self.config.model.registry_kwargs()
         model_kwargs.setdefault("device", self.device)
@@ -67,19 +69,27 @@ class Trainer:
             fit_kwargs["validation_splits"] = inner_splits
 
         model.fit(X_train, y_train, **fit_kwargs)
+        ordinal_calibration = self._resolve_ordinal_calibration(model)
 
         metrics = self._evaluate(model, dataset)
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
         checkpoint_path = self._persist_checkpoint(model, timestamp)
-        summary_path = self._persist_run_summary(metrics, dataset, timestamp, checkpoint_path)
+        summary_path = self._persist_run_summary(
+            metrics,
+            dataset,
+            timestamp,
+            checkpoint_path,
+            ordinal_calibration=ordinal_calibration,
+        )
         self._persist_checkpoint_manifest(
             metrics=metrics,
             dataset=dataset,
             timestamp=timestamp,
             checkpoint_path=checkpoint_path,
             summary_path=summary_path,
+            ordinal_calibration=ordinal_calibration,
         )
-        self._export_eval_data(dataset)
+        self._export_eval_data(dataset, ordinal_calibration=ordinal_calibration)
         test_predictions_path = self._generate_test_predictions(
             model=model,
             dataset=dataset,
@@ -94,6 +104,7 @@ class Trainer:
             summary_path=summary_path,
             checkpoint_path=checkpoint_path,
             test_predictions_path=test_predictions_path,
+            ordinal_calibration=ordinal_calibration,
         )
 
 
@@ -113,7 +124,7 @@ class Trainer:
             inner_val_y = None
             if outputs["inner_splits"]:
                 inner_train, inner_val, inner_train_y, inner_val_y = outputs["inner_splits"][0]
-            return PreparedDataset(
+            dataset = PreparedDataset(
                 X_train=outputs["X_train_outer"],
                 y_train=outputs["y_train_outer"],
                 X_eval=outputs["X_test_outer"],
@@ -126,14 +137,20 @@ class Trainer:
                 y_train_inner=inner_train_y,
                 X_val_inner=inner_val,
                 y_val_inner=inner_val_y,
+                all_feature_names=list(outputs["X_train_outer"].columns),
             )
+            return self._apply_selected_features(dataset)
 
         if recipe == "kan_paper":
             outputs = kan_prep.run_pipeline(train_csv, random_seed=self.random_seed)
-            return self._build_kan_dataset(outputs, recipe, kan_prep.TARGET_COLUMN)
+            return self._apply_selected_features(
+                self._build_kan_dataset(outputs, recipe, kan_prep.TARGET_COLUMN)
+            )
         if recipe == "kan_sota":
             outputs = kan_sota_prep.run_pipeline(train_csv, random_seed=self.random_seed)
-            return self._build_kan_dataset(outputs, recipe, kan_sota_prep.TARGET_COLUMN)
+            return self._apply_selected_features(
+                self._build_kan_dataset(outputs, recipe, kan_sota_prep.TARGET_COLUMN)
+            )
         raise ValueError(f"Unknown preprocessing recipe: {recipe}")
 
     def _evaluate(self, model, dataset: "PreparedDataset") -> Dict[str, Optional[float]]:
@@ -163,6 +180,8 @@ class Trainer:
         dataset: "PreparedDataset",
         timestamp: str,
         checkpoint_path: Optional[Path],
+        *,
+        ordinal_calibration: Dict[str, object] | None,
     ) -> Optional[Path]:
         """Write a JSON summary capturing config, seed, device, and metrics."""
 
@@ -177,6 +196,7 @@ class Trainer:
             "device": self.device,
             "metrics": metrics,
             "model_architecture": self.config.model.architecture_payload(),
+            "ordinal_calibration": ordinal_calibration,
             "preprocessing": preprocessing_contract,
             "checkpoint_path": str(checkpoint_path) if checkpoint_path is not None else None,
             "config": self.config.model_dump(mode="json"),
@@ -198,6 +218,7 @@ class Trainer:
         timestamp: str,
         checkpoint_path: Optional[Path],
         summary_path: Optional[Path],
+        ordinal_calibration: Dict[str, object] | None,
     ) -> Optional[Path]:
         """Write a checkpoint-adjacent manifest mirroring the effective run contract."""
 
@@ -214,6 +235,7 @@ class Trainer:
             "summary_path": str(summary_path) if summary_path is not None else None,
             "metrics": metrics,
             "model_architecture": self.config.model.architecture_payload(),
+            "ordinal_calibration": ordinal_calibration,
             "preprocessing": self._build_preprocessing_contract(dataset),
             "config": self.config.model_dump(mode="json"),
         }
@@ -235,6 +257,132 @@ class Trainer:
             "feature_count": len(feature_names),
             "feature_names": feature_names,
         }
+
+    def _apply_selected_features(self, dataset: "PreparedDataset") -> "PreparedDataset":
+        selected_path = self.config.preprocessing.selected_features_path
+        if selected_path is None:
+            return dataset
+
+        full_feature_names = list(dataset.all_feature_names or dataset.feature_names or dataset.X_train.columns)
+        selected_features = self._load_selected_features(selected_path)
+        missing = [feature for feature in selected_features if feature not in full_feature_names]
+        if missing:
+            raise ValueError(
+                "Selected features were not found in the preprocessed feature space: "
+                f"{', '.join(missing[:10])}"
+            )
+
+        def _subset_frame(frame: Optional[pd.DataFrame]) -> Optional[pd.DataFrame]:
+            if frame is None:
+                return None
+            return frame.loc[:, selected_features].copy()
+
+        preprocess_artifacts = dict(dataset.preprocess_artifacts)
+        inner_splits = preprocess_artifacts.get("inner_splits")
+        if inner_splits:
+            preprocess_artifacts["inner_splits"] = self._subset_inner_splits(
+                inner_splits,
+                selected_features,
+            )
+
+        X_eval_raw = dataset.X_eval_raw
+        if X_eval_raw is not None:
+            raw_columns = self._resolve_raw_columns_for_selected_features(selected_features, X_eval_raw)
+            X_eval_raw = X_eval_raw.loc[:, raw_columns].copy()
+
+        return PreparedDataset(
+            X_train=_subset_frame(dataset.X_train),
+            y_train=dataset.y_train,
+            X_eval=_subset_frame(dataset.X_eval),
+            y_eval=dataset.y_eval,
+            recipe=dataset.recipe,
+            preprocess_artifacts=preprocess_artifacts,
+            X_eval_raw=X_eval_raw,
+            feature_names=list(selected_features),
+            X_train_inner=_subset_frame(dataset.X_train_inner),
+            y_train_inner=dataset.y_train_inner,
+            X_val_inner=_subset_frame(dataset.X_val_inner),
+            y_val_inner=dataset.y_val_inner,
+            all_feature_names=full_feature_names,
+        )
+
+    @staticmethod
+    def _load_selected_features(selected_path: Path) -> list[str]:
+        try:
+            raw_text = selected_path.read_text()
+        except OSError as exc:
+            raise OSError(f"Failed to read selected feature list at {selected_path}: {exc}") from exc
+
+        features: list[str]
+        suffix = selected_path.suffix.lower()
+        if suffix == ".json":
+            payload = json.loads(raw_text)
+            if isinstance(payload, list):
+                features = [str(item) for item in payload]
+            elif isinstance(payload, dict):
+                for key in ("features", "selected_features", "feature_names"):
+                    if key in payload:
+                        candidate = payload[key]
+                        if not isinstance(candidate, list):
+                            raise TypeError(
+                                f"Selected feature payload key '{key}' must contain a list."
+                            )
+                        features = [str(item) for item in candidate]
+                        break
+                else:
+                    raise ValueError(
+                        "Selected feature JSON must be a list or include one of: "
+                        "'features', 'selected_features', 'feature_names'."
+                    )
+            else:
+                raise TypeError("Selected feature JSON must be a list or object.")
+        else:
+            features = [line.strip() for line in raw_text.splitlines() if line.strip()]
+
+        deduped = list(dict.fromkeys(features))
+        if not deduped:
+            raise ValueError(f"Selected feature list at {selected_path} is empty.")
+        return deduped
+
+    @staticmethod
+    def _resolve_raw_columns_for_selected_features(
+        selected_features: list[str],
+        raw_frame: pd.DataFrame,
+    ) -> list[str]:
+        raw_columns: list[str] = []
+        if "Id" in raw_frame.columns:
+            raw_columns.append("Id")
+
+        for feature in selected_features:
+            base_feature = feature
+            for prefix in ("cb_", "qt_", "mm_"):
+                if base_feature.startswith(prefix):
+                    base_feature = base_feature[len(prefix):]
+                    break
+            if base_feature.startswith("missing_"):
+                base_feature = base_feature[len("missing_"):]
+            if base_feature in raw_frame.columns:
+                raw_columns.append(base_feature)
+
+        deduped = list(dict.fromkeys(raw_columns))
+        return deduped or list(raw_frame.columns)
+
+    @staticmethod
+    def _subset_inner_splits(inner_splits, selected_features: list[str]):
+        subset_splits = []
+        for split in inner_splits:
+            if len(split) < 4:
+                subset_splits.append(split)
+                continue
+            X_split_train, X_split_val, y_split_train, y_split_val, *rest = split
+            if isinstance(X_split_train, pd.DataFrame):
+                X_split_train = X_split_train.loc[:, selected_features].copy()
+            if isinstance(X_split_val, pd.DataFrame):
+                X_split_val = X_split_val.loc[:, selected_features].copy()
+            subset_splits.append(
+                (X_split_train, X_split_val, y_split_train, y_split_val, *rest)
+            )
+        return subset_splits
 
     def _persist_checkpoint(self, model: PrudentialModel, timestamp: str) -> Optional[Path]:
         """Save a Torch checkpoint or a joblib pickle depending on model type."""
@@ -271,7 +419,12 @@ class Trainer:
             print(f"Warning: joblib.dump failed at {checkpoint_path}: {exc}")
         return None
 
-    def _export_eval_data(self, dataset: "PreparedDataset") -> None:
+    def _export_eval_data(
+        self,
+        dataset: "PreparedDataset",
+        *,
+        ordinal_calibration: Dict[str, object] | None,
+    ) -> None:
         """Persist the preprocessed eval split for downstream interpretability scripts."""
         if dataset.X_eval is None or dataset.y_eval is None:
             return
@@ -322,8 +475,36 @@ class Trainer:
             (eval_dir / "feature_types.json").write_text(
                 json.dumps(feature_type_map, indent=2, sort_keys=True)
             )
+            if ordinal_calibration is not None:
+                (eval_dir / "ordinal_thresholds.json").write_text(
+                    json.dumps(ordinal_calibration, indent=2, sort_keys=True)
+                )
         except Exception as exc:  # pragma: no cover
             print(f"Warning: failed to export eval data: {exc}")
+
+    @staticmethod
+    def _resolve_ordinal_calibration(model: PrudentialModel) -> Dict[str, object] | None:
+        payload = model.get_ordinal_calibration()
+        if payload is None:
+            return None
+
+        thresholds = payload.get("thresholds")
+        if thresholds is None:
+            return None
+
+        serializable_thresholds = [float(value) for value in thresholds]
+        result: Dict[str, object] = {
+            "method": str(payload.get("method", "optimized_thresholds")),
+            "num_classes": int(payload.get("num_classes", 8)),
+            "thresholds": serializable_thresholds,
+        }
+        if payload.get("source_split") is not None:
+            result["source_split"] = str(payload["source_split"])
+        if payload.get("optimized_qwk_on_source_split") is not None:
+            result["optimized_qwk_on_source_split"] = float(
+                payload["optimized_qwk_on_source_split"]
+            )
+        return result
 
     @staticmethod
     def _resolve_torch_module(model: PrudentialModel, torch_module) -> Optional["torch.nn.Module"]:
@@ -380,12 +561,15 @@ class Trainer:
         return None
 
     def _transform_test_dataframe(self, df: pd.DataFrame, dataset: "PreparedDataset") -> pd.DataFrame:
+        full_feature_names = list(dataset.all_feature_names or dataset.feature_names or [])
+
         if dataset.recipe == "xgboost_paper":
             processed, _ = paper_prep.transform(
                 df,
                 dataset.preprocess_artifacts["state"],
             )
-            return processed
+            processed_df = processed.copy()
+            return processed_df.loc[:, list(dataset.feature_names or processed_df.columns)].copy()
 
         if dataset.recipe == "kan_paper":
             base_state = dataset.preprocess_artifacts["baseline"]
@@ -395,7 +579,8 @@ class Trainer:
                 base_state,
                 kan_state=kan_state,
             )
-            return pd.DataFrame(processed_array, columns=dataset.feature_names)
+            processed_df = pd.DataFrame(processed_array, columns=full_feature_names)
+            return processed_df.loc[:, list(dataset.feature_names or processed_df.columns)].copy()
 
         if dataset.recipe == "kan_sota":
             base_state = dataset.preprocess_artifacts["baseline"]
@@ -405,7 +590,8 @@ class Trainer:
                 base_state,
                 sota_state=sota_state,
             )
-            return pd.DataFrame(processed_array, columns=dataset.feature_names)
+            processed_df = pd.DataFrame(processed_array, columns=full_feature_names)
+            return processed_df.loc[:, list(dataset.feature_names or processed_df.columns)].copy()
 
         raise ValueError(f"Unknown preprocessing recipe for test transform: {dataset.recipe}")
 
@@ -458,6 +644,7 @@ class Trainer:
             y_train_inner=inner_train_y,
             X_val_inner=inner_val,
             y_val_inner=inner_val_y,
+            all_feature_names=list(feature_names),
         )
 
     def _load_raw_eval_features(self, row_index) -> Optional[pd.DataFrame]:

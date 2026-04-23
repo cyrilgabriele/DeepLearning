@@ -40,6 +40,11 @@ class PrudentialModel(ABC):
 
         return dict(self.model_params)
 
+    def get_ordinal_calibration(self) -> Dict[str, Any] | None:
+        """Return optional ordinal calibration metadata for downstream artifacts."""
+
+        return None
+
 
 @dataclass
 class TrainingArtifacts:
@@ -53,3 +58,4 @@ class TrainingArtifacts:
     summary_path: Optional[Path] = None
     checkpoint_path: Optional[Path] = None
     test_predictions_path: Optional[Path] = None
+    ordinal_calibration: Optional[Dict[str, Any]] = None
