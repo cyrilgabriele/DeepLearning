@@ -5,6 +5,19 @@ import pytest
 from src.models.xgboost_paper import XGBoostPaperModel
 
 
+_XGB_REQUIRED = dict(
+    min_child_weight=1.0,
+    subsample=1.0,
+    colsample_bytree=1.0,
+    reg_alpha=0.0,
+    reg_lambda=1.0,
+    num_classes=8,
+    tree_method="hist",
+    eval_metric="mlogloss",
+    refit_full_training=False,
+)
+
+
 def _toy_dataset(n: int = 80, seed: int = 7):
     rng = np.random.default_rng(seed)
     X = pd.DataFrame(rng.normal(size=(n, 5)), columns=[f"f{i}" for i in range(5)])
@@ -32,6 +45,7 @@ class TestXGBoostPaperModel:
             n_estimators=5,
             max_depth=3,
             learning_rate=0.2,
+            **_XGB_REQUIRED,
         )
         model.fit(X, y)
         preds = model.predict(X)
@@ -62,6 +76,8 @@ class TestXGBoostPaperModel:
             random_state=2,
             n_estimators=3,
             max_depth=4,
+            learning_rate=0.1,
+            **_XGB_REQUIRED,
         )
         model.fit(
             X_train,
@@ -87,7 +103,9 @@ class TestXGBoostPaperModel:
         model = XGBoostPaperModel(
             random_state=3,
             n_estimators=3,
-            refit_full_training=True,
+            max_depth=3,
+            learning_rate=0.1,
+            **{**_XGB_REQUIRED, "refit_full_training": True},
         )
         model.fit(X_train, y_train, validation_data=(X_val, y_val))
 

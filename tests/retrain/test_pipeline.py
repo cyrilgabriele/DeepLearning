@@ -29,7 +29,15 @@ def _candidate_manifest(tmp_path: Path) -> Path:
                             "depth": 2,
                             "width": 64,
                             "degree": 4,
-                            "params": {"max_epochs": 10, "sparsity_lambda": 0.0},
+                            "params": {
+                            "max_epochs": 10,
+                            "lr": 1e-3,
+                            "weight_decay": 0.0,
+                            "batch_size": 256,
+                            "sparsity_lambda": 0.0,
+                            "l1_weight": 1.0,
+                            "entropy_weight": 1.0,
+                        },
                         },
                         "trainer_config": {
                             "experiment_name": "cheby-base-trial-000",
