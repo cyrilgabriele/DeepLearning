@@ -18,6 +18,6 @@ model:
     lr: 0.005469718211738354
     weight_decay: 0.0005425921367964894
     batch_size: 2048
-    sparsity_lambda: 0.1
+    sparsity_lambda: 0.0
     l1_weight: 1.0
     entropy_weight: 1.0
