@@ -1,0 +1,64 @@
+trainer:
+  experiment_name: stage-c-fourierkan-pareto-sparsity
+  train_csv: data/prudential-life-insurance-assessment/train.csv
+  test_csv: data/prudential-life-insurance-assessment/test.csv
+  seed: 42
+
+preprocessing:
+  contract_version: 1
+  recipe: kan_paper
+
+model:
+  name: tabkan-base
+  flavor: fourierkan
+  hidden_widths: [64, 256, 64]
+  params:
+    max_epochs: 100
+    grid_size: 8
+    lr: 0.0031887242971171403
+    weight_decay: 2.393884747850709e-05
+    batch_size: 256
+    l1_weight: 1.0
+    entropy_weight: 1.0
+
+tune:
+  name: stage-c-fourierkan-pareto-sparsity
+  storage: sweeps/stage-c-fourierkan-pareto-sparsity.db
+  n_trials: 30
+  directions: [maximize, maximize]   # (qwk, sparsity_ratio)
+  sampler: grid
+  top_k_candidates: 30
+  search_space:
+    sparsity_lambda:
+      type: grid
+      values:
+        - 0.001
+        - 0.00123899
+        - 0.0015351
+        - 0.00190197
+        - 0.00235652
+        - 0.00291971
+        - 0.00361749
+        - 0.00448204
+        - 0.0055532
+        - 0.00688036
+        - 0.0085247
+        - 0.010562
+        - 0.0130862
+        - 0.0162137
+        - 0.0200887
+        - 0.0248897
+        - 0.030838
+        - 0.038208
+        - 0.0473394
+        - 0.0586531
+        - 0.0726706
+        - 0.0900381
+        - 0.111556
+        - 0.138217
+        - 0.17125
+        - 0.212177
+        - 0.262885
+        - 0.325712
+        - 0.403554
+        - 0.5

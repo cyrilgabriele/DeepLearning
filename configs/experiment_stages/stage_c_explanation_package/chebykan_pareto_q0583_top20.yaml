@@ -1,0 +1,23 @@
+trainer:
+  experiment_name: stage-c-chebykan-pareto-q0583-top20
+  train_csv: data/prudential-life-insurance-assessment/train.csv
+  test_csv: data/prudential-life-insurance-assessment/test.csv
+  seed: 42
+
+preprocessing:
+  contract_version: 1
+  recipe: kan_paper
+
+model:
+  name: tabkan-base
+  flavor: chebykan
+  hidden_widths: [128, 64]
+  degree: 6
+  params:
+    max_epochs: 100
+    lr: 0.005469718211738354
+    weight_decay: 0.0005425921367964894
+    batch_size: 2048
+    sparsity_lambda: 0.0108
+    l1_weight: 1.0
+    entropy_weight: 1.0

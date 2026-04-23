@@ -13,14 +13,20 @@ class SearchParamConfig(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    type: Literal["log_uniform", "uniform", "int", "categorical"] = Field(...)
+    type: Literal["log_uniform", "uniform", "int", "categorical", "grid"] = Field(...)
     low: float | None = None
     high: float | None = None
     step: int | None = None
     choices: list[Any] | None = None
+    values: list[float | int] | None = None
 
     @model_validator(mode="after")
     def _validate_shape(self) -> "SearchParamConfig":
+        if self.type == "grid":
+            if not self.values:
+                raise ValueError("Grid search parameters require a non-empty `values` list.")
+            return self
+
         if self.type == "categorical":
             if not self.choices:
                 raise ValueError("Categorical search parameters require a non-empty `choices` list.")
@@ -63,7 +69,7 @@ class TuneConfig(BaseModel):
             "maximize-QWK behaviour."
         ),
     )
-    sampler: Literal["tpe", "random"] = Field(
+    sampler: Literal["tpe", "random", "grid"] = Field(
         default="tpe",
         description="Optuna sampler to use for the study.",
     )

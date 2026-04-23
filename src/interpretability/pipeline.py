@@ -115,6 +115,7 @@ def run_interpret(
     pruning_threshold: float = 0.01,
     qwk_tolerance: float = 0.01,
     candidate_library: str = "scipy",
+    max_features: int | None = None,
 ) -> dict[str, object]:
     """Run the model-appropriate interpretability workflow for one experiment."""
 
@@ -205,6 +206,50 @@ def run_interpret(
 
     pruning_summary_path = reports_dir(interpret_dir) / f"{flavor}_pruning_summary.json"
     pruned_checkpoint_path = models_dir(interpret_dir) / f"{flavor}_pruned_module.pt"
+    restricted_features: list[str] | None = None
+
+    # ── Optional feature restriction ─────────────────────────────────────────
+    if max_features is not None:
+        import torch
+        from src.models.tabkan import TabKAN
+        from src.interpretability.utils.kan_coefficients import (
+            coefficient_importance_from_module,
+            get_first_kan_layer,
+        )
+
+        _X_tmp = pd.read_parquet(eval_features_path)
+        _feature_names = list(_X_tmp.columns)
+        _widths = config.model.resolved_hidden_widths()
+        _mod = TabKAN(
+            in_features=_X_tmp.shape[1], widths=_widths, kan_type=flavor,
+            degree=config.model.degree or 3,
+            grid_size=config.model.params.get("grid_size", 4),
+            use_layernorm=config.model.use_layernorm,
+        )
+        _mod.load_state_dict(torch.load(pruned_checkpoint_path, map_location="cpu"))
+        _mod.eval()
+
+        ranking = coefficient_importance_from_module(_mod, _feature_names)
+        top_feats = set(ranking.head(max_features).index.tolist())
+        drop_indices = [i for i, f in enumerate(_feature_names) if f not in top_feats]
+
+        first_layer = get_first_kan_layer(_mod)
+        with torch.no_grad():
+            for in_i in drop_indices:
+                if hasattr(first_layer, "cheby_coeffs"):
+                    first_layer.cheby_coeffs[:, in_i, :] = 0.0
+                elif hasattr(first_layer, "fourier_a"):
+                    first_layer.fourier_a[:, in_i, :] = 0.0
+                    first_layer.fourier_b[:, in_i, :] = 0.0
+                first_layer.base_weight[:, in_i] = 0.0
+
+        torch.save(_mod.state_dict(), pruned_checkpoint_path)
+        kept = [f for f in _feature_names if f in top_feats]
+        restricted_features = kept
+        print(f"Feature restriction: kept top {max_features} features, "
+              f"zeroed {len(drop_indices)} input edges.")
+        print(f"Top features: {kept[:10]}{'...' if len(kept) > 10 else ''}")
+        del _X_tmp, _mod
 
     feat_types = (
         json.loads(feature_types_path.read_text())
@@ -250,18 +295,65 @@ def run_interpret(
         in_features=in_features, widths=widths, kan_type=flavor,
         degree=config.model.degree or 3,
         grid_size=config.model.params.get("grid_size", 4),
+        use_layernorm=config.model.use_layernorm,
     )
     pruned_module.load_state_dict(torch.load(pruned_checkpoint_path, map_location="cpu"))
     pruned_module.eval()
 
     symbolic_fits_path = data_dir(interpret_dir) / f"{flavor}_symbolic_fits.csv"
+    ranking_path = data_dir(interpret_dir) / f"{flavor}_feature_ranking.csv"
+    top20_path = data_dir(interpret_dir) / f"{flavor}_top20_features.json"
+    top12_path = data_dir(interpret_dir) / f"{flavor}_top12_features.json"
+    y_eval = pd.read_parquet(eval_labels_path).iloc[:, 0]
+
+    from src.interpretability.utils.kan_coefficients import coefficient_importance_from_module
+
+    ranking = coefficient_importance_from_module(pruned_module, feature_names)
+    kan_ranked = ranking.index.tolist() if not ranking.empty else feature_names
+    (
+        ranking.rename("importance")
+        .rename_axis("feature")
+        .reset_index()
+        .to_csv(ranking_path, index=False)
+    )
+    top20_path.write_text(json.dumps(kan_ranked[:20], indent=2))
+    top12_path.write_text(json.dumps(kan_ranked[:12], indent=2))
 
     # Formula composition (SymPy)
     from src.interpretability.formula_composition import run as run_formula_composition
-    run_formula_composition(
+    exact_report = run_formula_composition(
         symbolic_fits_path, pruned_module, feature_names,
         interpret_dir, flavor, X_eval=X_eval,
     )
+
+    # Local case explanations for the active feature set.
+    from src.interpretability.local_case_explanations import run as run_local_case_explanations
+
+    case_features = restricted_features if restricted_features is not None else kan_ranked[: min(20, len(kan_ranked))]
+    case_artifacts = run_local_case_explanations(
+        pruned_module,
+        X_eval,
+        output_dir=interpret_dir,
+        flavor=flavor,
+        feature_types=feat_types,
+        X_eval_raw=X_raw,
+        candidate_features=case_features,
+        row_position=0,
+    )
+
+    surrogate_artifacts = None
+    if not exact_report.get("exact_available", False):
+        from src.interpretability.closed_form_surrogate import run as run_closed_form_surrogate
+
+        surrogate_features = restricted_features if restricted_features is not None else kan_ranked[:20]
+        surrogate_artifacts = run_closed_form_surrogate(
+            pruned_module,
+            X_eval,
+            output_dir=interpret_dir,
+            feature_names=surrogate_features,
+            y_eval=y_eval,
+            flavor=flavor,
+        )
 
     # R² distribution histogram + quality tier pie chart
     from src.interpretability.quality_figures import plot_r2_distribution
@@ -276,16 +368,23 @@ def run_interpret(
         symbolic_fits=fits_df if not fits_df.empty else None,
     )
 
+    # Partial dependence plots (input → output effect)
+    from src.interpretability.partial_dependence import plot_partial_dependence
+    from src.interpretability.utils.kan_coefficients import (
+        top_features_by_coefficients,
+    )
+    pdp_n = max_features or 20
+    pdp_feats = top_features_by_coefficients(pruned_module, feature_names, top_n=pdp_n)
+    plot_partial_dependence(
+        pruned_module, X_eval, pdp_feats, interpret_dir, flavor,
+        X_raw=X_raw, feat_types=feat_types,
+    )
+
     # Feature subset validation (TabKAN Section 5.7)
     from src.interpretability.feature_validation import (
         compute_feature_validation_curves,
         plot_feature_validation_curves,
     )
-    from src.interpretability.utils.kan_coefficients import coefficient_importance_from_module
-
-    y_eval = pd.read_parquet(eval_labels_path).iloc[:, 0]
-    ranking = coefficient_importance_from_module(pruned_module, feature_names)
-    kan_ranked = ranking.index.tolist() if not ranking.empty else feature_names
 
     import torch
     import numpy as np
@@ -313,8 +412,17 @@ def run_interpret(
         "symbolic_fits": symbolic_fits_path,
         "r2_report": reports_dir(interpret_dir) / f"{flavor}_r2_report.json",
         "symbolic_formulas": reports_dir(interpret_dir) / f"{flavor}_symbolic_formulas.json",
+        "exact_closed_form": reports_dir(interpret_dir) / f"{flavor}_exact_closed_form.json",
+        "feature_ranking": ranking_path,
+        "top20_features": top20_path,
+        "top12_features": top12_path,
+        "case_summary": case_artifacts["case_summary"],
+        "local_sensitivities": case_artifacts["local_sensitivities"],
+        "case_what_if": case_artifacts["what_if"],
         "kan_diagram": Path("figures") / f"{flavor}_kan_diagram.pdf",
         "r2_distribution": Path("figures") / f"{flavor}_r2_distribution.pdf",
         "feature_validation": curves_path,
     }
+    if surrogate_artifacts is not None:
+        result["artifacts"]["closed_form_surrogate"] = surrogate_artifacts["json_path"]
     return result

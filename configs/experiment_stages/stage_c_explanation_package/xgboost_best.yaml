@@ -19,6 +19,7 @@ model:
     min_child_weight: 8
     reg_alpha: 0.12670481458419444
     reg_lambda: 1.246619007860089
+    num_classes: 8
     tree_method: hist
     eval_metric: mlogloss
     refit_full_training: true

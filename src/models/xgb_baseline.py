@@ -52,12 +52,15 @@ class XGBBaseline(PrudentialModel):
             random_state=random_state,
         )
         self.thresholds: np.ndarray | None = None
+        self.threshold_source_split: str | None = None
+        self.threshold_optimization_qwk: float | None = None
 
     def fit(self, X, y, eval_set=None) -> None:
         self.model.fit(X, y, eval_set=eval_set, verbose=False)
         y_cont = self.model.predict(X)
         y_arr = y.to_numpy() if hasattr(y, "to_numpy") else np.asarray(y)
-        self.thresholds, _ = optimize_thresholds(y_arr, y_cont)
+        self.thresholds, self.threshold_optimization_qwk = optimize_thresholds(y_arr, y_cont)
+        self.threshold_source_split = "training"
 
     def predict(self, X) -> np.ndarray:
         if self.thresholds is None:
@@ -70,7 +73,23 @@ class XGBBaseline(PrudentialModel):
         y_cont = self.model.predict(X)
         y_arr = y_true.to_numpy() if hasattr(y_true, "to_numpy") else np.asarray(y_true)
         self.thresholds, kappa = optimize_thresholds(y_arr, y_cont)
+        self.threshold_source_split = "evaluation"
+        self.threshold_optimization_qwk = float(kappa)
         return kappa
+
+    def get_ordinal_calibration(self) -> dict[str, object] | None:
+        if self.thresholds is None:
+            return None
+        payload: dict[str, object] = {
+            "method": "optimized_thresholds",
+            "num_classes": 8,
+            "thresholds": [float(value) for value in self.thresholds],
+        }
+        if self.threshold_source_split is not None:
+            payload["source_split"] = self.threshold_source_split
+        if self.threshold_optimization_qwk is not None:
+            payload["optimized_qwk_on_source_split"] = float(self.threshold_optimization_qwk)
+        return payload
 
 
 def build_xgb_model(

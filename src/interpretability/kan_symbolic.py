@@ -171,6 +171,53 @@ def _fit_pysr(x: np.ndarray, y: np.ndarray) -> tuple[str, float]:
         return _fit_scipy_candidates(x, y)
 
 
+def fit_symbolic_edge_chebykan_native(
+    layer,
+    *,
+    out_idx: int,
+    in_idx: int,
+    variable_name: str = "x",
+    n_verify_samples: int = 1000,
+) -> tuple[str, float]:
+    """Extract the exact per-edge formula from a trained ChebyKAN layer.
+
+    Reads ``cheby_coeffs[out_idx, in_idx, :]`` and ``base_weight[out_idx, in_idx]``
+    directly and returns the exact SymPy string:
+
+        base_weight * x + sum_k cheby_coeffs[k] * T_k(tanh(x))
+
+    The returned R² is the empirical agreement between this formula and the
+    layer's isolated edge output at ``n_verify_samples`` points; it is ≈ 1 by
+    construction and serves as a guard against implementation drift.
+    """
+    from src.models.kan_layers import ChebyKANLayer
+    from src.interpretability.formula_composition import _compose_exact_chebykan_edge
+
+    if not isinstance(layer, ChebyKANLayer):
+        raise TypeError(f"Expected ChebyKANLayer, got {type(layer).__name__}")
+
+    import sympy as sp
+
+    x_sym = sp.Symbol(variable_name)
+    expr = _compose_exact_chebykan_edge(
+        layer, out_idx=out_idx, in_idx=in_idx, input_expr=x_sym
+    )
+    formula_str = str(expr)
+
+    x_norm, y_edge = _sample_chebykan_edge(layer, out_idx, in_idx, n=n_verify_samples)
+    x_pre = np.arctanh(np.clip(x_norm, -0.999999, 0.999999))
+
+    if expr == 0:
+        y_formula = np.zeros_like(y_edge)
+    else:
+        f = sp.lambdify(x_sym, expr, modules=["numpy"])
+        y_formula = np.asarray(f(x_pre), dtype=np.float64)
+        if y_formula.ndim == 0:
+            y_formula = np.full_like(y_edge, float(y_formula))
+
+    return formula_str, float(_r2(y_edge, y_formula))
+
+
 def fit_symbolic_edge(
     x: np.ndarray,
     y: np.ndarray,
@@ -471,6 +518,10 @@ def lock_in_symbolic_edges(
     from src.models.kan_layers import ChebyKANLayer, FourierKANLayer
 
     clean_df = fits_df[fits_df["quality_tier"] == "clean"].copy()
+    if "fit_mode" in clean_df.columns:
+        # Native-fit rows are already the exact layer parameters; projecting back
+        # onto the same basis would be a no-op, so skip them.
+        clean_df = clean_df[clean_df["fit_mode"] != "chebykan_native"]
     if clean_df.empty:
         print("lock_in_symbolic_edges: no clean edges found. Skipping.")
         return module, []
@@ -546,6 +597,75 @@ def lock_in_symbolic_edges(
     return symbolified, lockin_log
 
 
+# ── Per-edge record builder ───────────────────────────────────────────────────
+
+
+def _build_edge_records(
+    module,
+    *,
+    threshold: float,
+    feature_names: list[str],
+    use_pysr: bool = False,
+    n_samples: int = 1000,
+) -> list[dict]:
+    """Iterate active edges and emit one record per edge.
+
+    For ChebyKAN layers, uses the native coefficient-read path (R² ≈ 1 by
+    construction). For FourierKAN layers, falls back to scipy candidate fitting.
+    """
+    from src.models.kan_layers import ChebyKANLayer, FourierKANLayer
+    from src.interpretability.kan_pruning import _compute_edge_l1
+
+    records: list[dict] = []
+    layer_idx = 0
+
+    for layer in module.kan_layers:
+        if not isinstance(layer, (ChebyKANLayer, FourierKANLayer)):
+            continue
+
+        variances = _compute_edge_l1(layer)
+        n_active = int((variances >= threshold).sum().item())
+        print(f"Layer {layer_idx}: {layer.in_features}→{layer.out_features} edges, {n_active} active")
+
+        is_chebykan = isinstance(layer, ChebyKANLayer)
+
+        for out_i in range(layer.out_features):
+            for in_i in range(layer.in_features):
+                if variances[out_i, in_i].item() < threshold:
+                    continue
+
+                if is_chebykan:
+                    formula, r2 = fit_symbolic_edge_chebykan_native(
+                        layer, out_idx=out_i, in_idx=in_i, n_verify_samples=n_samples
+                    )
+                    fit_mode = "chebykan_native"
+                else:
+                    x_vals, y_vals = sample_edge(layer, out_i, in_i, n=n_samples)
+                    formula, r2 = fit_symbolic_edge(x_vals, y_vals, use_pysr=use_pysr)
+                    fit_mode = "scipy_candidate"
+
+                input_feat = (
+                    feature_names[in_i]
+                    if layer_idx == 0 and in_i < len(feature_names)
+                    else f"h{in_i}"
+                )
+                records.append({
+                    "layer": layer_idx,
+                    "edge_in": in_i,
+                    "edge_out": out_i,
+                    "input_feature": input_feat,
+                    "formula": formula,
+                    "r_squared": round(r2, 6),
+                    "flagged": r2 < 0.90,
+                    "quality_tier": _quality_tier(r2),
+                    "fit_mode": fit_mode,
+                })
+
+        layer_idx += 1
+
+    return records
+
+
 # ── Main per-model runner ─────────────────────────────────────────────────────
 
 def run(
@@ -574,10 +694,12 @@ def run(
     widths = config.model.resolved_hidden_widths()
     if flavor == "chebykan":
         module = TabKAN(in_features=in_features, widths=widths, kan_type="chebykan",
-                        degree=config.model.degree or 3)
+                        degree=config.model.degree or 3,
+                        use_layernorm=config.model.use_layernorm)
     else:
         module = TabKAN(in_features=in_features, widths=widths, kan_type="fourierkan",
-                        grid_size=config.model.params.get("grid_size", 4))
+                        grid_size=config.model.params.get("grid_size", 4),
+                        use_layernorm=config.model.use_layernorm)
 
     module.load_state_dict(torch.load(pruned_checkpoint_path, map_location="cpu"))
     module.eval()
@@ -587,39 +709,13 @@ def run(
         coefficient_importance_from_layer,
         get_first_kan_layer,
     )
-    records = []
-    layer_idx = 0
-
-    for layer in module.kan_layers:
-        if not isinstance(layer, (ChebyKANLayer, FourierKANLayer)):
-            continue
-
-        # Precompute all edge L1 norms once per layer (avoids O(n²) recomputation)
-        from src.interpretability.kan_pruning import _compute_edge_l1
-        variances = _compute_edge_l1(layer)
-        n_active = int((variances >= threshold).sum().item())
-        print(f"Layer {layer_idx}: {layer.in_features}→{layer.out_features} edges, {n_active} active")
-        for out_i in range(layer.out_features):
-            for in_i in range(layer.in_features):
-                if variances[out_i, in_i].item() < threshold:
-                    continue
-
-                x_vals, y_vals = sample_edge(layer, out_i, in_i, n=n_samples)
-                formula, r2 = fit_symbolic_edge(x_vals, y_vals, use_pysr=use_pysr)
-
-                input_feat = feature_names[in_i] if layer_idx == 0 and in_i < len(feature_names) else f"h{in_i}"
-                records.append({
-                    "layer": layer_idx,
-                    "edge_in": in_i,
-                    "edge_out": out_i,
-                    "input_feature": input_feat,
-                    "formula": formula,
-                    "r_squared": round(r2, 6),
-                    "flagged": r2 < 0.90,
-                    "quality_tier": _quality_tier(r2),
-                })
-
-        layer_idx += 1
+    records = _build_edge_records(
+        module,
+        threshold=threshold,
+        feature_names=feature_names,
+        use_pysr=use_pysr,
+        n_samples=n_samples,
+    )
 
     df = pd.DataFrame(records)
     from src.interpretability.utils.paths import data as data_dir, figures as fig_dir

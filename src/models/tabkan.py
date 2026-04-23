@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 from src.models.kan_layers import ChebyKANLayer, FourierKANLayer, BSplineKANLayer
-from src.metrics.qwk import quadratic_weighted_kappa
+from src.metrics.qwk import _apply_thresholds, optimize_thresholds, quadratic_weighted_kappa
 from src.models.base import PrudentialModel
 
 
@@ -40,6 +40,7 @@ class TabKAN(L.LightningModule):
         sparsity_lambda: float = 0.0,
         l1_weight: float = 1.0,
         entropy_weight: float = 1.0,
+        use_layernorm: bool = True,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -61,7 +62,8 @@ class TabKAN(L.LightningModule):
         dims = [in_features] + widths
         for i in range(len(dims) - 1):
             layers.append(layer_cls(dims[i], dims[i + 1], **layer_kwargs))
-            layers.append(nn.LayerNorm(dims[i + 1]))
+            if use_layernorm:
+                layers.append(nn.LayerNorm(dims[i + 1]))
 
         self.kan_layers = nn.Sequential(*layers)
         self.head = nn.Linear(widths[-1], 1)
@@ -78,7 +80,7 @@ class TabKAN(L.LightningModule):
         """L1 + entropy regularisation over KAN activation functions.
 
         Implements the sparsity objective from Liu et al. (2024) arXiv:2404.19756 §2.5:
-            ℓ_reg = λ · (μ₁ Σ_l ||Φ_l||₁ + μ₂ Σ_l S(Φ_l))
+            l_reg = λ · (μ₁ Σ_l ||Φ_l||₁ + μ₂ Σ_l S(Φ_l))
         where ||Φ_l||₁ is the summed L1 norm of all activation functions in layer l,
         and S(Φ_l) is the entropy of the distribution of edge magnitudes within layer l.
         L1 drives activations toward zero; entropy (minimised) produces a concentrated
@@ -162,9 +164,9 @@ class TabKANClassifier(PrudentialModel):
     """
 
     PRESETS = {
-        "tabkan-tiny": {"widths": (32, 16), "lr": 5e-3, "max_epochs": 50},
-        "tabkan-small": {"widths": (64, 32), "lr": 3e-3, "max_epochs": 100},
-        "tabkan-base": {"widths": (128, 64), "lr": 1e-3, "max_epochs": 100},
+        "tabkan-tiny": {"widths": (32, 16)},
+        "tabkan-small": {"widths": (64, 32)},
+        "tabkan-base": {"widths": (128, 64)},
     }
 
     def __init__(
@@ -172,17 +174,21 @@ class TabKANClassifier(PrudentialModel):
         preset: str = "tabkan-base",
         *,
         random_state: int = 42,
-        flavor: str = "chebykan",
+        flavor: str,
         hidden_widths: list[int] | tuple[int, ...] | None = None,
         depth: int | None = None,
         width: int | None = None,
-        degree: int = 3,
-        grid_size: int = 4,
-        spline_order: int = 3,
-        max_epochs: int | None = None,
-        sparsity_lambda: float = 0.0,
-        l1_weight: float = 1.0,
-        entropy_weight: float = 1.0,
+        degree: int | None = None,
+        grid_size: int | None = None,
+        spline_order: int | None = None,
+        max_epochs: int,
+        lr: float,
+        weight_decay: float,
+        batch_size: int,
+        sparsity_lambda: float,
+        l1_weight: float,
+        entropy_weight: float,
+        use_layernorm: bool = True,
         **extra_params,
     ) -> None:
         params = {
@@ -192,6 +198,16 @@ class TabKANClassifier(PrudentialModel):
             "depth": depth,
             "width": width,
             "degree": degree,
+            "grid_size": grid_size,
+            "spline_order": spline_order,
+            "max_epochs": max_epochs,
+            "lr": lr,
+            "weight_decay": weight_decay,
+            "batch_size": batch_size,
+            "sparsity_lambda": sparsity_lambda,
+            "l1_weight": l1_weight,
+            "entropy_weight": entropy_weight,
+            "use_layernorm": use_layernorm,
             "random_state": random_state,
         }
         params.update(extra_params)
@@ -203,11 +219,21 @@ class TabKANClassifier(PrudentialModel):
         self.grid_size = grid_size
         self.spline_order = spline_order
         self.random_state = random_state
-        self.max_epochs = max_epochs or base["max_epochs"]
-        self.lr = base["lr"]
+        self.max_epochs = int(max_epochs)
+        self.lr = float(lr)
+        self.weight_decay = float(weight_decay)
+        self.batch_size = int(batch_size)
         self.sparsity_lambda = sparsity_lambda
         self.l1_weight = l1_weight
         self.entropy_weight = entropy_weight
+        self.use_layernorm = bool(use_layernorm)
+
+        if self.kan_type == "chebykan" and self.degree is None:
+            raise ValueError("ChebyKAN requires an explicit `degree`.")
+        if self.kan_type in {"fourierkan", "bsplinekan"} and self.grid_size is None:
+            raise ValueError(f"{self.kan_type} requires an explicit `grid_size`.")
+        if self.kan_type == "bsplinekan" and self.spline_order is None:
+            raise ValueError("bsplinekan requires an explicit `spline_order`.")
 
         base_widths = list(base["widths"])
         if hidden_widths is not None:
@@ -222,6 +248,9 @@ class TabKANClassifier(PrudentialModel):
             self.widths = base_widths
 
         self.module: TabKAN | None = None
+        self.thresholds: np.ndarray | None = None
+        self.threshold_source_split: str | None = None
+        self.threshold_optimization_qwk: float | None = None
 
     def fit(
         self,
@@ -245,15 +274,17 @@ class TabKANClassifier(PrudentialModel):
             grid_size=self.grid_size,
             spline_order=self.spline_order,
             lr=self.lr,
+            weight_decay=self.weight_decay,
             sparsity_lambda=self.sparsity_lambda,
             l1_weight=self.l1_weight,
             entropy_weight=self.entropy_weight,
+            use_layernorm=self.use_layernorm,
         )
 
         X_t = torch.tensor(X_values, dtype=torch.float32)
         y_t = torch.tensor(y_values, dtype=torch.float32)
         dataset = torch.utils.data.TensorDataset(X_t, y_t.unsqueeze(1))
-        loader = torch.utils.data.DataLoader(dataset, batch_size=256, shuffle=True)
+        loader = torch.utils.data.DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
 
         val_loader = None
         if validation_data is not None:
@@ -261,7 +292,7 @@ class TabKANClassifier(PrudentialModel):
             X_val_t = torch.tensor(self._to_numpy_features(X_val), dtype=torch.float32)
             y_val_t = torch.tensor(self._to_numpy_targets(y_val), dtype=torch.float32)
             val_ds = torch.utils.data.TensorDataset(X_val_t, y_val_t.unsqueeze(1))
-            val_loader = torch.utils.data.DataLoader(val_ds, batch_size=256, shuffle=False)
+            val_loader = torch.utils.data.DataLoader(val_ds, batch_size=self.batch_size, shuffle=False)
 
         trainer = L.Trainer(
             max_epochs=self.max_epochs,
@@ -276,15 +307,53 @@ class TabKANClassifier(PrudentialModel):
             fit_kwargs["val_dataloaders"] = val_loader
         trainer.fit(self.module, **fit_kwargs)
 
-    def predict(self, X: pd.DataFrame) -> np.ndarray:
+        if validation_data is not None:
+            X_cal, y_cal = validation_data
+            self.calibrate_thresholds(X_cal, y_cal, source_split="inner_validation")
+        else:
+            self.calibrate_thresholds(X, y, source_split="training")
+
+    def predict_scores(self, X: pd.DataFrame) -> np.ndarray:
         if self.module is None:
-            raise RuntimeError("Call fit() before predict().")
+            raise RuntimeError("Call fit() before predict_scores().")
 
         self.module.eval()
         X_t = torch.tensor(self._to_numpy_features(X), dtype=torch.float32)
         with torch.no_grad():
             preds = self.module(X_t).cpu().numpy().flatten()
+        return np.asarray(preds, dtype=float)
+
+    def calibrate_thresholds(
+        self,
+        X: pd.DataFrame,
+        y: pd.Series,
+        *,
+        source_split: str,
+    ) -> None:
+        y_cont = self.predict_scores(X)
+        y_true = self._to_numpy_targets(y).astype(int)
+        self.thresholds, self.threshold_optimization_qwk = optimize_thresholds(y_true, y_cont)
+        self.threshold_source_split = source_split
+
+    def predict(self, X: pd.DataFrame) -> np.ndarray:
+        preds = self.predict_scores(X)
+        if self.thresholds is not None:
+            return np.clip(_apply_thresholds(preds, self.thresholds), 1, 8).astype(int)
         return np.clip(np.round(preds), 1, 8).astype(int)
+
+    def get_ordinal_calibration(self) -> dict[str, object] | None:
+        if self.thresholds is None:
+            return None
+        payload: dict[str, object] = {
+            "method": "optimized_thresholds",
+            "num_classes": 8,
+            "thresholds": [float(value) for value in self.thresholds],
+        }
+        if self.threshold_source_split is not None:
+            payload["source_split"] = self.threshold_source_split
+        if self.threshold_optimization_qwk is not None:
+            payload["optimized_qwk_on_source_split"] = float(self.threshold_optimization_qwk)
+        return payload
 
     @staticmethod
     def _to_numpy_features(X: pd.DataFrame | np.ndarray) -> np.ndarray:
@@ -303,17 +372,17 @@ def build_tabkan_model(
     preset: str,
     *,
     random_state: int,
-    flavor: str | None = None,
+    flavor: str,
     hidden_widths: list[int] | tuple[int, ...] | None = None,
     depth: int | None = None,
     width: int | None = None,
     degree: int | None = None,
+    use_layernorm: bool = True,
     **extra_params,
 ) -> TabKANClassifier:
     """Factory function for the model registry."""
     kwargs: dict = {"random_state": random_state}
-    if flavor is not None:
-        kwargs["flavor"] = flavor
+    kwargs["flavor"] = flavor
     if hidden_widths is not None:
         kwargs["hidden_widths"] = list(hidden_widths)
     if depth is not None:
@@ -322,5 +391,6 @@ def build_tabkan_model(
         kwargs["width"] = width
     if degree is not None:
         kwargs["degree"] = degree
+    kwargs["use_layernorm"] = use_layernorm
     kwargs.update(extra_params)
     return TabKANClassifier(preset, **kwargs)
