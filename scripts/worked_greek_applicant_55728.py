@@ -37,10 +37,10 @@ from src.models.tabkan import TabKAN
 
 
 REPO = Path("/Users/gian1/CODE/HSG/FS26/DeepLearning/DeepLearning")
-EXP = "stage-c-chebykan-pareto-q0583-top20-noln"
+EXP = "chebykan-lambda-0.100"
 CKPT = REPO / "outputs" / "interpretability" / "kan_paper" / EXP / "models" / "chebykan_pruned_module.pt"
 EVAL = REPO / "outputs" / "eval" / "kan_paper" / EXP
-CONFIG = REPO / "configs" / "experiment_stages" / "stage_c_explanation_package" / "chebykan_pareto_q0583_top20_noln.yaml"
+CONFIG = REPO / "configs" / "experiment_stages" / "stage_c_explanation_package" / "chebykan_tuned_sparse_hero_final.yaml"
 
 APPLICANT_ID = 55728.0
 FEATURE = "BMI"

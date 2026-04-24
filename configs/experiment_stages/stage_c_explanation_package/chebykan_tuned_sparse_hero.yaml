@@ -1,0 +1,28 @@
+trainer:
+  experiment_name: stage-c-chebykan-tuned-sparse-hero
+  train_csv: data/prudential-life-insurance-assessment/train.csv
+  test_csv: data/prudential-life-insurance-assessment/test.csv
+  seed: 42
+
+# Uses the feature list derived FROM the tuned 140-ft ChebyKAN
+# (stage-c-chebykan-tuned-sparse-fullft), not the old Pareto-sparsity
+# list. Same Optuna-tuned hyperparameters all the way through.
+preprocessing:
+  contract_version: 1
+  recipe: kan_paper
+  selected_features_path: configs/experiment_stages/stage_c_explanation_package/feature_lists/chebykan_tuned_top20_features.json
+
+model:
+  name: tabkan-base
+  flavor: chebykan
+  hidden_widths: [64, 64]
+  degree: 7
+  use_layernorm: false
+  params:
+    max_epochs: 100
+    lr: 0.0009492510093510513
+    weight_decay: 0.00012919049875653767
+    batch_size: 2048
+    sparsity_lambda: 0.0108
+    l1_weight: 1.0
+    entropy_weight: 1.0

@@ -54,6 +54,8 @@ MODELS = [
      "sweeps/stage-c-chebykan-top20-tune_best.yaml"),
     ("stage-c-fourierkan-top20-tune-tuned", "model-20260424-172802", "kan_paper",
      "sweeps/stage-c-fourierkan-top20-tune_best.yaml"),
+    ("chebykan-lambda-0.100", "model-20260424-182238", "kan_paper",
+     "configs/experiment_stages/stage_c_explanation_package/chebykan_tuned_sparse_hero_final.yaml"),
     ("stage-c-chebykan-best", "model-20260423-123113", "kan_paper",
      "configs/experiment_stages/stage_c_explanation_package/chebykan_best.yaml"),
     ("stage-c-fourierkan-best", "model-20260423-123404", "kan_paper",

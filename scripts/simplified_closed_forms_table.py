@@ -29,15 +29,15 @@ from src.models.tabkan import TabKAN
 
 
 REPO = Path("/Users/gian1/CODE/HSG/FS26/DeepLearning/DeepLearning")
-CONFIG = REPO / "configs/experiment_stages/stage_c_explanation_package/chebykan_pareto_q0583_top20_noln.yaml"
-CKPT = REPO / "outputs/interpretability/kan_paper/stage-c-chebykan-pareto-q0583-top20-noln/models/chebykan_pruned_module.pt"
+CONFIG = REPO / "configs/experiment_stages/stage_c_explanation_package/chebykan_tuned_sparse_hero_final.yaml"
+CKPT = REPO / "outputs/interpretability/kan_paper/chebykan-lambda-0.100/models/chebykan_pruned_module.pt"
 
 REPRESENTATIVE_FEATURES = [
     "BMI",
     "Wt",
-    "Ins_Age",
-    "Product_Info_4",
     "Medical_Keyword_3",
+    "Product_Info_4",
+    "Medical_History_30",
 ]
 COEF_THRESHOLD = 5e-3  # drop smaller terms
 ROUND_DIGITS = 3
@@ -70,7 +70,7 @@ def _first_layer(module: TabKAN) -> ChebyKANLayer:
 
 def _feature_names() -> list[str]:
     import json
-    path = REPO / "configs/experiment_stages/stage_c_explanation_package/feature_lists/chebykan_pareto_q0583_top20_features.json"
+    path = REPO / "configs/experiment_stages/stage_c_explanation_package/feature_lists/chebykan_tuned_top20_features.json"
     return json.loads(path.read_text())
 
 

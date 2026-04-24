@@ -1,0 +1,29 @@
+trainer:
+  experiment_name: stage-c-chebykan-tuned-sparse-fullft
+  train_csv: data/prudential-life-insurance-assessment/train.csv
+  test_csv: data/prudential-life-insurance-assessment/test.csv
+  seed: 42
+
+preprocessing:
+  contract_version: 1
+  recipe: kan_paper
+
+# Optuna-tuned ChebyKAN hyperparameters (from stage-c-chebykan-top20-tune,
+# best trial inner-val QWK 0.5645), trained on ALL 140 features with
+# sparsity regularisation so we can select top-20 features from this
+# SAME-CONFIG model's coefficient importance, instead of inheriting the
+# feature list from the (different) Pareto-sparsity sweep run.
+model:
+  name: tabkan-base
+  flavor: chebykan
+  hidden_widths: [64, 64]
+  degree: 7
+  use_layernorm: false
+  params:
+    max_epochs: 100
+    lr: 0.0009492510093510513
+    weight_decay: 0.00012919049875653767
+    batch_size: 2048
+    sparsity_lambda: 0.0108
+    l1_weight: 1.0
+    entropy_weight: 1.0
