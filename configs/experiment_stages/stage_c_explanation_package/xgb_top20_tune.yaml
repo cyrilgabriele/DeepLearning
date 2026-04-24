@@ -1,0 +1,69 @@
+trainer:
+  experiment_name: stage-c-xgb-top20-tune
+  train_csv: data/prudential-life-insurance-assessment/train.csv
+  test_csv: data/prudential-life-insurance-assessment/test.csv
+  seed: 42
+
+preprocessing:
+  contract_version: 1
+  recipe: kan_paper
+  selected_features_path: configs/experiment_stages/stage_c_explanation_package/feature_lists/xgboost_top20_features.json
+
+model:
+  name: xgb
+  params:
+    n_estimators: 500
+    max_depth: 6
+    min_child_weight: 1
+    learning_rate: 0.1
+    subsample: 1.0
+    colsample_bytree: 1.0
+    reg_alpha: 1.0
+    reg_lambda: 1.0
+    gamma: 0.0
+
+tune:
+  name: stage-c-xgb-top20-tune
+  storage: sweeps/stage-c-xgb-top20-tune.db
+  n_trials: 50
+  timeout: null
+  sampler: tpe
+  top_k_candidates: 1
+  search_space:
+    n_estimators:
+      type: int
+      low: 100
+      high: 1200
+      step: 50
+    max_depth:
+      type: int
+      low: 3
+      high: 15
+    min_child_weight:
+      type: uniform
+      low: 1.0
+      high: 15.0
+    learning_rate:
+      type: log_uniform
+      low: 0.001
+      high: 0.3
+    subsample:
+      type: uniform
+      low: 0.5
+      high: 1.0
+    colsample_bytree:
+      type: uniform
+      low: 0.5
+      high: 1.0
+    reg_alpha:
+      type: log_uniform
+      low: 0.0001
+      high: 10.0
+    reg_lambda:
+      type: log_uniform
+      low: 0.0001
+      high: 10.0
+    gamma:
+      type: log_uniform
+      low: 0.001
+      high: 10.0

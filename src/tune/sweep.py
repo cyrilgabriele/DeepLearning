@@ -444,6 +444,8 @@ def _resolve_model_family(config: ExperimentConfig) -> ModelFamily:
         return "glm"
     if config.model.name == "xgboost-paper":
         return "xgboost-paper"
+    if config.model.name == "xgb":
+        return "xgboost-paper"  # same pipeline role (tree baseline, threshold-calibrated)
     if not config.model.name.startswith("tabkan"):
         raise ValueError(
             f"Tune stage does not support model '{config.model.name}'. "

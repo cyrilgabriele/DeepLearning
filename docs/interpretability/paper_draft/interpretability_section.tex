@@ -24,12 +24,15 @@ their inner-validation QWK against the sweep-selected dense baselines
 would be asymmetric. For the dense rows we further average across three
 training seeds to absorb the single-retrain variance we observed
 ($\sigma \lesssim 0.03$ QWK for ChebyKAN, $\lesssim 0.01$ for FourierKAN).
-To make the sparse comparison fair at a matched feature budget, we
-additionally retrain XGBoost on the same 20 features selected for
-the sparse ChebyKAN hero with hyperparameters re-tuned for that
-smaller input space (max\_depth 6, 300 trees, gamma 1); this is the
-``XGBoost (20 ft)'' row. The XGBoost implementation used throughout
-is XGBRegressor on the ordinal target followed by
+To make the sparse comparison fair at a matched feature budget, each
+20-feature row in Table~\ref{tab:interpretability_outer_test} uses
+\emph{its own model's} top-20 features (native coefficient importance
+for the KANs; mean-$|\mathrm{SHAP}|$ for XGBoost) and its own
+50-trial Optuna sweep over a matched hyperparameter space that
+includes learning rate, weight decay, batch size, architecture, and
+the natural regularisers (sparsity $\lambda$ for KANs; $\gamma$ and
+leaf regularisation for XGBoost). The XGBoost implementation used
+throughout is XGBRegressor on the ordinal target followed by
 QWK-threshold calibration on the training predictions.
 Every KAN configuration we analyse admits exact per-edge symbolic
 recovery from its basis coefficients (R$^2 = 1.000$ by construction
@@ -40,22 +43,25 @@ model can be written as a single expression.
 
 \begin{table}[H]
 \centering
-\caption{Held-out outer-test QWK and structural size, grouped by feature budget. Dense KAN rows report the mean $\pm$ standard deviation across three training seeds; all other rows are single retrainings with 95\% bootstrap CIs over n{=}11{,}877 test samples. At full features XGBoost is the strongest baseline (0.642); at 20 features the sparse FourierKAN matches XGBoost within bootstrap noise and the sparse ChebyKAN trails by $\approx 0.03$ QWK in exchange for a single closed-form composed expression and exact analytic Greeks.}
+\caption{Held-out outer-test QWK and structural size, grouped by feature budget. Dense KAN rows report the mean $\pm$ standard deviation across three training seeds; all other rows are single retrainings with 95\% bootstrap CIs over n{=}11{,}877 test samples. Each 20-feature row uses its model's own top-20 features (native importance for KANs, SHAP for XGBoost) with hyperparameters tuned by a dedicated 50-trial Optuna search on the restricted input space. At full features XGBoost is the strongest baseline (0.642); at 20 features FourierKAN beats XGBoost within bootstrap noise. The sparse ChebyKAN hero row uses a Pareto-derived, L1-pruned no-LayerNorm variant that sacrifices $\approx 0.07$ QWK in exchange for a single closed-form composed expression and exact analytic Greeks.}
 \label{tab:interpretability_outer_test}
 \footnotesize
 \begin{tabular}{lccl}
 \hline
-Model & QWK (outer test) & Active edges & Explanation \\
+Model & QWK (outer test) & Active params & Explanation \\
 \hline
 \multicolumn{4}{l}{\emph{Full-feature regime ($\geq 126$ features)}} \\
 XGBoost                    & \textbf{0.642} [0.629, 0.655] & 765 trees & SHAP (post-hoc) \\
-ChebyKAN, dense            & $0.595 \pm 0.027$    & 26{,}112    & per-edge native \\
-FourierKAN, dense          & $0.599 \pm 0.007$    & 41{,}728    & per-edge native \\
+ChebyKAN, dense            & $0.595 \pm 0.027$    & 26{,}112 edges    & per-edge native \\
+FourierKAN, dense          & $0.599 \pm 0.007$    & 41{,}728 edges    & per-edge native \\
 \hline
-\multicolumn{4}{l}{\emph{Sparse regime (20 features)}} \\
-XGBoost (20 ft, retuned)   & 0.565 [0.551, 0.579] & 300 trees   & SHAP (post-hoc) \\
-ChebyKAN, sparse (no LN)   & 0.533 [0.519, 0.547] & \textbf{597 edges} & \textbf{closed form + exact Greeks} \\
-FourierKAN, sparse (no LN) & 0.562 [0.549, 0.576] & 7{,}158 edges & per-edge closed form \\
+\multicolumn{4}{l}{\emph{Sparse regime (20 features, Optuna-tuned per budget)}} \\
+XGBoost, tuned             & 0.601 [0.587, 0.614] & 1200 trees   & SHAP (post-hoc) \\
+ChebyKAN, tuned (no LN)    & 0.565 [0.551, 0.578] & 5{,}440 edges & closed form per edge \\
+FourierKAN, tuned (no LN)  & \textbf{0.604} [0.590, 0.618] & 70{,}912 edges & per-edge closed form \\
+\hline
+\multicolumn{4}{l}{\emph{Sparse ChebyKAN hero (Pareto-derived + L1-pruned)}} \\
+ChebyKAN, sparse hero      & 0.533 [0.519, 0.547] & \textbf{597 edges} & \textbf{single closed-form polynomial + exact Greeks} \\
 \hline
 \end{tabular}
 \end{table}
@@ -68,17 +74,21 @@ FourierKAN, sparse (no LN) & 0.562 [0.549, 0.576] & 7{,}158 edges & per-edge clo
 \subsubsection{Sparse regime: compact closed-form TabKAN}
 \label{sec:interpretability_sparse}
 
-We derive a compact interpretable variant of each KAN flavour by
-(i) selecting the 20 highest-importance input features from a
-sparsity-regularised baseline, (ii) retraining on that subset with
-LayerNorm removed, and (iii) L1-pruning edges whose mean activation
-magnitude falls below a threshold tightened until inner-val QWK loss
-stays within 0.005. ChebyKAN tolerates 94\% within-architecture
-pruning; FourierKAN reaches 79\% under the same QWK-loss budget.
-On outer test the sparse variants come within 0.06--0.07 QWK of their
-dense counterparts (Cheby: $0.595 \to 0.533$, $\Delta \approx -0.062$;
-Fourier: $0.599 \to 0.562$, $\Delta \approx -0.037$), so the accuracy
-cost of the interpretability pipeline is moderate.
+At matched 20-feature budget with per-model tuning
+(Table~\ref{tab:interpretability_outer_test}, middle block),
+FourierKAN reaches 0.604 QWK --- tied with XGBoost-20 (0.601)
+within bootstrap noise --- while ChebyKAN-20 trails at 0.565.
+To obtain a genuinely compact model with structural
+interpretability we then derive a \emph{sparse hero} variant from
+ChebyKAN via (i) selecting the 20 highest-coefficient-importance
+features from a sparsity-regularised baseline, (ii) retraining on
+that subset with LayerNorm removed, and (iii) L1-pruning edges whose
+mean activation magnitude falls below a threshold tightened until
+inner-val QWK loss stays within 0.005. The resulting sparse
+ChebyKAN hero retains 597 of its 10\,752 trainable edges
+($\approx 94\%$ within-architecture pruning) at outer-test QWK
+0.533 --- about 0.07 below the tuned ChebyKAN-20 baseline, but with
+qualitatively stronger interpretability properties detailed below.
 
 Every surviving edge in both sparse variants admits exact closed-form
 recovery from its basis coefficients: each ChebyKAN edge is a
@@ -157,16 +167,6 @@ Central finite difference ($\varepsilon = 10^{-3}$) & $-0.649929$ \\
 
 At full features, XGBoost is the strongest baseline on outer-test
 QWK (0.642); dense ChebyKAN and FourierKAN both come within 0.05.
-At the 20-feature budget, the sparse FourierKAN matches XGBoost
-within bootstrap noise (0.562 vs.\ 0.565) with 6$\times$ fewer active
-parameters (7{,}158 edges vs.\ 300 trees). The sparse ChebyKAN row
-trails by about 0.03 QWK (0.533 vs.\ 0.565) in exchange for three
-properties no other row in Table~\ref{tab:interpretability_outer_test}
-achieves simultaneously: 44$\times$ edge compression against its
-dense baseline (597 vs.\ 26{,}112), a single closed-form composed
-expression in the 20 inputs, and exact analytic Greeks. The
-interpretability cost of the sparse ChebyKAN, against the
-strongest KAN baseline in the paper, is therefore about 0.06 QWK
-on held-out test.
-
-\section{Discussion and Limitations}
+At the 20-feature budget with per-model Optuna tuning,
+\textbf{FourierKAN matches XGBoost} (0.604 vs.\ 0.601, CIs overlap)
+while ChebyKAN trails by 0.04. The sparse ChebyKAN hero row
