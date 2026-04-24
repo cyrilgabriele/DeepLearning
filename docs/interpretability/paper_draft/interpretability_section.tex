@@ -24,6 +24,11 @@ their inner-validation QWK against the sweep-selected dense baselines
 would be asymmetric. For the dense rows we further average across three
 training seeds to absorb the single-retrain variance we observed
 ($\sigma \lesssim 0.03$ QWK for ChebyKAN, $\lesssim 0.01$ for FourierKAN).
+To make the sparse comparison fair at a matched feature budget, we
+additionally retrain XGBoost on the same 20 features selected for
+the sparse ChebyKAN hero with hyperparameters re-tuned for that
+smaller input space (max\_depth 6, 300 trees); this is the
+``XGBoost (20 ft)'' row.
 Every KAN configuration we analyse admits exact per-edge symbolic
 recovery from its basis coefficients (R$^2 = 1.000$ by construction
 via the basis-native extractor); the interpretability distinction
@@ -33,18 +38,22 @@ model can be written as a single expression.
 
 \begin{table}[H]
 \centering
-\caption{Held-out outer-test QWK and structural size. Dense KAN rows report the mean $\pm$ standard deviation across three training seeds; sparse rows are single retrainings with 95\% bootstrap CIs over n{=}11{,}877 test samples. Dense KANs beat XGBoost; the sparse 20-feature variants trade 0.03--0.07 QWK for 12--44$\times$ fewer active edges.}
+\caption{Held-out outer-test QWK and structural size, grouped by feature budget. Dense KAN rows report the mean $\pm$ standard deviation across three training seeds; the other rows are single retrainings with 95\% bootstrap CIs over n{=}11{,}877 test samples. At matched feature budgets, both KAN flavours clearly beat XGBoost: dense KANs by 0.03--0.04 QWK over full-feature XGBoost, sparse KANs by 0.06--0.09 QWK over 20-feature XGBoost.}
 \label{tab:interpretability_outer_test}
 \footnotesize
 \begin{tabular}{lccl}
 \hline
 Model & QWK (outer test) & Active edges & Explanation \\
 \hline
+\multicolumn{4}{l}{\emph{Full-feature regime ($\geq 126$ features)}} \\
 XGBoost                    & 0.559 [0.543, 0.575] & 723k leaves & SHAP (post-hoc) \\
 ChebyKAN, dense            & $0.595 \pm 0.027$    & 26{,}112    & per-edge native \\
 FourierKAN, dense          & $0.599 \pm 0.007$    & 41{,}728    & per-edge native \\
-ChebyKAN, sparse (20 ft)   & 0.533 [0.519, 0.547] & \textbf{597} & \textbf{closed form + exact Greeks} \\
-FourierKAN, sparse (20 ft) & 0.562 [0.549, 0.576] & 7{,}158     & per-edge closed form \\
+\hline
+\multicolumn{4}{l}{\emph{Sparse regime (20 features)}} \\
+XGBoost (20 ft, retuned)   & 0.470 [0.454, 0.487] & 66k leaves  & SHAP (post-hoc) \\
+ChebyKAN, sparse (no LN)   & 0.533 [0.519, 0.547] & \textbf{597} & \textbf{closed form + exact Greeks} \\
+FourierKAN, sparse (no LN) & 0.562 [0.549, 0.576] & 7{,}158     & per-edge closed form \\
 \hline
 \end{tabular}
 \end{table}
@@ -144,13 +153,20 @@ Central finite difference ($\varepsilon = 10^{-3}$) & $-0.649929$ \\
 
 \subsubsection{Summary}
 
-The same TabKAN family spans both the top-tier accuracy class at the
-dense end (Table~\ref{tab:interpretability_outer_test} rows 2--3;
-both beat XGBoost) and uniquely transparent structures at the sparse
-end (rows 4--5). In particular, the sparse ChebyKAN row combines
-three properties no other row achieves simultaneously:
-44$\times$ edge sparsity against the dense baseline (597 vs.\
-26{,}112), a single closed-form composed expression in the 20
-inputs, and exact analytic Greeks. The accuracy cost of these three
-properties, against the best-performing TabKAN configuration in the
-paper, is about 0.06 QWK on held-out test.
+At both feature budgets in Table~\ref{tab:interpretability_outer_test},
+TabKAN outperforms XGBoost on outer-test QWK: by 0.03--0.04 at full
+features and by 0.06--0.09 at the 20-feature budget. The sparse
+ChebyKAN row additionally combines three properties no other row
+achieves simultaneously: 44$\times$ edge sparsity against the dense
+baseline (597 vs.\ 26{,}112), a single closed-form composed
+expression in the 20 inputs, and exact analytic Greeks. The accuracy
+cost of these three properties, against the best-performing TabKAN
+configuration in the paper, is about 0.06 QWK on held-out test.
+
+\section{Discussion and Limitations}
+\label{sec:discussion}
+
+Finally, we discuss the implications and limitations of our findings. In particular, we consider:
+
+\begin{itemize}
+    \item whether observed performance differences are statistically and practically meaningful,

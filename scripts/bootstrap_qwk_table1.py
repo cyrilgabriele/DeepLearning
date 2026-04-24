@@ -41,7 +41,9 @@ MODELS = [
     ("stage-c-glm-baseline", "model-20260423-122752", "kan_paper",
      "configs/experiment_stages/stage_c_explanation_package/glm_baseline.yaml"),
     ("stage-c-xgboost-best", "model-20260412-165531", "xgboost_paper",
-     None),  # XGBoost needs no config for inference
+     None),
+    ("stage-c-xgboost-top20-retuned", "model-20260424-135751", "kan_paper",
+     None),
     ("stage-c-chebykan-best", "model-20260423-123113", "kan_paper",
      "configs/experiment_stages/stage_c_explanation_package/chebykan_best.yaml"),
     ("stage-c-fourierkan-best", "model-20260423-123404", "kan_paper",
