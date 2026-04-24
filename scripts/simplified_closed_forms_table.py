@@ -84,12 +84,15 @@ def _render_term(coef: float, basis_label: str) -> str:
 
 
 def _render_edge_formula(coefs: np.ndarray, base_weight: float,
-                         threshold: float = COEF_THRESHOLD) -> str:
-    """Return simplified LaTeX formula for base_w * x + Σ_k c_k T_k(tanh x)."""
-    # Order: base weight * x, then T_0, T_1, ..., T_d
-    parts: list[str] = []
+                         threshold: float = COEF_THRESHOLD,
+                         top_k: int = 3) -> str:
+    """Return simplified LaTeX formula for base_w * x + Σ_k c_k T_k(tanh x),
+    showing only the top-`top_k` terms by absolute coefficient magnitude and
+    collapsing the remainder into a trailing `+ ...` marker."""
+    # Gather all nonzero terms as (abs_coef, signed_coef, label)
+    candidates: list[tuple[float, float, str]] = []
     if abs(base_weight) >= threshold:
-        parts.append(_render_term(float(base_weight), "x"))
+        candidates.append((abs(base_weight), float(base_weight), "x"))
     for k, c in enumerate(coefs):
         if abs(c) < threshold:
             continue
@@ -99,13 +102,23 @@ def _render_edge_formula(coefs: np.ndarray, base_weight: float,
             label = "\\tanh x"
         else:
             label = f"T_{{{k}}}(\\tanh x)"
-        parts.append(_render_term(float(c), label))
-    if not parts:
+        candidates.append((abs(float(c)), float(c), label))
+
+    if not candidates:
         return "0"
-    # strip a leading "+" for the first term
+
+    # Sort by absolute magnitude, take top-k
+    candidates.sort(key=lambda t: t[0], reverse=True)
+    kept = candidates[:top_k]
+    dropped = candidates[top_k:]
+
+    # Render in descending-importance order (keeps the visually dominant term first)
+    parts = [_render_term(c[1], c[2]) for c in kept]
     text = " ".join(parts)
     if text.startswith("+"):
         text = text.lstrip("+ \\,")
+    if dropped:
+        text = text + " +\\,\\dots"
     return text
 
 

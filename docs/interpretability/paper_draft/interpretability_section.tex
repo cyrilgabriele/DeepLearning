@@ -10,7 +10,6 @@
 % Figure 1 (fig1_interpretability.pdf) is in outputs/figures/; copy or \includegraphics
 % with a relative path appropriate to the paper's tree.
 % =============================================================
-
 \subsection{Interpretability and Model Analysis}
 \label{sec:interpretability}
 
@@ -22,31 +21,30 @@ ordinal thresholds calibrated on inner validation
 because the interpretable sparse variants introduced below are single
 retrainings and therefore carry no Optuna-selection bias; reporting
 their inner-validation QWK against the sweep-selected dense baselines
-would be asymmetric.
-
-All four KAN configurations we analyse (Cheby/Fourier $\times$
-dense/sparse) admit exact per-edge symbolic recovery:
-each learned univariate edge function can be read directly off its
-basis coefficients, yielding R$^2 = 1.000$ by construction (the
-basis-native extractor does not fit, it reads). The interpretability
-distinction between operating points is therefore not \emph{whether}
-edges are recoverable but \emph{how many} edges remain and whether
-the composed model can be written as a single expression.
+would be asymmetric. For the dense rows we further average across three
+training seeds to absorb the single-retrain variance we observed
+($\sigma \lesssim 0.03$ QWK for ChebyKAN, $\lesssim 0.01$ for FourierKAN).
+Every KAN configuration we analyse admits exact per-edge symbolic
+recovery from its basis coefficients (R$^2 = 1.000$ by construction
+via the basis-native extractor); the interpretability distinction
+between operating points is therefore not \emph{whether} edges are
+recoverable but \emph{how many} edges remain and whether the composed
+model can be written as a single expression.
 
 \begin{table}[H]
 \centering
-\caption{Held-out outer-test QWK with 95\% bootstrap CIs (n{=}11{,}877 samples, 1000 resamples) and structural size. Dense KANs match or exceed XGBoost; the sparse 20-feature variants trade 0.03--0.07 QWK for 12--44$\times$ fewer active edges. R$^2$ is the basis-native per-edge recovery fidelity.}
+\caption{Held-out outer-test QWK and structural size. Dense KAN rows report the mean $\pm$ standard deviation across three training seeds; sparse rows are single retrainings with 95\% bootstrap CIs over n{=}11{,}877 test samples. Dense KANs beat XGBoost; the sparse 20-feature variants trade 0.03--0.07 QWK for 12--44$\times$ fewer active edges.}
 \label{tab:interpretability_outer_test}
 \footnotesize
-\begin{tabular}{lccc}
+\begin{tabular}{lccl}
 \hline
-Model & QWK (95\% CI) & Active edges & R$^2$ \\
+Model & QWK (outer test) & Active edges & Explanation \\
 \hline
-XGBoost                 & 0.559 [0.543, 0.575] & 723k leaves & --- \\
-ChebyKAN, dense         & \textbf{0.607} [0.594, 0.620] & 26{,}112 & 1.000 \\
-FourierKAN, dense       & 0.592 [0.578, 0.606] & 41{,}728 & 1.000 \\
-ChebyKAN, sparse (20 ft) & 0.533 [0.519, 0.547] & \textbf{597} & 1.000 \\
-FourierKAN, sparse (20 ft) & 0.562 [0.549, 0.576] & 7{,}158 & 1.000 \\
+XGBoost                    & 0.559 [0.543, 0.575] & 723k leaves & SHAP (post-hoc) \\
+ChebyKAN, dense            & $0.595 \pm 0.027$    & 26{,}112    & per-edge native \\
+FourierKAN, dense          & $0.599 \pm 0.007$    & 41{,}728    & per-edge native \\
+ChebyKAN, sparse (20 ft)   & 0.533 [0.519, 0.547] & \textbf{597} & \textbf{closed form + exact Greeks} \\
+FourierKAN, sparse (20 ft) & 0.562 [0.549, 0.576] & 7{,}158     & per-edge closed form \\
 \hline
 \end{tabular}
 \end{table}
@@ -54,24 +52,7 @@ FourierKAN, sparse (20 ft) & 0.562 [0.549, 0.576] & 7{,}158 & 1.000 \\
 \subsubsection{Dense regime: KAN vs.\ XGBoost+SHAP}
 \label{sec:interpretability_dense}
 
-% ==============================================================
-% CYRIL: dense-regime interpretability content goes here.
-% Expected claims (see docs/interpretability/PAPER_CONTENT_INTERPRETABILITY.md §11):
-%   - Per-feature importance agreement between KAN-native coefficient
-%     importance and XGBoost SHAP (Kendall τ ≈ TBD on top-15 features).
-%   - Per-feature behaviour comparison (GLM coefficient vs SHAP
-%     dependence vs KAN edge curve), either as Figure 2 or as text
-%     cross-referencing Figure 1.
-%   - Key claim: KAN explanations are model-native (read directly from
-%     learned basis coefficients with R² = 1.000), whereas SHAP must
-%     approximate XGBoost with a local linear surrogate per prediction.
-% Requires re-running the interpret pipeline on the current dense
-% ChebyKAN and FourierKAN checkpoints (2026-04-23 retrains) so that
-% dense FourierKAN edges fit at R² = 1.000 via the native extractor
-% added on this branch (commit dd690c1).
-% ==============================================================
-
-[PLACEHOLDER — Cyril.]
+[PLACEHOLDER --- Cyril.]
 
 \subsubsection{Sparse regime: compact closed-form TabKAN}
 \label{sec:interpretability_sparse}
@@ -83,33 +64,51 @@ LayerNorm removed, and (iii) L1-pruning edges whose mean activation
 magnitude falls below a threshold tightened until inner-val QWK loss
 stays within 0.005. ChebyKAN tolerates 94\% within-architecture
 pruning; FourierKAN reaches 79\% under the same QWK-loss budget.
-On outer test the sparse variants match or come close to their dense
-counterparts (Cheby: 0.607 $\to$ 0.533, $\Delta = -0.074$;
-Fourier: 0.592 $\to$ 0.562, $\Delta = -0.030$), so the accuracy cost
-of interpretability in this regime is moderate.
+On outer test the sparse variants come within 0.06--0.07 QWK of their
+dense counterparts (Cheby: $0.595 \to 0.533$, $\Delta \approx -0.062$;
+Fourier: $0.599 \to 0.562$, $\Delta \approx -0.037$), so the accuracy
+cost of the interpretability pipeline is moderate.
 
 Every surviving edge in both sparse variants admits exact closed-form
 recovery from its basis coefficients: each ChebyKAN edge is a
 polynomial of degree $\leq 6$ in $\tanh(x)$, each FourierKAN edge is
-a linear combination of eight harmonic pairs in
-$k\pi(\tanh(x)+1)$. Figure~\ref{fig:fig1_interpretability} shows the
-learned edge activations for BMI and Wt under both flavours with the
-closed-form overlay; the sampled-activation points (grey) lie on the
-recovered curve (coloured) exactly.
-Table~\ref{tab:closed_forms} exhibits five representative sparse
-ChebyKAN layer-0 edges after rounding and dropping small terms.
+a linear combination of eight harmonic pairs in $k\pi(\tanh(x)+1)$.
+Because the sparse no-LayerNorm ChebyKAN is a closed-form polynomial
+in the inputs, any prediction further decomposes into exactly-additive
+per-feature contributions via integrated gradients along a reference
+path --- no surrogate, no sampling, no post-hoc approximation.
+Figure~\ref{fig:fig1_interpretability} applies this decomposition to
+applicant 55728: the low-risk reference score ($0.62$) is grown into
+the applicant's predicted score ($5.23$, class $5$) by adding the
+integrated-gradient contribution of each input feature.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=\columnwidth]{fig1_interpretability.pdf}
-    \caption{Learned layer-0 edges for BMI (left column) and Wt (right column) in the sparse ChebyKAN (top) and FourierKAN (bottom) heroes. Grey dots: the edge evaluated at outer-test feature values. Coloured line: the exact closed-form recovered by the basis-native extractor. Axes are in tanh-normalised model-input space. R$^2 = 1.000$ by construction.}
+    \caption{Analytic per-feature decomposition of the sparse ChebyKAN's predicted risk score for applicant 55728 (predicted class 5, score $5.23$), against the lowest-scoring class-1 reference applicant ($0.62$). Bars show the integrated-gradient contribution of each input feature, computed along the linear path from reference to applicant on the model's closed-form polynomial. Positive contributions (blue) raise the score; the single negative contribution (red) lowers it. The top 7 features by $|\mathrm{IG}|$ are shown individually; the remaining 13 are lumped as ``$+\,13$ others''. By construction $\sum_i \mathrm{IG}_i = f(x_{\mathrm{app}}) - f(x_{\mathrm{ref}})$ exactly (residual $< 10^{-4}$).}
     \label{fig:fig1_interpretability}
 \end{figure}
 
-% Optional supplementary table: five representative closed forms.
-% Generated by scripts/simplified_closed_forms_table.py
-% (content at outputs/reports/table_closed_forms_latex.tex)
-\input{closed_forms_table.tex}
+Table~\ref{tab:closed_forms} exhibits five representative sparse-hero
+layer-0 edges rounded to their top three Chebyshev terms.
+
+\begin{table}[H]
+\centering
+\caption{Five representative closed-form layer-0 edges from the sparse ChebyKAN hero (out of 597 active edges), each showing the top-3 terms by absolute coefficient; ``$+\,\dots$'' denotes truncated small terms. Each row is the edge from the named input feature to its highest-L1 hidden output. All edges are exact (R$^2 = 1.000$) via the basis-native extractor.}
+\label{tab:closed_forms}
+\footnotesize
+\begin{tabular}{ll}
+\hline
+Feature & Closed-form edge $\phi(x)$ (top 3 terms) \\
+\hline
+\texttt{BMI} & $\displaystyle 0.536\,T_{4}(\tanh x) +\,0.242\,T_{5}(\tanh x) -\,0.046\,T_{2}(\tanh x)$ \\
+\texttt{Wt} & $\displaystyle 0.227\,T_{6}(\tanh x) -\,0.211\,T_{4}(\tanh x) -\,0.022\,T_{5}(\tanh x) +\,\dots$ \\
+\texttt{Ins\_Age} & $\displaystyle -\,0.607\,T_{5}(\tanh x) -\,0.337\,T_{6}(\tanh x) +\,0.170\,T_{2}(\tanh x) +\,\dots$ \\
+\texttt{Product\_Info\_4} & $\displaystyle 0.938\,T_{5}(\tanh x) -\,0.937\,T_{3}(\tanh x) +\,0.747\,\tanh x +\,\dots$ \\
+\texttt{Medical\_Keyword\_3} & $\displaystyle 0.407\,T_{5}(\tanh x) -\,0.218\,\tanh x +\,0.148\,T_{4}(\tanh x) +\,\dots$ \\
+\hline
+\end{tabular}
+\end{table}
 
 Because the sparse no-LayerNorm ChebyKAN composes into a single
 closed-form polynomial in the 20 retained inputs (Chebyshev
@@ -146,11 +145,12 @@ Central finite difference ($\varepsilon = 10^{-3}$) & $-0.649929$ \\
 \subsubsection{Summary}
 
 The same TabKAN family spans both the top-tier accuracy class at the
-dense end (Table~\ref{tab:interpretability_outer_test} rows 2--3) and
-uniquely transparent structures at the sparse end (rows 4--5). In
-particular, the sparse ChebyKAN row combines three properties no
-other row achieves simultaneously: 44$\times$ edge sparsity against
-the dense baseline (597 vs.\ 26{,}112), a single closed-form
-composed expression in the 20 inputs, and exact analytic Greeks.
-The accuracy cost of those three properties, against the
-best-performing TabKAN configuration in the paper, is 0.074 QWK.
+dense end (Table~\ref{tab:interpretability_outer_test} rows 2--3;
+both beat XGBoost) and uniquely transparent structures at the sparse
+end (rows 4--5). In particular, the sparse ChebyKAN row combines
+three properties no other row achieves simultaneously:
+44$\times$ edge sparsity against the dense baseline (597 vs.\
+26{,}112), a single closed-form composed expression in the 20
+inputs, and exact analytic Greeks. The accuracy cost of these three
+properties, against the best-performing TabKAN configuration in the
+paper, is about 0.06 QWK on held-out test.
