@@ -178,6 +178,47 @@ not inner-val sweep numbers.
   the interpretability of the two large TabKAN flavors. GLM remains out of
   scope.
 
+## PDP audit
+
+Treat the current dense-Cheby PDP figure as a weak / partially misleading
+supporting artifact until the plotting logic is fixed:
+
+- [chebykan_partial_dependence.pdf](../../outputs/interpretability/kan_paper/stage-c-chebykan-best/figures/chebykan_partial_dependence.pdf)
+  should not be used as clean evidence of model-level feature effects in its
+  current form.
+- The current PDP code in
+  [partial_dependence.py](../../src/interpretability/partial_dependence.py)
+  builds a `np.linspace(lo, hi, 100)` grid for every feature using the 1st and
+  99th percentiles. That is acceptable for continuous variables, but it is
+  wrong for discrete coded variables.
+- In the current dense-Cheby top-20 PDP artifact, 14 of the 20 panels are
+  binary or categorical. Those panels are being evaluated on impossible
+  in-between values rather than only on observed states.
+- Example failures from the current eval split:
+  - `Medical_History_23` only takes `{1, 3}`, but the PDP line is drawn across
+    the whole interval `1 → 3`.
+  - `Medical_History_5` has counts `1:11789, 2:88`, so the 99th percentile is
+    `1` and the panel collapses to one x-value.
+  - `Medical_History_30` has counts `1:1, 2:11377, 3:499`, so the 1st
+    percentile is `2` and category `1` disappears from the plot.
+  - `Medical_History_18` has counts `1:11233, 2:641, 3:3`, so the 99th
+    percentile is `2` and category `3` disappears from the plot.
+- The x-axis semantics are also misleading for `recipe: kan_paper`.
+  [preprocess_kan_paper.py](../../src/preprocessing/preprocess_kan_paper.py)
+  does not externally scale inputs to `[-1,1]`; it keeps mostly raw/code-valued
+  features and only imputes / adds missing indicators. The ChebyKAN and
+  FourierKAN layers then apply `tanh(...)` internally. So labels such as
+  `Encoded [-1,1]` in the current PDP figure are not faithful to the stored
+  `X_eval` artifact.
+- Working interpretation rule for this handoff:
+  prefer `*_activations.pdf` plus feature-retention validation as the main
+  KAN-side evidence. Treat the current PDPs as secondary illustrations only,
+  not as the primary shape summary.
+- If the PDP figure is revisited later, discrete features should be evaluated
+  on observed states only, percentile clipping should not remove valid
+  categories, and the axis should explicitly distinguish external preprocessing
+  scale from the layer-internal `tanh` normalization.
+
 ## Ordered tasks
 
 ### 1. Re-run dense Cheby interpretability on the existing dense checkpoint
