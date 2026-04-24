@@ -30,6 +30,9 @@ _XGBOOST_REQUIRED_PARAMS = {
     "eval_metric",
     "refit_full_training",
 }
+_XGBOOST_OPTIONAL_PARAMS = {
+    "gamma",  # Optuna sweep tuned this; dropping it silently caused a ~0.10 QWK regression.
+}
 _GLM_REQUIRED_PARAMS = {"alpha"}
 
 
@@ -159,7 +162,7 @@ class ModelConfig(BaseModel):
                 allowed.add("spline_order")
             return allowed
         if self.name == "xgboost-paper":
-            return set(_XGBOOST_REQUIRED_PARAMS)
+            return set(_XGBOOST_REQUIRED_PARAMS) | set(_XGBOOST_OPTIONAL_PARAMS)
         if self.name == "glm":
             return set(_GLM_REQUIRED_PARAMS)
         return set()

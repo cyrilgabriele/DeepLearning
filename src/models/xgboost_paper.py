@@ -32,6 +32,7 @@ class XGBoostPaperModel(PrudentialModel):
         tree_method: str,
         eval_metric: str,
         refit_full_training: bool,
+        gamma: float = 0.0,
         n_jobs: Optional[int] = None,
     ) -> None:
         params = {
@@ -44,6 +45,7 @@ class XGBoostPaperModel(PrudentialModel):
             "colsample_bytree": colsample_bytree,
             "reg_alpha": reg_alpha,
             "reg_lambda": reg_lambda,
+            "gamma": gamma,
             "num_classes": num_classes,
             "tree_method": tree_method,
             "eval_metric": eval_metric,
@@ -67,6 +69,7 @@ class XGBoostPaperModel(PrudentialModel):
             "colsample_bytree": colsample_bytree,
             "reg_alpha": reg_alpha,
             "reg_lambda": reg_lambda,
+            "gamma": gamma,
         }
 
         self._estimator: Optional[xgb.XGBClassifier] = None
@@ -216,6 +219,7 @@ class XGBoostPaperModel(PrudentialModel):
             colsample_bytree=float(params["colsample_bytree"]),
             reg_alpha=float(params["reg_alpha"]),
             reg_lambda=float(params["reg_lambda"]),
+            gamma=float(params.get("gamma", 0.0)),
             objective="multi:softprob",
             num_class=self.num_classes,
             random_state=seed,
