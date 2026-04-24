@@ -1,0 +1,29 @@
+trainer:
+  experiment_name: stage-c-xgb-top20
+  train_csv: data/prudential-life-insurance-assessment/train.csv
+  test_csv: data/prudential-life-insurance-assessment/test.csv
+  seed: 42
+
+# Same preprocessing as the sparse ChebyKAN hero, restricted to its top-20
+# features — gives XGBoost a fair head-to-head at a matched feature budget.
+preprocessing:
+  contract_version: 1
+  recipe: kan_paper
+  selected_features_path: configs/experiment_stages/stage_c_explanation_package/feature_lists/chebykan_pareto_q0583_top20_features.json
+
+# XGBRegressor + threshold-optimisation, re-tuned for small feature set
+# (shallower trees, fewer rounds, stronger regularisation) to avoid
+# overfitting that the full-feature Optuna best would induce on only
+# 20 inputs.
+model:
+  name: xgb
+  params:
+    n_estimators: 300
+    max_depth: 6
+    learning_rate: 0.05
+    subsample: 0.7
+    colsample_bytree: 0.8
+    min_child_weight: 10
+    reg_alpha: 0.5
+    reg_lambda: 2.0
+    gamma: 1.0

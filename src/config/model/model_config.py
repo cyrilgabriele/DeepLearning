@@ -33,6 +33,22 @@ _XGBOOST_REQUIRED_PARAMS = {
 _XGBOOST_OPTIONAL_PARAMS = {
     "gamma",  # Optuna sweep tuned this; dropping it silently caused a ~0.10 QWK regression.
 }
+
+# XGBRegressor + threshold-optimisation baseline ("xgb"), re-registered for
+# reproducibility of the original Optuna sweep (sweeps/xgb_xgb_paper_best.json).
+# This is the sweep that produced §3.1 Table 1's 0.6546 — a strictly
+# regression-based XGBoost with QWK-thresholded outputs, not XGBClassifier.
+_XGB_REQUIRED_PARAMS = {
+    "n_estimators",
+    "max_depth",
+    "learning_rate",
+    "subsample",
+    "colsample_bytree",
+    "min_child_weight",
+    "reg_alpha",
+    "reg_lambda",
+}
+_XGB_OPTIONAL_PARAMS = {"gamma"}
 _GLM_REQUIRED_PARAMS = {"alpha"}
 
 
@@ -163,6 +179,8 @@ class ModelConfig(BaseModel):
             return allowed
         if self.name == "xgboost-paper":
             return set(_XGBOOST_REQUIRED_PARAMS) | set(_XGBOOST_OPTIONAL_PARAMS)
+        if self.name == "xgb":
+            return set(_XGB_REQUIRED_PARAMS) | set(_XGB_OPTIONAL_PARAMS)
         if self.name == "glm":
             return set(_GLM_REQUIRED_PARAMS)
         return set()
@@ -228,6 +246,8 @@ class ModelConfig(BaseModel):
         required_params = set()
         if self.name == "xgboost-paper":
             required_params = set(_XGBOOST_REQUIRED_PARAMS)
+        elif self.name == "xgb":
+            required_params = set(_XGB_REQUIRED_PARAMS)
         elif self.name == "glm":
             required_params = set(_GLM_REQUIRED_PARAMS)
 

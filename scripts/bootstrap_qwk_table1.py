@@ -44,6 +44,10 @@ MODELS = [
      None),
     ("stage-c-xgboost-top20-retuned", "model-20260424-135751", "kan_paper",
      None),
+    ("stage-c-xgb-best", "model-20260424-144108", "xgboost_paper",
+     None),
+    ("stage-c-xgb-top20", "model-20260424-144138", "kan_paper",
+     None),
     ("stage-c-chebykan-best", "model-20260423-123113", "kan_paper",
      "configs/experiment_stages/stage_c_explanation_package/chebykan_best.yaml"),
     ("stage-c-fourierkan-best", "model-20260423-123404", "kan_paper",
@@ -154,7 +158,7 @@ def predict_on_outer_test(exp_name: str, ckpt_stem: str, recipe: str,
 
     if model_name == "glm":
         y_pred = _predict_glm(ckpt_path, X_eval, thresholds)
-    elif model_name in {"xgb", "xgboost", "xgb_paper", "xgboost-paper"}:
+    elif model_name in {"xgb", "xgboost", "xgb_paper", "xgboost-paper", "xgboost-paper"}:
         y_pred = _predict_xgb(ckpt_path, X_eval, thresholds)
     else:
         y_pred = _predict_tabkan(ckpt_path, cfg_path, X_eval, thresholds)

@@ -27,8 +27,10 @@ training seeds to absorb the single-retrain variance we observed
 To make the sparse comparison fair at a matched feature budget, we
 additionally retrain XGBoost on the same 20 features selected for
 the sparse ChebyKAN hero with hyperparameters re-tuned for that
-smaller input space (max\_depth 6, 300 trees); this is the
-``XGBoost (20 ft)'' row.
+smaller input space (max\_depth 6, 300 trees, gamma 1); this is the
+``XGBoost (20 ft)'' row. The XGBoost implementation used throughout
+is XGBRegressor on the ordinal target followed by
+QWK-threshold calibration on the training predictions.
 Every KAN configuration we analyse admits exact per-edge symbolic
 recovery from its basis coefficients (R$^2 = 1.000$ by construction
 via the basis-native extractor); the interpretability distinction
@@ -38,7 +40,7 @@ model can be written as a single expression.
 
 \begin{table}[H]
 \centering
-\caption{Held-out outer-test QWK and structural size, grouped by feature budget. Dense KAN rows report the mean $\pm$ standard deviation across three training seeds; the other rows are single retrainings with 95\% bootstrap CIs over n{=}11{,}877 test samples. At matched feature budgets, both KAN flavours clearly beat XGBoost: dense KANs by 0.03--0.04 QWK over full-feature XGBoost, sparse KANs by 0.06--0.09 QWK over 20-feature XGBoost.}
+\caption{Held-out outer-test QWK and structural size, grouped by feature budget. Dense KAN rows report the mean $\pm$ standard deviation across three training seeds; all other rows are single retrainings with 95\% bootstrap CIs over n{=}11{,}877 test samples. At full features XGBoost is the strongest baseline (0.642); at 20 features the sparse FourierKAN matches XGBoost within bootstrap noise and the sparse ChebyKAN trails by $\approx 0.03$ QWK in exchange for a single closed-form composed expression and exact analytic Greeks.}
 \label{tab:interpretability_outer_test}
 \footnotesize
 \begin{tabular}{lccl}
@@ -46,14 +48,14 @@ model can be written as a single expression.
 Model & QWK (outer test) & Active edges & Explanation \\
 \hline
 \multicolumn{4}{l}{\emph{Full-feature regime ($\geq 126$ features)}} \\
-XGBoost                    & 0.559 [0.543, 0.575] & 723k leaves & SHAP (post-hoc) \\
+XGBoost                    & \textbf{0.642} [0.629, 0.655] & 765 trees & SHAP (post-hoc) \\
 ChebyKAN, dense            & $0.595 \pm 0.027$    & 26{,}112    & per-edge native \\
 FourierKAN, dense          & $0.599 \pm 0.007$    & 41{,}728    & per-edge native \\
 \hline
 \multicolumn{4}{l}{\emph{Sparse regime (20 features)}} \\
-XGBoost (20 ft, retuned)   & 0.470 [0.454, 0.487] & 66k leaves  & SHAP (post-hoc) \\
-ChebyKAN, sparse (no LN)   & 0.533 [0.519, 0.547] & \textbf{597} & \textbf{closed form + exact Greeks} \\
-FourierKAN, sparse (no LN) & 0.562 [0.549, 0.576] & 7{,}158     & per-edge closed form \\
+XGBoost (20 ft, retuned)   & 0.565 [0.551, 0.579] & 300 trees   & SHAP (post-hoc) \\
+ChebyKAN, sparse (no LN)   & 0.533 [0.519, 0.547] & \textbf{597 edges} & \textbf{closed form + exact Greeks} \\
+FourierKAN, sparse (no LN) & 0.562 [0.549, 0.576] & 7{,}158 edges & per-edge closed form \\
 \hline
 \end{tabular}
 \end{table}
@@ -153,20 +155,18 @@ Central finite difference ($\varepsilon = 10^{-3}$) & $-0.649929$ \\
 
 \subsubsection{Summary}
 
-At both feature budgets in Table~\ref{tab:interpretability_outer_test},
-TabKAN outperforms XGBoost on outer-test QWK: by 0.03--0.04 at full
-features and by 0.06--0.09 at the 20-feature budget. The sparse
-ChebyKAN row additionally combines three properties no other row
-achieves simultaneously: 44$\times$ edge sparsity against the dense
-baseline (597 vs.\ 26{,}112), a single closed-form composed
-expression in the 20 inputs, and exact analytic Greeks. The accuracy
-cost of these three properties, against the best-performing TabKAN
-configuration in the paper, is about 0.06 QWK on held-out test.
+At full features, XGBoost is the strongest baseline on outer-test
+QWK (0.642); dense ChebyKAN and FourierKAN both come within 0.05.
+At the 20-feature budget, the sparse FourierKAN matches XGBoost
+within bootstrap noise (0.562 vs.\ 0.565) with 6$\times$ fewer active
+parameters (7{,}158 edges vs.\ 300 trees). The sparse ChebyKAN row
+trails by about 0.03 QWK (0.533 vs.\ 0.565) in exchange for three
+properties no other row in Table~\ref{tab:interpretability_outer_test}
+achieves simultaneously: 44$\times$ edge compression against its
+dense baseline (597 vs.\ 26{,}112), a single closed-form composed
+expression in the 20 inputs, and exact analytic Greeks. The
+interpretability cost of the sparse ChebyKAN, against the
+strongest KAN baseline in the paper, is therefore about 0.06 QWK
+on held-out test.
 
 \section{Discussion and Limitations}
-\label{sec:discussion}
-
-Finally, we discuss the implications and limitations of our findings. In particular, we consider:
-
-\begin{itemize}
-    \item whether observed performance differences are statistically and practically meaningful,
