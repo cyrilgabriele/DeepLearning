@@ -43,7 +43,7 @@ model can be written as a single expression.
 
 \begin{table}[H]
 \centering
-\caption{Held-out outer-test QWK and structural size, grouped by feature budget. Dense KAN rows report the mean $\pm$ standard deviation across three training seeds; all other rows are single retrainings with 95\% bootstrap CIs over n{=}11{,}877 test samples. Each 20-feature row uses its model's own top-20 features (native importance for KANs, SHAP for XGBoost). KAN architectures are picked by a 50-trial Optuna search on the 20-feature input space. At full features XGBoost is the strongest baseline (0.642); at 20 features XGBoost, FourierKAN, and the sparse ChebyKAN hero are statistically tied (all three 95\% CIs overlap), but the sparse ChebyKAN hero achieves this with $>$10$\times$ fewer active parameters than either alternative, along with end-to-end closed-form composability and exact analytic Greeks.}
+\caption{Held-out outer-test QWK and structural size, grouped by feature budget. Full-feature numbers are populated by the dense-regime sub-section (\S\ref{sec:interpretability_dense}). All sparse-regime rows are single retrainings with 95\% bootstrap CIs over n{=}11{,}877 test samples; each 20-feature row uses its model's own top-20 features (native importance for KANs, SHAP for XGBoost) and KAN architectures are picked by a 50-trial Optuna search on the 20-feature input space. At 20 features XGBoost, FourierKAN, and the sparse ChebyKAN hero are statistically tied (all three 95\% CIs overlap), but the sparse ChebyKAN hero achieves this with $>$10$\times$ fewer active parameters than either alternative, along with end-to-end closed-form composability and exact analytic Greeks.}
 \label{tab:interpretability_outer_test}
 \footnotesize
 \begin{tabular}{lccl}
@@ -51,9 +51,9 @@ model can be written as a single expression.
 Model & QWK (outer test) & Active params & Explanation \\
 \hline
 \multicolumn{4}{l}{\emph{Full-feature regime ($\geq 126$ features)}} \\
-XGBoost                    & \textbf{0.642} [0.629, 0.655] & 765 trees & SHAP (post-hoc) \\
-ChebyKAN, dense            & $0.595 \pm 0.027$    & 26{,}112 edges    & per-edge native \\
-FourierKAN, dense          & $0.599 \pm 0.007$    & 41{,}728 edges    & per-edge native \\
+XGBoost                    & \textcolor{red}{fill from Cyril} & 765 trees & SHAP (post-hoc) \\
+ChebyKAN, dense            & \textcolor{red}{fill from Cyril} & 26{,}112 edges    & per-edge native \\
+FourierKAN, dense          & \textcolor{red}{fill from Cyril} & 41{,}728 edges    & per-edge native \\
 \hline
 \multicolumn{4}{l}{\emph{Sparse regime (20 features, per-budget tuning)}} \\
 XGBoost, tuned             & 0.601 [0.587, 0.614] & 1200 trees   & SHAP (post-hoc) \\
@@ -163,12 +163,11 @@ Central finite difference ($\varepsilon = 10^{-3}$) & $-1.703977$ \\
 
 \subsubsection{Summary}
 
-At full features, XGBoost is the strongest baseline on outer-test
-QWK (0.642); dense ChebyKAN and FourierKAN come within 0.05. At the
-20-feature budget with per-model tuning, \textbf{XGBoost
-(0.601), tuned FourierKAN (0.604), and the sparse ChebyKAN hero
-(0.592) are statistically tied} --- all three 95\% bootstrap CIs
-overlap. The sparse ChebyKAN hero distinguishes itself structurally:
+Full-feature outer-test numbers are given in
+\S\ref{sec:interpretability_dense}. At the 20-feature budget with
+per-model tuning, \textbf{XGBoost (0.601), tuned FourierKAN (0.604),
+and the sparse ChebyKAN hero (0.592) are statistically tied} ---
+all three 95\% bootstrap CIs overlap. The sparse ChebyKAN hero distinguishes itself structurally:
 at only 806 active edges it is $>$10$\times$ smaller than tuned
 FourierKAN (70\,912 edges) and far more compact than
 1\,200-tree XGBoost. It is also the only configuration in
@@ -180,3 +179,4 @@ accuracy while providing native, exact symbolic explanations that
 SHAP can only approximate.
 
 \section{Discussion and Limitations}
+\label{sec:discussion}
