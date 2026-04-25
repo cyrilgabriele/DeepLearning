@@ -47,8 +47,8 @@ FourierKAN, dense          & \textcolor{red}{fill from Cyril} & 41{,}728 edges  
 \hline
 \multicolumn{4}{l}{\emph{Sparse regime (20 features, per-budget tuning)}} \\
 XGBoost, tuned             & 0.601 [0.587, 0.614] & 1200 trees   & SHAP (post-hoc) \\
-FourierKAN, tuned (no LN)  & \textbf{0.604} [0.590, 0.618] & 70{,}912 edges & per-edge closed form \\
-\textbf{ChebyKAN, sparse hero (no LN, $\lambda{=}0.1$, L1-pruned)} & \textbf{0.592} [0.579, 0.606] & \textbf{806 edges} & \textbf{single closed-form polynomial + exact Greeks} \\
+FourierKAN, tuned (no LN)  & 0.604 [0.590, 0.618] & 70{,}656 edges & per-edge closed form \\
+\textbf{ChebyKAN, sparse hero (no LN, $\lambda{=}0.1$, L1-pruned)} & 0.592 [0.579, 0.606] & \textbf{806 edges} & \textbf{single closed-form expression + exact Greeks} \\
 \hline
 \end{tabular}
 \end{table}
@@ -73,14 +73,13 @@ edges whose mean activation magnitude falls below $2\times 10^{-3}$.
 The result keeps 806 of the 5{,}376 KAN-layer edges
 ($\approx 85\%$ pruning) at essentially no inner-val QWK cost. At
 those 806 active parameters it is more than $10\times$ more compact
-than its matched-budget alternatives (70{,}912-edge FourierKAN and
+than its matched-budget alternatives (70{,}656-edge FourierKAN and
 1{,}200-tree XGBoost) while matching them on outer-test accuracy.
 
-Every active edge admits an exact closed-form recovery from its
-basis coefficients: each layer-0 ChebyKAN edge is a polynomial of
-degree $\leq 7$ in $\tanh(x)$, read directly off the learned
-Chebyshev coefficients (R$^2 = 1.000$ by construction;
-Table~\ref{tab:closed_forms} lists five representatives). With
+Each active edge admits an exact closed-form recovery: every
+layer-0 ChebyKAN edge is a polynomial of degree $\leq 7$ in
+$\tanh(x)$ read directly off the learned Chebyshev coefficients
+(Table~\ref{tab:closed_forms} lists five representatives). With
 LayerNorm removed, composing these edges through both KAN layers
 yields a single closed-form expression in the 20 retained inputs.
 Any prediction then decomposes into exactly-additive per-feature
@@ -101,7 +100,7 @@ $5$).
 
 \begin{table}[H]
 \centering
-\caption{Five representative closed-form layer-0 edges from the sparse ChebyKAN hero (out of 806 active edges), each showing the top-3 terms by absolute coefficient; ``$+\,\dots$'' denotes truncated small terms. Each row is the edge from the named input feature to its highest-L1 hidden output. All edges are exact (R$^2 = 1.000$) via the basis-native extractor.}
+\caption{Five representative closed-form layer-0 edges from the sparse ChebyKAN hero (out of 806 active edges), each showing the top-3 terms by absolute coefficient; ``$+\,\dots$'' denotes truncated small terms. Each row is the edge from the named input feature to its highest-L1 hidden output.}
 \label{tab:closed_forms}
 \footnotesize
 \begin{tabular}{ll}
