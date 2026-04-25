@@ -13,33 +13,23 @@
 \subsection{Interpretability and Model Analysis}
 \label{sec:interpretability}
 
-While Table~\ref{tab:single_objective_optuna} reports Optuna-selected
-inner-validation QWK for each architecture, here we evaluate a subset
-of configurations on held-out \emph{outer-test} QWK using fixed
-ordinal thresholds calibrated on inner validation
-(Table~\ref{tab:interpretability_outer_test}). We switch regimes
-because the interpretable sparse variants introduced below are single
-retrainings and therefore carry no Optuna-selection bias; reporting
-their inner-validation QWK against the sweep-selected dense baselines
-would be asymmetric. For the dense rows we further average across three
-training seeds to absorb the single-retrain variance we observed
-($\sigma \lesssim 0.03$ QWK for ChebyKAN, $\lesssim 0.01$ for FourierKAN).
-To make the sparse comparison fair at a matched feature budget, each
-20-feature row in Table~\ref{tab:interpretability_outer_test} uses
-\emph{its own model's} top-20 features (native coefficient importance
-for the KANs; mean-$|\mathrm{SHAP}|$ for XGBoost) and its own
-50-trial Optuna sweep over a matched hyperparameter space that
-includes learning rate, weight decay, batch size, architecture, and
-the natural regularisers (sparsity $\lambda$ for KANs; $\gamma$ and
-leaf regularisation for XGBoost). The XGBoost implementation used
-throughout is XGBRegressor on the ordinal target followed by
-QWK-threshold calibration on the training predictions.
-Every KAN configuration we analyse admits exact per-edge symbolic
-recovery from its basis coefficients (R$^2 = 1.000$ by construction
-via the basis-native extractor); the interpretability distinction
-between operating points is therefore not \emph{whether} edges are
-recoverable but \emph{how many} edges remain and whether the composed
-model can be written as a single expression.
+We complement \S\ref{sec:results_optuna}'s inner-validation Optuna
+results with held-out \emph{outer-test} QWK for a curated subset of
+configurations (Table~\ref{tab:interpretability_outer_test}). Dense
+rows aggregate three training seeds to absorb single-retrain variance
+($\sigma \lesssim 0.03$ for ChebyKAN, $\lesssim 0.01$ for FourierKAN).
+Each 20-feature row is independently tuned by a 50-trial Optuna sweep
+on the model's own top-20 features --- selected by native coefficient
+importance for the KANs and by mean-$|\mathrm{SHAP}|$ for XGBoost ---
+over a search space that covers optimisation, architecture, and the
+relevant regulariser ($\lambda$ for KANs, $\gamma$ and leaf
+regularisation for XGBoost). XGBoost throughout is XGBRegressor with
+QWK-threshold-calibrated outputs. Every KAN configuration in the
+table admits exact per-edge symbolic recovery from its basis
+coefficients (R$^2 = 1.000$ by construction via the basis-native
+extractor); the interpretability distinctions among rows therefore
+turn on \emph{how many} edges remain after pruning and whether the
+composed model can be written as a single expression.
 
 \begin{table}[H]
 \centering
@@ -68,38 +58,39 @@ FourierKAN, tuned (no LN)  & \textbf{0.604} [0.590, 0.618] & 70{,}912 edges & pe
 
 [PLACEHOLDER --- Cyril.]
 
-\subsubsection{Sparse regime: compact closed-form TabKAN}
+\subsubsection{Sparse regime: a compact closed-form ChebyKAN}
 \label{sec:interpretability_sparse}
 
-At matched 20-feature budget
-(Table~\ref{tab:interpretability_outer_test}, middle block),
-XGBoost reaches 0.601, tuned FourierKAN reaches 0.604, and our
-sparse ChebyKAN hero reaches 0.592 --- all three 95\% bootstrap CIs
-overlap, so the three models are statistically tied at outer-test
-QWK. The sparse ChebyKAN hero is derived entirely from the
-Optuna-tuned ChebyKAN config ([64,64], degree 7) by (i) training on
-all 140 features with L1 sparsity regularisation at $\lambda{=}0.1$,
-(ii) selecting the 20 highest-coefficient-importance features from
-\emph{that} same model, (iii) retraining on that subset with
-LayerNorm removed, and (iv) L1-pruning edges whose mean activation
-magnitude falls below 0.002. The resulting network retains 806 of
-its 5\,376 trainable edges ($\approx 85\%$ pruning) with essentially
-zero QWK loss from pruning alone. At just 806 active parameters, it
-is more than 10$\times$ smaller than the 70\,912-edge FourierKAN and
-1\,200-tree XGBoost counterparts, while matching them on accuracy.
+At the 20-feature budget, XGBoost (0.601), tuned FourierKAN (0.604)
+and our sparse ChebyKAN hero (0.592) are statistically tied --- all
+three 95\% bootstrap CIs overlap. The hero is derived end-to-end
+from the Optuna-tuned ChebyKAN ([64,64], degree 7): we (i) train
+that configuration on all 140 features with L1 sparsity
+regularisation at $\lambda{=}0.1$, (ii) take the top-20 features
+ranked by that same model's coefficient importance, (iii) retrain on
+the restricted subset with LayerNorm removed, and (iv) L1-prune
+edges whose mean activation magnitude falls below $2\times 10^{-3}$.
+The result keeps 806 of the 5{,}376 KAN-layer edges
+($\approx 85\%$ pruning) at essentially no inner-val QWK cost. At
+those 806 active parameters it is more than $10\times$ more compact
+than its matched-budget alternatives (70{,}912-edge FourierKAN and
+1{,}200-tree XGBoost) while matching them on outer-test accuracy.
 
-Every surviving edge in both sparse variants admits exact closed-form
-recovery from its basis coefficients: each ChebyKAN edge is a
-polynomial of degree $\leq 6$ in $\tanh(x)$, each FourierKAN edge is
-a linear combination of eight harmonic pairs in $k\pi(\tanh(x)+1)$.
-Because the sparse no-LayerNorm ChebyKAN is a closed-form polynomial
-in the inputs, any prediction further decomposes into exactly-additive
-per-feature contributions via integrated gradients along a reference
-path --- no surrogate, no sampling, no post-hoc approximation.
-Figure~\ref{fig:fig1_interpretability} applies this decomposition to
-applicant 55728: the low-risk reference score ($-0.18$) is grown into
-the applicant's predicted score ($4.58$, class $5$) by adding the
-integrated-gradient contribution of each input feature.
+Every active edge admits an exact closed-form recovery from its
+basis coefficients: each layer-0 ChebyKAN edge is a polynomial of
+degree $\leq 7$ in $\tanh(x)$, read directly off the learned
+Chebyshev coefficients (R$^2 = 1.000$ by construction;
+Table~\ref{tab:closed_forms} lists five representatives). With
+LayerNorm removed, composing these edges through both KAN layers
+yields a single closed-form expression in the 20 retained inputs.
+Any prediction then decomposes into exactly-additive per-feature
+contributions via integrated gradients along a chosen reference
+path --- no post-hoc surrogate is needed.
+Figure~\ref{fig:fig1_interpretability} illustrates this for
+applicant 55728: starting from a low-risk reference applicant
+(score $-0.18$), the integrated-gradient contributions of the
+20 features sum to the applicant's predicted score ($4.58$, class
+$5$).
 
 \begin{figure}[H]
     \centering
@@ -107,9 +98,6 @@ integrated-gradient contribution of each input feature.
     \caption{Analytic per-feature decomposition of the sparse ChebyKAN hero's predicted risk score for applicant 55728 (predicted class 5, score $4.58$), against the lowest-scoring class-1 reference applicant ($-0.18$). Bars show the integrated-gradient contribution of each input feature, computed along the linear path from reference to applicant on the model's closed-form polynomial. Positive contributions (blue) raise the score; negative contributions (red) lower it. The top 7 features by $|\mathrm{IG}|$ are shown individually; the remaining 13 are lumped as ``$+\,13$ others''. By construction $\sum_i \mathrm{IG}_i = f(x_{\mathrm{app}}) - f(x_{\mathrm{ref}})$ exactly (residual $< 2 \times 10^{-2}$ after path integration).}
     \label{fig:fig1_interpretability}
 \end{figure}
-
-Table~\ref{tab:closed_forms} exhibits five representative sparse-hero
-layer-0 edges rounded to their top three Chebyshev terms.
 
 \begin{table}[H]
 \centering
@@ -129,21 +117,19 @@ Feature & Closed-form edge $\phi(x)$ (top 3 terms) \\
 \end{tabular}
 \end{table}
 
-Because the sparse no-LayerNorm ChebyKAN composes into a single
-closed-form polynomial in the 20 retained inputs (Chebyshev
-polynomials are closed under composition), it also admits \emph{exact
-analytic partial derivatives} --- actuarial ``Greeks'' computed by
-symbolic differentiation rather than finite-differencing. For a
-representative applicant (row 55728) we computed $\partial y /
-\partial \text{BMI}$ three ways
-(Table~\ref{tab:worked_greek}); the symbolic value ($-1.7043$) agrees
-with PyTorch autograd to $2 \times 10^{-6}$ and with central finite
-difference (O($\varepsilon^2$) truncation) to $3 \times 10^{-4}$.
-This property does not transfer to the other rows of
-Table~\ref{tab:interpretability_outer_test}: FourierKAN's basis is
-not closed under composition, and the dense ChebyKAN's LayerNorm
-breaks exactness. Analytic-Greek transparency is therefore a
-distinguishing feature of the sparse no-LN ChebyKAN configuration.
+The same closed-form structure also yields exact analytic Greeks:
+the partial derivatives $\partial y / \partial x_i$ are obtained by
+symbolic chain rule rather than by finite differencing or autograd.
+Table~\ref{tab:worked_greek} reports $\partial \text{score} /
+\partial \text{BMI}$ for applicant 55728 --- the symbolic value
+($-1.7043$) agrees with PyTorch autograd to $2 \times 10^{-6}$ and
+with central finite difference (O($\varepsilon^2$) truncation) to
+$3 \times 10^{-4}$. This property does not transfer to the other
+rows of Table~\ref{tab:interpretability_outer_test}: FourierKAN's
+basis is not closed under composition (composing trigonometric
+expressions through $\tanh$ yields Bessel-style series, not a finite
+expression), and the dense ChebyKAN's LayerNorm breaks the
+polynomial structure that makes symbolic differentiation exact.
 
 \begin{table}[H]
 \centering
@@ -163,20 +149,12 @@ Central finite difference ($\varepsilon = 10^{-3}$) & $-1.703977$ \\
 
 \subsubsection{Summary}
 
-Full-feature outer-test numbers are given in
-\S\ref{sec:interpretability_dense}. At the 20-feature budget with
-per-model tuning, \textbf{XGBoost (0.601), tuned FourierKAN (0.604),
-and the sparse ChebyKAN hero (0.592) are statistically tied} ---
-all three 95\% bootstrap CIs overlap. The sparse ChebyKAN hero distinguishes itself structurally:
-at only 806 active edges it is $>$10$\times$ smaller than tuned
-FourierKAN (70\,912 edges) and far more compact than
-1\,200-tree XGBoost. It is also the only configuration in
-Table~\ref{tab:interpretability_outer_test} that admits a single
-closed-form composed expression in the inputs and exact analytic
-Greeks. TabKAN therefore offers a genuinely different point on the
-accuracy--interpretability frontier: matching XGBoost on outer-test
-accuracy while providing native, exact symbolic explanations that
-SHAP can only approximate.
+TabKAN occupies a distinct point on the accuracy--interpretability
+frontier in this study. At the 20-feature budget the sparse ChebyKAN
+hero matches XGBoost and tuned FourierKAN on outer-test accuracy at
+more than $10\times$ fewer active parameters, and it is the only
+row of Table~\ref{tab:interpretability_outer_test} that further
+admits an end-to-end closed-form composed expression and exact
+analytic Greeks --- a level of model-native transparency that SHAP
+explanations of the alternatives can only approximate.
 
-\section{Discussion and Limitations}
-\label{sec:discussion}
