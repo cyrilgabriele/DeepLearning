@@ -6,23 +6,23 @@ trainer:
 preprocessing:
   contract_version: 1
   recipe: kan_paper
-  selected_features_path: /Users/gian1/CODE/HSG/FS26/DeepLearning/DeepLearning/configs/experiment_stages/stage_c_explanation_package/feature_lists/fourierkan_pareto_top20_features.json
+  selected_features_path: /Users/gian1/CODE/HSG/FS26/DeepLearning/DeepLearning/configs/experiment_stages/stage_c_explanation_package/feature_lists/fourierkan_tuned_top20_features.json
 model:
   name: tabkan-base
   flavor: fourierkan
   depth: 2
-  width: 256
+  width: 64
   hidden_widths:
-  - 256
-  - 256
+  - 64
+  - 64
   degree: null
   use_layernorm: false
   params:
-    max_epochs: 150
-    grid_size: 8
-    lr: 0.0004234895323253983
-    weight_decay: 1.6914887817571163e-05
-    batch_size: 512
+    max_epochs: 100
+    grid_size: 7
+    lr: 0.00017090418224181622
+    weight_decay: 5.398006433472482e-06
+    batch_size: 1024
     sparsity_lambda: 0.0249
     l1_weight: 1.0
     entropy_weight: 1.0

@@ -7,7 +7,7 @@ trainer:
 preprocessing:
   contract_version: 1
   recipe: kan_paper
-  selected_features_path: configs/experiment_stages/stage_c_explanation_package/feature_lists/xgboost_top20_features.json
+  selected_features_path: configs/experiment_stages/stage_c_explanation_package/feature_lists/xgb_tuned_top20_features.json
 
 model:
   name: xgb

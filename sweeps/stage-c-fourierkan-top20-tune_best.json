@@ -1,26 +1,26 @@
 {
   "best_params": {
-    "batch_size": 512,
+    "batch_size": 1024,
     "depth": 2,
-    "grid_size": 8,
-    "lr": 0.0004234895323253983,
-    "max_epochs": 150,
-    "weight_decay": 1.6914887817571163e-05,
-    "width": 256
+    "grid_size": 7,
+    "lr": 0.00017090418224181622,
+    "max_epochs": 100,
+    "weight_decay": 5.398006433472482e-06,
+    "width": 64
   },
-  "best_qwk": 0.603692,
+  "best_qwk": 0.608349,
   "best_trial_attrs": {
-    "checkpoint_path": "checkpoints/stage-c-fourierkan-top20-tune-trial-037/model-20260424-170435.pt",
-    "experiment_name": "stage-c-fourierkan-top20-tune-trial-037",
+    "checkpoint_path": "checkpoints/stage-c-fourierkan-top20-tune-trial-016/model-20260425-110020.pt",
+    "experiment_name": "stage-c-fourierkan-top20-tune-trial-016",
     "metrics": {
-      "accuracy": 0.38250399932642926,
-      "f1_macro": 0.2238536949508307,
-      "mae": 1.3351856470108032,
-      "qwk": 0.6036919830590487
+      "accuracy": 0.33308074429569756,
+      "f1_macro": 0.21041935600489528,
+      "mae": 1.3622968196868896,
+      "qwk": 0.6083488581419977
     },
-    "summary_path": "artifacts/stage-c-fourierkan-top20-tune-trial-037/run-summary-20260424-170435.json"
+    "summary_path": "artifacts/stage-c-fourierkan-top20-tune-trial-016/run-summary-20260425-110020.json"
   },
-  "best_trial_number": 37,
+  "best_trial_number": 16,
   "completed_trials": 50,
   "model_family": "fourierkan",
   "preprocessing_recipe": "kan_paper",

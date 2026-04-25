@@ -33,7 +33,7 @@ composed model can be written as a single expression.
 
 \begin{table}[H]
 \centering
-\caption{Held-out outer-test QWK and structural size, grouped by feature budget. Full-feature numbers are populated by the dense-regime sub-section (\S\ref{sec:interpretability_dense}). All sparse-regime rows are single retrainings with 95\% bootstrap CIs over n{=}11{,}877 test samples; each 20-feature row uses its model's own top-20 features (native importance for KANs, SHAP for XGBoost) and KAN architectures are picked by a 50-trial Optuna search on the 20-feature input space. At 20 features XGBoost, FourierKAN, and the sparse ChebyKAN hero are statistically tied (all three 95\% CIs overlap), but the sparse ChebyKAN hero achieves this with $>$10$\times$ fewer active parameters than either alternative, along with end-to-end closed-form composability and exact analytic Greeks.}
+\caption{Held-out outer-test QWK and structural size, grouped by feature budget. Full-feature numbers are populated by the dense-regime sub-section (\S\ref{sec:interpretability_dense}). All sparse-regime rows are single retrainings with 95\% bootstrap CIs over n{=}11{,}877 test samples; each 20-feature row uses its model's own top-20 features (native importance for KANs, SHAP for XGBoost) and KAN architectures are picked by a 50-trial Optuna search on the 20-feature input space. At 20 features XGBoost, FourierKAN, and the sparse ChebyKAN hero are statistically tied (all three 95\% CIs overlap); the sparse ChebyKAN hero achieves this with $\approx 7\times$ fewer active edges than the tuned FourierKAN and dramatically fewer than XGBoost's 37{,}000 leaves, along with end-to-end closed-form composability and exact analytic Greeks.}
 \label{tab:interpretability_outer_test}
 \footnotesize
 \begin{tabular}{lccl}
@@ -46,8 +46,8 @@ ChebyKAN, dense            & \textcolor{red}{fill from Cyril} & 26{,}112 edges  
 FourierKAN, dense          & \textcolor{red}{fill from Cyril} & 41{,}728 edges    & per-edge native \\
 \hline
 \multicolumn{4}{l}{\emph{Sparse regime (20 features, per-budget tuning)}} \\
-XGBoost, tuned             & 0.601 [0.587, 0.614] & 1200 trees   & SHAP (post-hoc) \\
-FourierKAN, tuned (no LN)  & 0.604 [0.590, 0.618] & 70{,}656 edges & per-edge closed form \\
+XGBoost, tuned             & 0.611 [0.598, 0.624] & 700 trees / 37k leaves & SHAP (post-hoc) \\
+FourierKAN, tuned (no LN)  & 0.608 [0.596, 0.622] & 5{,}376 edges & per-edge closed form \\
 \textbf{ChebyKAN, sparse hero (no LN, $\lambda{=}0.1$, L1-pruned)} & 0.592 [0.579, 0.606] & \textbf{806 edges} & \textbf{single closed-form expression + exact Greeks} \\
 \hline
 \end{tabular}
@@ -61,7 +61,7 @@ FourierKAN, tuned (no LN)  & 0.604 [0.590, 0.618] & 70{,}656 edges & per-edge cl
 \subsubsection{Sparse regime: a compact closed-form ChebyKAN}
 \label{sec:interpretability_sparse}
 
-At the 20-feature budget, XGBoost (0.601), tuned FourierKAN (0.604)
+At the 20-feature budget, XGBoost (0.611), tuned FourierKAN (0.608)
 and our sparse ChebyKAN hero (0.592) are statistically tied --- all
 three 95\% bootstrap CIs overlap. The hero is derived end-to-end
 from the Optuna-tuned ChebyKAN ([64,64], degree 7): we (i) train
@@ -72,9 +72,10 @@ the restricted subset with LayerNorm removed, and (iv) L1-prune
 edges whose mean activation magnitude falls below $2\times 10^{-3}$.
 The result keeps 806 of the 5{,}376 KAN-layer edges
 ($\approx 85\%$ pruning) at essentially no inner-val QWK cost. At
-those 806 active parameters it is more than $10\times$ more compact
-than its matched-budget alternatives (70{,}656-edge FourierKAN and
-1{,}200-tree XGBoost) while matching them on outer-test accuracy.
+those 806 active parameters it is $\approx 7\times$ more compact than
+the matched-budget tuned FourierKAN (5{,}376 edges) and dramatically
+more compact than the 700-tree, 37{,}000-leaf XGBoost --- while
+remaining within bootstrap noise of both on outer-test accuracy.
 
 Each active edge admits an exact closed-form recovery: every
 layer-0 ChebyKAN edge is a polynomial of degree $\leq 7$ in
@@ -156,4 +157,3 @@ row of Table~\ref{tab:interpretability_outer_test} that further
 admits an end-to-end closed-form composed expression and exact
 analytic Greeks --- a level of model-native transparency that SHAP
 explanations of the alternatives can only approximate.
-
