@@ -27,10 +27,16 @@ def test_surrogate_supports_feature_subset_smaller_than_model_input(tmp_path):
         output_dir=tmp_path,
         feature_names=["feat_a", "feat_b"],
         flavor="chebykan",
+        y_eval=pd.Series([2, 2, 4, 4], name="Response"),
+        ordinal_calibration={
+            "method": "optimized_thresholds",
+            "thresholds": [1.75, 2.75, 3.75, 4.75, 5.75, 6.75, 7.75],
+        },
     )
 
     report = artifacts["report"]
     assert report["feature_names"] == ["feat_a", "feat_b"]
     assert report["fidelity_r2"] == 1.0
+    assert report["qwk_metric"] == "optimized_thresholds"
     assert artifacts["json_path"].exists()
     assert artifacts["md_path"].exists()

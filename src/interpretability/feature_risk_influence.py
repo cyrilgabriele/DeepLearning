@@ -51,20 +51,26 @@ def _plot_continuous(
     X_eval: pd.DataFrame,
     y: pd.Series,
     output_dir: Path,
+    feat_types: dict,
     glm_indexed: pd.DataFrame,
     shap_df: pd.DataFrame,
     chebykan_sym: pd.DataFrame | None,
     fourierkan_sym: pd.DataFrame | None,
     chebykan_layer,
     fourierkan_layer,
+    preprocessing_recipe: str | None = None,
     n_bins: int = 20,
 ) -> None:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from src.interpretability.utils.style import apply_paper_style, savefig_pdf, MODEL_COLORS, encode_to_raw_lookup
+    from src.interpretability.utils.style import (
+        MODEL_COLORS, apply_paper_style, build_feature_grid,
+        display_feature_values, feature_axis_label, resolve_feature_display_spec,
+        savefig_pdf,
+    )
     from src.interpretability.utils.paths import figures as fig_dir
-    from src.interpretability.utils.kan_coefficients import sample_feature_function
+    from src.interpretability.utils.kan_coefficients import evaluate_feature_function
 
     apply_paper_style()
     n = len(feats)
@@ -73,9 +79,15 @@ def _plot_continuous(
         axes = axes.reshape(3, 1)
 
     for col, feat in enumerate(feats):
-        if feat not in X_raw.columns:
+        spec = resolve_feature_display_spec(
+            feat,
+            feat_types=feat_types,
+            preprocessing_recipe=preprocessing_recipe,
+        )
+        raw_feature = spec.raw_feature
+        if raw_feature is None or raw_feature not in X_raw.columns:
             continue
-        vals = X_raw[feat].reset_index(drop=True)
+        vals = X_raw[raw_feature].reset_index(drop=True)
         risk = y.reset_index(drop=True)
         valid = vals.notna() & risk.notna()
         v, r = vals[valid], risk[valid]
@@ -91,11 +103,11 @@ def _plot_continuous(
         ax.plot(bin_centers, means.values, color="tomato", lw=2, zorder=5, label="Bin mean")
         ax.fill_between(bin_centers, (means - 1.96 * sems).values, (means + 1.96 * sems).values,
                         alpha=0.25, color="tomato", label="95% CI")
-        ax.set_xlabel(f"{feat} (original scale)", fontsize=8)
+        ax.set_xlabel(f"{raw_feature} (original scale)", fontsize=8)
         ax.set_ylabel("Risk level (1–8)", fontsize=8)
         ax.set_ylim(0.5, 8.5)
         ax.set_yticks(range(1, 9))
-        ax.set_title(feat, fontsize=9, fontweight="bold")
+        ax.set_title(raw_feature, fontsize=9, fontweight="bold")
         ax.legend(fontsize=7)
 
         # ── Row 1: KDE per risk level ──
@@ -106,32 +118,29 @@ def _plot_continuous(
             if len(subset) < 10:
                 continue
             subset.plot.kde(ax=ax2, label=f"R{risk_level}", color=color, lw=1.2, bw_method=0.4)
-        ax2.set_xlabel(f"{feat} (original scale)", fontsize=8)
+        ax2.set_xlabel(f"{raw_feature} (original scale)", fontsize=8)
         ax2.set_ylabel("Density", fontsize=8)
         ax2.legend(fontsize=6, ncol=2, loc="upper right")
-        ax2.set_title(f"{feat} distribution by risk", fontsize=8)
+        ax2.set_title(f"{raw_feature} distribution by risk", fontsize=8)
 
         # ── Row 2: 4-model overlay on original scale ──
         ax3 = axes[2, col]
         x_enc_vals = X_eval[feat].values if feat in X_eval.columns else None
-        has_raw = feat in X_raw.columns
 
         if x_enc_vals is not None:
-            x_norm_grid = np.linspace(x_enc_vals.min(), x_enc_vals.max(), 300)
-            x_orig_grid = (encode_to_raw_lookup(feat, X_eval, X_raw, x_norm_grid)
-                           if has_raw else x_norm_grid)
+            x_model_grid = build_feature_grid(spec, X_eval, grid_resolution=300, percentile_range=None)
+            x_display_grid, use_raw_axis = display_feature_values(spec, X_eval, X_raw, x_model_grid)
 
             # GLM
             if not glm_indexed.empty and feat in glm_indexed.index:
                 coef = float(glm_indexed.loc[feat, "coefficient"])
-                ax3.plot(x_orig_grid, coef * x_norm_grid, color=MODEL_COLORS["GLM"], lw=2, label="GLM")
+                ax3.plot(x_display_grid, coef * x_model_grid, color=MODEL_COLORS["GLM"], lw=2, label="GLM")
 
             # SHAP LOWESS
             if not shap_df.empty and feat in shap_df.columns:
                 try:
                     from statsmodels.nonparametric.smoothers_lowess import lowess
-                    x_shap = (encode_to_raw_lookup(feat, X_eval, X_raw)
-                              if has_raw else x_enc_vals)
+                    x_shap, _ = display_feature_values(spec, X_eval, X_raw, np.asarray(x_enc_vals, dtype=float))
                     smoothed = lowess(shap_df[feat].values, x_shap, frac=0.3, return_sorted=True)
                     ax3.plot(smoothed[:, 0], smoothed[:, 1], color=MODEL_COLORS["XGBoost"],
                              lw=2, label="XGBoost SHAP")
@@ -148,13 +157,19 @@ def _plot_continuous(
                 feat_idx = X_eval.columns.get_loc(feat) if feat in X_eval.columns else -1
                 if feat_idx < 0:
                     continue
-                x_norm_edge, y_edge, _ = sample_feature_function(layer, feat_idx, n=300, reduction="mean")
-                x_plot = (encode_to_raw_lookup(feat, X_eval, X_raw, x_norm_edge)
-                          if has_raw else x_norm_edge)
-                ax3.plot(x_plot, y_edge, color=MODEL_COLORS[model_name], lw=1.5, label=model_name)
+                _, y_edge, _ = evaluate_feature_function(
+                    layer,
+                    feat_idx,
+                    x_values=x_model_grid,
+                    reduction="mean",
+                )
+                ax3.plot(x_display_grid, y_edge, color=MODEL_COLORS[model_name], lw=1.5, label=model_name)
 
             ax3.axhline(0, color="gray", lw=0.5, ls=":")
-            ax3.set_xlabel(f"{feat} (original scale)" if has_raw else f"{feat} (encoded)", fontsize=8)
+            ax3.set_xlabel(
+                f"{feat} ({feature_axis_label(spec, use_raw_axis=use_raw_axis).lower()})",
+                fontsize=8,
+            )
             ax3.set_ylabel("Model attribution", fontsize=8)
             ax3.set_title(f"{feat} — all models", fontsize=8)
             ax3.legend(fontsize=7)
@@ -240,19 +255,24 @@ def _plot_binary(
     X_eval: pd.DataFrame,
     y: pd.Series,
     output_dir: Path,
+    feat_types: dict,
     glm_indexed: pd.DataFrame,
     shap_df: pd.DataFrame,
     chebykan_sym: pd.DataFrame | None,
     fourierkan_sym: pd.DataFrame | None,
     chebykan_layer,
     fourierkan_layer,
+    preprocessing_recipe: str | None = None,
 ) -> None:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from src.interpretability.utils.style import apply_paper_style, savefig_pdf, MODEL_COLORS
+    from src.interpretability.utils.style import (
+        MODEL_COLORS, apply_paper_style, build_feature_grid,
+        discrete_feature_ticks, resolve_feature_display_spec, savefig_pdf,
+    )
     from src.interpretability.utils.paths import figures as fig_dir
-    from src.interpretability.utils.kan_coefficients import sample_feature_function
+    from src.interpretability.utils.kan_coefficients import evaluate_feature_function
 
     apply_paper_style()
 
@@ -261,17 +281,34 @@ def _plot_binary(
         effects = []
         if not glm_indexed.empty and feat in glm_indexed.index and enc is not None:
             coef = float(glm_indexed.loc[feat, "coefficient"])
-            effects.append(abs(2 * coef))
+            states = np.sort(enc.dropna().unique())
+            if len(states) >= 2:
+                effects.append(abs(coef * (states[-1] - states[0])))
         if not shap_df.empty and feat in shap_df.columns and enc is not None:
-            n_val, p_val = _binary_dot_values_shap(shap_df[feat], enc)
-            effects.append(abs(p_val - n_val))
+            states = np.sort(enc.dropna().unique())
+            if len(states) >= 2:
+                grouped = [shap_df[feat][enc == state].mean() for state in states[:2]]
+                if all(pd.notna(grouped)):
+                    effects.append(abs(float(grouped[-1] - grouped[0])))
         feat_idx = X_eval.columns.get_loc(feat) if feat in X_eval.columns else -1
         if feat_idx >= 0:
             for layer in (chebykan_layer, fourierkan_layer):
                 if layer is None:
                     continue
-                x_norm, y_vals, _ = sample_feature_function(layer, feat_idx, n=200, reduction="mean")
-                effects.append(abs(float(np.interp(1.0, x_norm, y_vals)) - float(np.interp(-1.0, x_norm, y_vals))))
+                spec = resolve_feature_display_spec(
+                    feat,
+                    feat_types=feat_types,
+                    preprocessing_recipe=preprocessing_recipe,
+                )
+                states = build_feature_grid(spec, X_eval, percentile_range=None)
+                if len(states) >= 2:
+                    _, y_vals, _ = evaluate_feature_function(
+                        layer,
+                        feat_idx,
+                        x_values=states,
+                        reduction="mean",
+                    )
+                    effects.append(abs(float(y_vals[-1] - y_vals[0])))
         return max(effects) if effects else 0.0
 
     feats = sorted(feats, key=max_effect, reverse=True)
@@ -287,21 +324,24 @@ def _plot_binary(
             ax.set_visible(False)
             continue
         enc = X_eval[feat].reset_index(drop=True)
-        raw = X_raw[feat].reset_index(drop=True) if feat in X_raw.columns else None
-
-        label_neg = str(raw[enc < -0.5].mode().iloc[0]) if (raw is not None and (enc < -0.5).any()) else "0"
-        label_pos = str(raw[enc > 0.5].mode().iloc[0]) if (raw is not None and (enc > 0.5).any()) else "1"
-        n_neg = int((enc < -0.5).sum())
-        n_pos = int((enc > 0.5).sum())
+        spec = resolve_feature_display_spec(
+            feat,
+            feat_types=feat_types,
+            preprocessing_recipe=preprocessing_recipe,
+        )
+        states = build_feature_grid(spec, X_eval, percentile_range=None)
+        tick_positions, tick_labels = discrete_feature_ticks(spec, X_eval, X_raw)
+        counts = [int((enc == state).sum()) for state in states]
 
         models_dots: dict[str, tuple[float, float]] = {}
 
-        if not glm_indexed.empty and feat in glm_indexed.index:
+        if not glm_indexed.empty and feat in glm_indexed.index and len(states) >= 2:
             coef = float(glm_indexed.loc[feat, "coefficient"])
-            models_dots["GLM"] = (-coef, coef)
+            models_dots["GLM"] = (coef * states[0], coef * states[-1])
 
-        if not shap_df.empty and feat in shap_df.columns:
-            neg_v, pos_v = _binary_dot_values_shap(shap_df[feat], enc)
+        if not shap_df.empty and feat in shap_df.columns and len(states) >= 2:
+            neg_v = float(shap_df[feat][enc == states[0]].mean())
+            pos_v = float(shap_df[feat][enc == states[-1]].mean())
             models_dots["XGBoost"] = (neg_v, pos_v)
 
         feat_idx = X_eval.columns.get_loc(feat) if feat in X_eval.columns else -1
@@ -309,11 +349,16 @@ def _plot_binary(
             (chebykan_layer, "ChebyKAN"),
             (fourierkan_layer, "FourierKAN"),
         ]:
-            if layer is None or feat_idx < 0:
+            if layer is None or feat_idx < 0 or len(states) < 2:
                 continue
-            x_norm, y_v, _ = sample_feature_function(layer, feat_idx, n=200, reduction="mean")
-            neg_v = float(np.interp(-1.0, x_norm, y_v))
-            pos_v = float(np.interp(1.0, x_norm, y_v))
+            _, y_v, _ = evaluate_feature_function(
+                layer,
+                feat_idx,
+                x_values=states,
+                reduction="mean",
+            )
+            neg_v = float(y_v[0])
+            pos_v = float(y_v[-1])
             models_dots[model_name] = (neg_v, pos_v)
 
         for offset, (model_name, (v0, v1)) in enumerate(models_dots.items()):
@@ -323,7 +368,11 @@ def _plot_binary(
                     marker="o", ms=6, label=model_name)
 
         ax.set_xticks([0, 1])
-        ax.set_xticklabels([f"{label_neg}\n(n={n_neg})", f"{label_pos}\n(n={n_pos})"], fontsize=8)
+        if len(tick_labels) >= 2:
+            ax.set_xticklabels(
+                [f"{tick_labels[0]}\n(n={counts[0]})", f"{tick_labels[-1]}\n(n={counts[-1]})"],
+                fontsize=8,
+            )
         ax.set_ylabel("Attribution (model native scale)", fontsize=8)
         ax.set_title(feat[:20], fontsize=9, fontweight="bold")
         ax.axhline(0, color="gray", lw=0.5, ls=":")
@@ -362,6 +411,7 @@ def run(
     import torch
     from src.interpretability.utils.paths import data as data_dir, reports as rep_dir
     from src.interpretability.utils.kan_coefficients import coefficient_importance_from_layer
+    from src.interpretability.utils.style import feature_plot_kind, resolve_feature_display_spec
     from src.models.tabkan import TabKAN
     from src.models.kan_layers import ChebyKANLayer, FourierKANLayer
     from src.config import load_experiment_config
@@ -414,6 +464,12 @@ def run(
 
     chebykan_layer = _load_kan_layer(chebykan_checkpoint_path, chebykan_config_path, "chebykan")
     fourierkan_layer = _load_kan_layer(fourierkan_checkpoint_path, fourierkan_config_path, "fourierkan")
+    primary_cfg_path = chebykan_config_path or fourierkan_config_path
+    preprocessing_recipe = (
+        load_experiment_config(primary_cfg_path).preprocessing.recipe
+        if primary_cfg_path and primary_cfg_path.exists()
+        else None
+    )
 
     kan_rank = pd.Series(dtype=float)
     for layer in (chebykan_layer, fourierkan_layer):
@@ -425,10 +481,49 @@ def run(
 
     cont_feats = _top_by_type(primary_rank, feat_types, "continuous", n_continuous)
     cat_feats = _top_by_type(primary_rank, feat_types, "categorical", n_categorical)
-    bin_feats = _top_by_type(primary_rank, feat_types, "binary", n_binary)
-    cont_feats = [f for f in cont_feats if f in X_raw.columns]
-    cat_feats = [f for f in cat_feats if f in X_raw.columns]
-    bin_feats = [f for f in bin_feats if f in X_raw.columns]
+    bin_feats = [f for f in primary_rank.index if feat_types.get(f) in ("binary", "missing_indicator")][:n_binary]
+
+    def _has_raw_feature(feat: str) -> bool:
+        spec = resolve_feature_display_spec(
+            feat,
+            feat_types=feat_types,
+            preprocessing_recipe=preprocessing_recipe,
+        )
+        return spec.raw_feature is not None and spec.raw_feature in X_raw.columns
+
+    cont_feats = [
+        f for f in cont_feats
+        if _has_raw_feature(f)
+        and feature_plot_kind(
+            resolve_feature_display_spec(
+                f,
+                feat_types=feat_types,
+                preprocessing_recipe=preprocessing_recipe,
+            )
+        ) == "continuous"
+    ]
+    cat_feats = [
+        f for f in cat_feats
+        if _has_raw_feature(f)
+        and feature_plot_kind(
+            resolve_feature_display_spec(
+                f,
+                feat_types=feat_types,
+                preprocessing_recipe=preprocessing_recipe,
+            )
+        ) == "categorical"
+    ]
+    bin_feats = [
+        f for f in bin_feats
+        if _has_raw_feature(f)
+        and feature_plot_kind(
+            resolve_feature_display_spec(
+                f,
+                feat_types=feat_types,
+                preprocessing_recipe=preprocessing_recipe,
+            )
+        ) == "binary"
+    ]
 
     print(f"Continuous features ({len(cont_feats)}): {cont_feats}")
     print(f"Categorical features ({len(cat_feats)}): {cat_feats}")
@@ -436,14 +531,16 @@ def run(
 
     if cont_feats:
         _plot_continuous(cont_feats, X_raw, X_eval, y, output_dir,
-                         glm_indexed, shap_df, chebykan_sym, fourierkan_sym,
-                         chebykan_layer, fourierkan_layer)
+                         feat_types, glm_indexed, shap_df, chebykan_sym, fourierkan_sym,
+                         chebykan_layer, fourierkan_layer,
+                         preprocessing_recipe=preprocessing_recipe)
     if cat_feats:
         _plot_categorical(cat_feats, X_raw, y, output_dir)
     if bin_feats:
         _plot_binary(bin_feats, X_raw, X_eval, y, output_dir,
-                     glm_indexed, shap_df, chebykan_sym, fourierkan_sym,
-                     chebykan_layer, fourierkan_layer)
+                     feat_types, glm_indexed, shap_df, chebykan_sym, fourierkan_sym,
+                     chebykan_layer, fourierkan_layer,
+                     preprocessing_recipe=preprocessing_recipe)
 
 
 def _parse_args() -> argparse.Namespace:

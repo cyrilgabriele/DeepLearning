@@ -12,6 +12,7 @@ import pandas as pd
 import torch
 
 from src.interpretability.utils.paths import data as data_dir, reports as reports_dir
+from src.interpretability.ordinal import class_from_score, qwk_metric_label
 
 
 def _predict_scores(module, X_df: pd.DataFrame) -> np.ndarray:
@@ -30,10 +31,6 @@ def _predict_changed_score(
     candidate = case_frame.copy()
     candidate.at[candidate.index[0], feature] = new_value
     return float(_predict_scores(module, candidate)[0])
-
-
-def _rounded_class(score: float) -> int:
-    return int(np.clip(np.round(score), 1, 8))
 
 
 def _base_feature_name(feature: str) -> str:
@@ -109,6 +106,7 @@ def _analyze_feature(
     current_class: int,
     current_raw_value: Any,
     processed_to_raw: dict[float, Any],
+    ordinal_calibration: dict[str, Any] | None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     values = X_eval[feature].astype(float).to_numpy()
     current_processed = float(case_frame.iloc[0][feature])
@@ -149,7 +147,8 @@ def _analyze_feature(
             new_value=float(target_processed),
         )
         output_delta = float(new_score - current_score)
-        class_delta = int(_rounded_class(new_score) - current_class)
+        new_class = class_from_score(new_score, ordinal_calibration)
+        class_delta = int(new_class - current_class)
         target_raw_value = _raw_display_for_target(
             feature=feature,
             target_processed=float(target_processed),
@@ -164,7 +163,10 @@ def _analyze_feature(
                 "current_score": current_score,
                 "new_score": new_score,
                 "output_delta": output_delta,
+                "current_class": current_class,
+                "new_class": new_class,
                 "class_delta": class_delta,
+                "class_mapping": qwk_metric_label(ordinal_calibration),
                 "current_processed_value": current_processed,
                 "target_processed_value": float(target_processed),
                 "current_raw_value": current_raw_value,
@@ -318,12 +320,14 @@ def run(
     X_eval_raw: pd.DataFrame | None = None,
     candidate_features: list[str] | None = None,
     row_position: int = 0,
+    ordinal_calibration: dict[str, Any] | None = None,
 ) -> dict[str, Path]:
     feature_types = feature_types or {}
     candidate_features = list(candidate_features or X_eval.columns.tolist())
     case_frame = X_eval.iloc[[row_position]].copy()
     base_score = float(_predict_scores(module, case_frame)[0])
-    base_class = _rounded_class(base_score)
+    base_class = class_from_score(base_score, ordinal_calibration)
+    class_mapping = qwk_metric_label(ordinal_calibration)
 
     raw_row = None
     if X_eval_raw is not None and row_position < len(X_eval_raw):
@@ -353,6 +357,7 @@ def run(
             current_class=base_class,
             current_raw_value=current_raw_value,
             processed_to_raw=processed_to_raw,
+            ordinal_calibration=ordinal_calibration,
         )
         sensitivity_rows.append(sensitivity_row)
         scenario_rows.extend(scenarios)
@@ -383,7 +388,7 @@ def run(
         f"# Case Summary — {row_id}",
         "",
         f"- Base model score: {base_score:.6f}",
-        f"- Rounded risk class: {base_class}",
+        f"- Risk class ({class_mapping}): {base_class}",
         "",
         "## Top Positive Contributors",
     ]

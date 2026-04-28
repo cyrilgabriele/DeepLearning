@@ -63,24 +63,25 @@ def _select_top_features(
     return selected
 
 
-def _plot_continuous(axes_row, feat, glm_indexed, shap_df, X_eval, X_raw, sym_df, kan_layer, flavor):
+def _plot_continuous(axes_row, feat, glm_indexed, shap_df, X_eval, X_raw, sym_df, kan_layer, flavor, spec):
     """Continuous: GLM linear effect | SHAP scatter+LOWESS | KAN feature function."""
-    from src.interpretability.utils.style import encode_to_raw_lookup, MODEL_COLORS
-    from src.interpretability.utils.kan_coefficients import sample_feature_function
+    from src.interpretability.utils.style import (
+        MODEL_COLORS, build_feature_grid, display_feature_values, feature_axis_label,
+    )
+    from src.interpretability.utils.kan_coefficients import evaluate_feature_function
 
-    enc = X_eval[feat].values if feat in X_eval.columns else np.linspace(-1, 1, 200)
-    has_raw = X_raw is not None and feat in X_raw.columns
+    x_model_grid = build_feature_grid(spec, X_eval, grid_resolution=200, percentile_range=None)
+    enc = X_eval[feat].values if feat in X_eval.columns else x_model_grid
+    x_plot_grid, use_raw_axis = display_feature_values(spec, X_eval, X_raw, x_model_grid)
     feat_idx = X_eval.columns.get_loc(feat) if feat in X_eval.columns else -1
 
     # ── Col 0: GLM ──
     ax0 = axes_row[0]
     coef = float(glm_indexed.loc[feat, "coefficient"]) if feat in glm_indexed.index else 0.0
-    x_enc_grid = np.linspace(enc.min(), enc.max(), 200)
-    x_orig_grid = encode_to_raw_lookup(feat, X_eval, X_raw, x_enc_grid) if has_raw else x_enc_grid
-    ax0.plot(x_orig_grid, coef * x_enc_grid, color=MODEL_COLORS["GLM"], lw=2,
+    ax0.plot(x_plot_grid, coef * x_model_grid, color=MODEL_COLORS["GLM"], lw=2,
              label=f"coef={coef:.4f}")
     ax0.axhline(0, color="gray", lw=0.5, ls=":")
-    ax0.set_xlabel(f"{feat} ({'original scale' if has_raw else 'encoded'})", fontsize=8)
+    ax0.set_xlabel(f"{feat} ({feature_axis_label(spec, use_raw_axis=use_raw_axis).lower()})", fontsize=8)
     ax0.set_ylabel("Marginal effect", fontsize=8)
     ax0.legend(fontsize=7)
 
@@ -88,7 +89,7 @@ def _plot_continuous(axes_row, feat, glm_indexed, shap_df, X_eval, X_raw, sym_df
     ax1 = axes_row[1]
     if feat in shap_df.columns:
         shap_vals = shap_df[feat].values
-        x_shap = encode_to_raw_lookup(feat, X_eval, X_raw) if has_raw else enc
+        x_shap, _ = display_feature_values(spec, X_eval, X_raw, np.asarray(enc, dtype=float))
         ax1.scatter(x_shap, shap_vals, alpha=0.15, s=4, c=shap_vals, cmap="coolwarm",
                     rasterized=True)
         try:
@@ -105,57 +106,58 @@ def _plot_continuous(axes_row, feat, glm_indexed, shap_df, X_eval, X_raw, sym_df
         except Exception:
             pass
         ax1.axhline(0, color="gray", lw=0.5, ls=":")
-        ax1.set_xlabel(f"{feat} ({'original scale' if has_raw else 'encoded'})", fontsize=8)
+        ax1.set_xlabel(f"{feat} ({feature_axis_label(spec, use_raw_axis=use_raw_axis).lower()})", fontsize=8)
         ax1.set_ylabel("SHAP value", fontsize=8)
         ax1.legend(fontsize=7)
 
     # ── Col 2: KAN spline + symbolic overlay ──
     ax2 = axes_row[2]
     if kan_layer is not None and feat_idx >= 0:
-        x_norm, y_vals, _ = sample_feature_function(kan_layer, feat_idx, n=500, reduction="mean")
-        x_plot = encode_to_raw_lookup(feat, X_eval, X_raw, x_norm) if has_raw else x_norm
+        _, y_vals, _ = evaluate_feature_function(
+            kan_layer,
+            feat_idx,
+            x_values=x_model_grid,
+            reduction="mean",
+        )
         kan_color = MODEL_COLORS["ChebyKAN"] if flavor == "chebykan" else MODEL_COLORS["FourierKAN"]
-        ax2.plot(x_plot, y_vals, color=kan_color, lw=2, label="Layer-0 aggregated")
+        ax2.plot(x_plot_grid, y_vals, color=kan_color, lw=2, label="Layer-0 aggregated")
         ax2.legend(fontsize=6)
-        ax2.set_xlabel(f"{feat} ({'original scale' if has_raw else 'encoded'})", fontsize=8)
+        ax2.set_xlabel(f"{feat} ({feature_axis_label(spec, use_raw_axis=use_raw_axis).lower()})", fontsize=8)
     else:
         ax2.text(0.5, 0.5, "No active KAN edge", ha="center", va="center",
                  transform=ax2.transAxes, fontsize=9, color="gray")
     ax2.set_ylabel("Edge output", fontsize=8)
 
 
-def _plot_binary(axes_row, feat, glm_indexed, shap_df, X_eval, X_raw, sym_df, kan_layer, flavor):
+def _plot_binary(axes_row, feat, glm_indexed, shap_df, X_eval, X_raw, sym_df, kan_layer, flavor, spec):
     """Binary: GLM bars | SHAP violin | KAN aggregated feature function."""
-    from src.interpretability.utils.style import MODEL_COLORS
-    from src.interpretability.utils.kan_coefficients import sample_feature_function
+    from src.interpretability.utils.style import (
+        MODEL_COLORS, build_feature_grid, discrete_feature_ticks, feature_axis_label,
+    )
+    from src.interpretability.utils.kan_coefficients import evaluate_feature_function
 
     enc = X_eval[feat] if feat in X_eval.columns else None
-    raw = X_raw[feat].reset_index(drop=True) if (X_raw is not None and feat in X_raw.columns) else None
     feat_idx = X_eval.columns.get_loc(feat) if feat in X_eval.columns else -1
-
-    if raw is not None and enc is not None:
-        label_neg = str(raw[enc < -0.5].mode().iloc[0]) if (enc < -0.5).any() else "0"
-        label_pos = str(raw[enc > 0.5].mode().iloc[0]) if (enc > 0.5).any() else "1"
-    else:
-        label_neg, label_pos = "-1 (enc)", "+1 (enc)"
+    states = build_feature_grid(spec, X_eval, percentile_range=None)
+    tick_positions, tick_labels = discrete_feature_ticks(spec, X_eval, X_raw)
 
     coef = float(glm_indexed.loc[feat, "coefficient"]) if feat in glm_indexed.index else 0.0
 
     # ── Col 0: GLM two bars ──
     ax0 = axes_row[0]
-    ax0.barh([0, 1], [-coef, coef], color=MODEL_COLORS["GLM"], alpha=0.8)
-    ax0.set_yticks([0, 1])
-    ax0.set_yticklabels([label_neg, label_pos], fontsize=9)
+    glm_effects = [coef * state for state in states]
+    ax0.barh(range(len(states)), glm_effects, color=MODEL_COLORS["GLM"], alpha=0.8)
+    ax0.set_yticks(range(len(states)))
+    ax0.set_yticklabels(tick_labels, fontsize=9)
     ax0.axvline(0, color="gray", lw=0.5)
-    ax0.set_xlabel("GLM marginal effect (encoded)", fontsize=8)
+    ax0.set_xlabel(f"GLM marginal effect ({feature_axis_label(spec).lower()})", fontsize=8)
 
     # ── Col 1: SHAP violin by class ──
     ax1 = axes_row[1]
     if feat in shap_df.columns and enc is not None:
-        groups = {label_neg: shap_df[feat][enc < -0.5].values,
-                  label_pos: shap_df[feat][enc > 0.5].values}
-        data = [v for v in groups.values() if len(v) > 0]
-        labels = [k for k, v in groups.items() if len(v) > 0]
+        groups = [(label, shap_df[feat][enc == state].values) for state, label in zip(states, tick_labels)]
+        data = [v for _, v in groups if len(v) > 0]
+        labels = [k for k, v in groups if len(v) > 0]
         if data:
             parts = ax1.violinplot(data, positions=range(len(data)), showmedians=True)
             for pc in parts["bodies"]:
@@ -168,58 +170,71 @@ def _plot_binary(axes_row, feat, glm_indexed, shap_df, X_eval, X_raw, sym_df, ka
     # ── Col 2: KAN full curve on encoded domain with ±1 markers ──
     ax2 = axes_row[2]
     if kan_layer is not None and feat_idx >= 0:
-        x_norm, y_vals, _ = sample_feature_function(kan_layer, feat_idx, n=500, reduction="mean")
+        _, y_vals, _ = evaluate_feature_function(
+            kan_layer,
+            feat_idx,
+            x_values=states,
+            reduction="mean",
+        )
         kan_color = MODEL_COLORS["ChebyKAN"] if flavor == "chebykan" else MODEL_COLORS["FourierKAN"]
-        ax2.plot(x_norm, y_vals, color=kan_color, lw=2, label="Layer-0 aggregated")
-        for x_mark, label in [(-1.0, label_neg), (1.0, label_pos)]:
-            y_mark = float(np.interp(x_mark, x_norm, y_vals))
-            ax2.axvline(x_mark, color="gray", lw=1, ls="--", alpha=0.7)
-            ax2.scatter([x_mark], [y_mark], s=60, zorder=5, color="black")
-            ax2.annotate(label, (x_mark, y_mark), xytext=(5, 5),
+        ax2.plot(states, y_vals, color=kan_color, lw=2, marker="o", label="Layer-0 aggregated")
+        for state, y_mark, label in zip(states, y_vals, tick_labels):
+            ax2.scatter([state], [y_mark], s=60, zorder=5, color="black")
+            ax2.annotate(label, (state, y_mark), xytext=(5, 5),
                          textcoords="offset points", fontsize=7)
-        delta = float(np.interp(1.0, x_norm, y_vals)) - float(np.interp(-1.0, x_norm, y_vals))
+        delta = float(y_vals[-1] - y_vals[0]) if len(y_vals) >= 2 else 0.0
         ax2.set_title(f"Δ = {delta:+.3f}", fontsize=8)
         ax2.legend(fontsize=6)
-        ax2.set_xticks([-1.0, 0.0, 1.0])
-        ax2.set_xticklabels([label_neg, "0", label_pos], fontsize=8)
+        ax2.set_xticks(tick_positions)
+        ax2.set_xticklabels(tick_labels, fontsize=8)
     else:
         ax2.text(0.5, 0.5, "No active KAN edge", ha="center", va="center",
                  transform=ax2.transAxes, fontsize=9, color="gray")
-    ax2.set_xlabel("Encoded domain [-1, 1]", fontsize=8)
+    ax2.set_xlabel(feature_axis_label(spec), fontsize=8)
     ax2.set_ylabel("Edge output", fontsize=8)
 
 
-def _plot_categorical(axes_row, feat, glm_indexed, shap_df, X_eval, sym_df, kan_layer, flavor):
-    from src.interpretability.utils.style import MODEL_COLORS
-    from src.interpretability.utils.kan_coefficients import sample_feature_function
+def _plot_categorical(axes_row, feat, glm_indexed, shap_df, X_eval, X_raw, sym_df, kan_layer, flavor, spec):
+    from src.interpretability.utils.style import (
+        MODEL_COLORS, build_feature_grid, discrete_feature_ticks, feature_axis_label,
+    )
+    from src.interpretability.utils.kan_coefficients import evaluate_feature_function
 
     coef = float(glm_indexed.loc[feat, "coefficient"]) if feat in glm_indexed.index else 0.0
     enc = X_eval[feat] if feat in X_eval.columns else None
     feat_idx = X_eval.columns.get_loc(feat) if feat in X_eval.columns else -1
+    states = build_feature_grid(spec, X_eval, percentile_range=None)
+    tick_positions, tick_labels = discrete_feature_ticks(spec, X_eval, X_raw)
 
     ax0 = axes_row[0]
-    if enc is not None:
-        cats = sorted(enc.unique())[:15]
-        ax0.barh(range(len(cats)), [coef * c for c in cats], color=MODEL_COLORS["GLM"], alpha=0.8)
-        ax0.set_yticks(range(len(cats)))
-        ax0.set_yticklabels([f"{c:.2f}" for c in cats], fontsize=7)
-    ax0.set_xlabel("GLM marginal effect", fontsize=8)
+    ax0.barh(range(len(states)), [coef * state for state in states], color=MODEL_COLORS["GLM"], alpha=0.8)
+    ax0.set_yticks(range(len(states)))
+    ax0.set_yticklabels(tick_labels, fontsize=7)
+    ax0.set_xlabel(f"GLM marginal effect ({feature_axis_label(spec).lower()})", fontsize=8)
 
     ax1 = axes_row[1]
     if feat in shap_df.columns and enc is not None:
-        cats = sorted(enc.unique())[:10]
-        data = [shap_df[feat][enc == c].values for c in cats]
+        data = [shap_df[feat][enc == state].values for state in states]
         data = [d for d in data if len(d) > 0]
         if data:
             ax1.violinplot(data, positions=range(len(data)), showmedians=True)
+            ax1.set_xticks(range(len(data)))
+            ax1.set_xticklabels(tick_labels[: len(data)], rotation=30, ha="right", fontsize=7)
     ax1.set_ylabel("SHAP value", fontsize=8)
 
     ax2 = axes_row[2]
     if kan_layer is not None and feat_idx >= 0:
-        x_norm, y_vals, _ = sample_feature_function(kan_layer, feat_idx, n=500, reduction="mean")
+        _, y_vals, _ = evaluate_feature_function(
+            kan_layer,
+            feat_idx,
+            x_values=states,
+            reduction="mean",
+        )
         kan_color = MODEL_COLORS["ChebyKAN"] if flavor == "chebykan" else MODEL_COLORS["FourierKAN"]
-        ax2.plot(x_norm, y_vals, color=kan_color, lw=2)
-        ax2.set_xlabel("CatBoost-encoded scale", fontsize=8)
+        ax2.plot(states, y_vals, color=kan_color, lw=2, marker="o")
+        ax2.set_xticks(tick_positions)
+        ax2.set_xticklabels(tick_labels, rotation=30, ha="right", fontsize=7)
+        ax2.set_xlabel(feature_axis_label(spec), fontsize=8)
     else:
         ax2.text(0.5, 0.5, "No active KAN edge", ha="center", va="center",
                  transform=ax2.transAxes, fontsize=9, color="gray")
@@ -268,6 +283,7 @@ def run(
         feat_types = json.loads(feat_types_path.read_text())
 
     cfg = load_experiment_config(kan_config_path)
+    preprocessing_recipe = cfg.preprocessing.recipe
     in_features = X_eval.shape[1]
     widths = cfg.model.resolved_hidden_widths()
     kan_type = "chebykan" if flavor == "chebykan" else "fourierkan"
@@ -295,14 +311,21 @@ def run(
         axes[0, c].set_title(title, fontsize=11, fontweight="bold", pad=10)
 
     for row, feat in enumerate(top_features):
-        ftype = feat_types.get(feat, "unknown")
+        from src.interpretability.utils.style import feature_plot_kind, resolve_feature_display_spec
+
+        spec = resolve_feature_display_spec(
+            feat,
+            feat_types=feat_types,
+            preprocessing_recipe=preprocessing_recipe,
+        )
+        plot_kind = feature_plot_kind(spec)
         axes[row, 0].set_ylabel(feature_type_label(feat, feat_types)[:25], fontsize=8)
-        if ftype in ("continuous", "ordinal"):
-            _plot_continuous(axes[row], feat, glm_indexed, shap_df, X_eval, X_raw, sym_df, kan_layer, flavor)
-        elif ftype in ("binary", "missing_indicator"):
-            _plot_binary(axes[row], feat, glm_indexed, shap_df, X_eval, X_raw, sym_df, kan_layer, flavor)
+        if plot_kind == "continuous":
+            _plot_continuous(axes[row], feat, glm_indexed, shap_df, X_eval, X_raw, sym_df, kan_layer, flavor, spec)
+        elif plot_kind == "binary":
+            _plot_binary(axes[row], feat, glm_indexed, shap_df, X_eval, X_raw, sym_df, kan_layer, flavor, spec)
         else:
-            _plot_categorical(axes[row], feat, glm_indexed, shap_df, X_eval, sym_df, kan_layer, flavor)
+            _plot_categorical(axes[row], feat, glm_indexed, shap_df, X_eval, X_raw, sym_df, kan_layer, flavor, spec)
 
     plt.suptitle(
         f"Side-by-Side Interpretability: GLM | XGBoost SHAP | {flavor.title()} Feature Function",

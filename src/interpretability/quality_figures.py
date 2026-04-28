@@ -108,6 +108,7 @@ def compute_pruning_pareto(
     eval_labels_path: Path,
     *,
     thresholds: list[float] | None = None,
+    ordinal_calibration: dict | None = None,
 ) -> list[dict]:
     """Compute QWK vs. sparsity for multiple pruning thresholds.
 
@@ -118,6 +119,7 @@ def compute_pruning_pareto(
     from src.interpretability.kan_pruning import _compute_edge_l1
     from src.models.kan_layers import ChebyKANLayer, FourierKANLayer
     import copy
+    from src.interpretability.ordinal import classes_from_scores, qwk_metric_label
 
     if thresholds is None:
         thresholds = [0.001, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5]
@@ -158,7 +160,7 @@ def compute_pruning_pareto(
         pruned.eval()
         with torch.no_grad():
             preds = pruned(X_tensor).cpu().numpy().flatten()
-        preds_cls = np.clip(np.round(preds), 1, 8).astype(int)
+        preds_cls = classes_from_scores(preds, ordinal_calibration)
         qwk = float(cohen_kappa_score(y_eval, preds_cls, weights="quadratic"))
 
         sparsity = 1.0 - (total_after / total_before) if total_before > 0 else 0.0
@@ -167,6 +169,7 @@ def compute_pruning_pareto(
             "threshold": thresh,
             "sparsity": round(sparsity, 4),
             "qwk": round(qwk, 6),
+            "qwk_metric": qwk_metric_label(ordinal_calibration),
             "edges_before": total_before,
             "edges_after": total_after,
         })

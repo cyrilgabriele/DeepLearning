@@ -143,16 +143,9 @@ def prune_kan(model, threshold: float = 0.01) -> tuple:
 # ── QWK evaluation ────────────────────────────────────────────────────────────
 
 def _summary_for_checkpoint(checkpoint_path: Path) -> Path | None:
-    stem = checkpoint_path.stem
-    if not stem.startswith("model-"):
-        return None
+    from src.interpretability.ordinal import summary_for_checkpoint
 
-    timestamp = stem.removeprefix("model-")
-    experiment_name = checkpoint_path.parent.name
-    summary_path = Path("artifacts") / experiment_name / f"run-summary-{timestamp}.json"
-    if not summary_path.exists():
-        return None
-    return summary_path
+    return summary_for_checkpoint(checkpoint_path)
 
 
 def _load_ordinal_calibration(
@@ -160,45 +153,24 @@ def _load_ordinal_calibration(
     eval_features_path: Path,
     checkpoint_path: Path,
 ) -> dict[str, Any] | None:
-    sidecar_path = eval_features_path.with_name("ordinal_thresholds.json")
-    if sidecar_path.exists():
-        payload = json.loads(sidecar_path.read_text())
-        if isinstance(payload, dict) and payload.get("thresholds"):
-            return payload
+    from src.interpretability.ordinal import load_ordinal_calibration
 
-    summary_path = _summary_for_checkpoint(checkpoint_path)
-    if summary_path is None:
-        return None
-
-    summary_payload = json.loads(summary_path.read_text())
-    calibration = summary_payload.get("ordinal_calibration")
-    if isinstance(calibration, dict) and calibration.get("thresholds"):
-        return calibration
-    return None
+    return load_ordinal_calibration(
+        eval_features_path=eval_features_path,
+        checkpoint_path=checkpoint_path,
+    )
 
 
 def _attach_ordinal_calibration(model_wrapper, ordinal_calibration: dict[str, Any] | None) -> None:
-    if ordinal_calibration is None:
-        return
+    from src.interpretability.ordinal import attach_ordinal_calibration
 
-    thresholds = ordinal_calibration.get("thresholds")
-    if not thresholds:
-        return
-
-    model_wrapper.thresholds = np.asarray(thresholds, dtype=float)
-    if hasattr(model_wrapper, "threshold_source_split"):
-        model_wrapper.threshold_source_split = ordinal_calibration.get("source_split")
-    if hasattr(model_wrapper, "threshold_optimization_qwk"):
-        optimized_qwk = ordinal_calibration.get("optimized_qwk_on_source_split")
-        model_wrapper.threshold_optimization_qwk = (
-            None if optimized_qwk is None else float(optimized_qwk)
-        )
+    attach_ordinal_calibration(model_wrapper, ordinal_calibration)
 
 
 def _qwk_metric_label(ordinal_calibration: dict[str, Any] | None) -> str:
-    if ordinal_calibration is None or not ordinal_calibration.get("thresholds"):
-        return "rounded_scores"
-    return str(ordinal_calibration.get("method", "optimized_thresholds"))
+    from src.interpretability.ordinal import qwk_metric_label
+
+    return qwk_metric_label(ordinal_calibration)
 
 def _evaluate_qwk(model_wrapper, X_eval: pd.DataFrame, y_eval: pd.Series) -> float:
     preds = model_wrapper.predict(X_eval)
