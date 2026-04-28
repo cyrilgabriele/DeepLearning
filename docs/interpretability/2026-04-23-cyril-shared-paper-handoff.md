@@ -219,6 +219,33 @@ supporting artifact until the plotting logic is fixed:
   categories, and the axis should explicitly distinguish external preprocessing
   scale from the layer-internal `tanh` normalization.
 
+## Pareto operating-point decision
+
+For the sparsity-regularised Pareto baselines, use these two operating points:
+
+- ChebyKAN: `trial 12` (`sparsity_lambda = 0.00291971`)
+- FourierKAN: `trial 26` (`sparsity_lambda = 0.0085247`)
+
+Decision rule for this handoff:
+
+- select the best trade-off between QWK and sparsity, but keep **QWK as the
+  primary criterion**
+- prefer the point that keeps QWK close to the best sparse trial while still
+  achieving materially higher sparsity
+- do **not** pick the maximum-sparsity point if the QWK drop is too large
+
+Reasoning:
+
+- for ChebyKAN, `trial 9` has the best sparse-trial QWK (`0.606061`), but
+  `trial 12` keeps QWK almost unchanged (`0.601025`) while increasing sparsity
+  from `85.34%` to `94.50%`
+- for FourierKAN, `trial 29` has the best sparse-trial QWK (`0.587545`), but
+  `trial 26` keeps QWK close (`0.579412`) while raising sparsity from `59.74%`
+  to `76.17%`
+- these are therefore the chosen Pareto operating points when the goal is
+  "higher QWK first, but still meaningfully sparse", not "maximum QWK" and not
+  "maximum sparsity"
+
 ## Ordered tasks
 
 ### 1. Re-run dense Cheby interpretability on the existing dense checkpoint
@@ -349,3 +376,118 @@ Acceptance:
 - Do not claim the current dense models are end-to-end exact symbolic formulas.
   The edge-level recovery is exact / basis-native, but the full network still
   contains LayerNorm.
+
+## 2026-04-24 interpretability comparison sequence
+
+Goal: compare the interpretability of the two KAN flavors against the
+XGBoost + SHAP baseline without mixing incompatible plot types.
+
+Recommended sequence:
+
+1. Start with feature importance overlap across the three models.
+   - XGBoost: use
+     [shap_xgb_beeswarm.pdf](../../outputs/interpretability/xgboost_paper/stage-c-xgboost-best/figures/shap_xgb_beeswarm.pdf)
+     and the underlying mean absolute SHAP ranking from
+     [shap_xgb_values.parquet](../../outputs/interpretability/xgboost_paper/stage-c-xgboost-best/data/shap_xgb_values.parquet).
+   - ChebyKAN: use
+     [chebykan_feature_ranking.pdf](../../outputs/interpretability/kan_paper/stage-c-chebykan-pareto-sparsity-pareto-q0.601-s0.94/figures/chebykan_feature_ranking.pdf)
+     and
+     [chebykan_feature_ranking.csv](../../outputs/interpretability/kan_paper/stage-c-chebykan-pareto-sparsity-pareto-q0.601-s0.94/data/chebykan_feature_ranking.csv).
+   - FourierKAN: use
+     [fourierkan_feature_ranking.pdf](../../outputs/interpretability/kan_paper/stage-c-fourierkan-pareto-sparsity-pareto-q0.579-s0.76/figures/fourierkan_feature_ranking.pdf)
+     and
+     [fourierkan_feature_ranking.csv](../../outputs/interpretability/kan_paper/stage-c-fourierkan-pareto-sparsity-pareto-q0.579-s0.76/data/fourierkan_feature_ranking.csv).
+
+2. Use the overlap result to choose which KAN flavor gets the detailed
+   feature-effect comparison against XGBoost.
+
+3. Compare like-for-like feature-effect plots for the overlapping important
+   features.
+   - XGBoost: use the SHAP dependence plots, for example
+     [shap_xgb_dependence_BMI.pdf](../../outputs/interpretability/xgboost_paper/stage-c-xgboost-best/figures/shap_xgb_dependence_BMI.pdf).
+     A high positive SHAP value means that, for that individual sample, the
+     feature pushed the XGBoost score for the plotted / predicted class upward
+     relative to the baseline. A high negative SHAP value means it pushed that
+     class score downward.
+   - KAN: use
+     [chebykan_partial_dependence.pdf](../../outputs/interpretability/kan_paper/stage-c-chebykan-pareto-sparsity-pareto-q0.601-s0.94/figures/chebykan_partial_dependence.pdf).
+     The PDP curve shows the average predicted response when one feature is
+     swept over its observed values while the other features remain at their
+     observed evaluation-sample values.
+
+Important interpretation notes:
+
+- The XGBoost beeswarm is a global importance / direction summary. It should
+  justify which features are inspected, but it is not the same object as a KAN
+  PDP.
+- The XGBoost SHAP dependence plot is local and sample-wise: every point is one
+  applicant's feature value and that feature's contribution to the predicted
+  class score.
+- The KAN PDP is model-level and average: it is not an individual applicant
+  explanation and it is not a probability. It supports statements such as
+  "at BMI around 0.8, the average ChebyKAN predicted response is about 3.6",
+  not "this person has high likelihood of class 4".
+- Feature markers in the KAN plots come from the project feature taxonomy:
+  `[K]` means categorical code, `[B]` means binary / indicator-style feature.
+  A categorical feature can show only two observed x-axis states in the
+  evaluation split, e.g. `Medical_History_20 [K]` shows states `1` and `2`.
+
+### Rank-scaled overlap decision
+
+I compared the top 20 XGBoost SHAP features against the top 20 coefficient
+rankings for the sparse Pareto ChebyKAN and FourierKAN artifacts. The score
+weights shared features by both ranks:
+
+```text
+score(feature) = ((21 - xgb_rank) / 20) * ((21 - kan_rank) / 20)
+total_score = sum(score(feature) for shared top-20 features)
+```
+
+This rewards overlap near the top of both rankings more than overlap near rank
+20.
+
+Top-20 XGBoost SHAP features:
+
+```text
+BMI, Medical_History_15, Medical_History_4, Wt, Product_Info_4,
+Medical_Keyword_15, InsuredInfo_6, Medical_History_23, Ins_Age,
+Product_Info_2, Medical_Keyword_3, Family_Hist_4, Family_Hist_3,
+Medical_History_1, Insurance_History_5, Medical_History_30, Ht,
+Family_Hist_2, Family_Hist_5, Medical_History_39
+```
+
+ChebyKAN overlap:
+
+| Feature | XGB rank | Cheby rank | Score |
+| --- | ---: | ---: | ---: |
+| BMI | 1 | 1 | 1.0000 |
+| Medical_History_4 | 3 | 9 | 0.5400 |
+| Wt | 4 | 3 | 0.7650 |
+| Product_Info_4 | 5 | 4 | 0.6800 |
+| InsuredInfo_6 | 7 | 19 | 0.0700 |
+| Medical_History_23 | 8 | 14 | 0.2275 |
+| Ins_Age | 9 | 6 | 0.4500 |
+| Medical_Keyword_3 | 11 | 2 | 0.4750 |
+| Medical_History_30 | 16 | 7 | 0.1750 |
+
+ChebyKAN shared top-20 count: 9. Rank-scaled score: 4.3825.
+
+FourierKAN overlap:
+
+| Feature | XGB rank | Fourier rank | Score |
+| --- | ---: | ---: | ---: |
+| BMI | 1 | 1 | 1.0000 |
+| Medical_History_15 | 2 | 13 | 0.3800 |
+| Wt | 4 | 8 | 0.5525 |
+| Product_Info_4 | 5 | 2 | 0.7600 |
+| Ins_Age | 9 | 5 | 0.4800 |
+| Medical_Keyword_3 | 11 | 6 | 0.3750 |
+| Medical_History_30 | 16 | 4 | 0.2125 |
+
+FourierKAN shared top-20 count: 7. Rank-scaled score: 3.7600.
+
+Decision: use ChebyKAN for the detailed KAN-vs-XGBoost feature-effect
+comparison because it has the stronger rank-scaled overlap with XGBoost SHAP
+and more shared top-20 features. The best shared features to discuss first are
+`BMI`, `Wt`, `Product_Info_4`, `Ins_Age`, `Medical_Keyword_3`,
+`Medical_History_4`, `Medical_History_23`, and `Medical_History_30`.

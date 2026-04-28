@@ -39,6 +39,51 @@ def test_feature_type_label_appends_marker():
     assert feature_type_label("Unknown", {}) == "Unknown"
 
 
+def test_resolve_feature_display_spec_marks_identity_binary_as_discrete():
+    from src.interpretability.utils.style import resolve_feature_display_spec
+
+    spec = resolve_feature_display_spec(
+        "Medical_Keyword_3",
+        feat_types={"Medical_Keyword_3": "binary"},
+        preprocessing_recipe="kan_paper",
+    )
+
+    assert spec.raw_feature == "Medical_Keyword_3"
+    assert spec.transform == "identity"
+    assert spec.model_input_kind == "discrete"
+
+
+def test_resolve_feature_display_spec_marks_catboost_features_as_continuous():
+    from src.interpretability.utils.style import resolve_feature_display_spec
+
+    spec = resolve_feature_display_spec(
+        "cb_Product_Info_2",
+        feat_types={"cb_Product_Info_2": "categorical"},
+        preprocessing_recipe="kan_sota",
+    )
+
+    assert spec.raw_feature == "Product_Info_2"
+    assert spec.transform == "catboost_encoded"
+    assert spec.model_input_kind == "continuous"
+
+
+def test_discrete_feature_ticks_use_raw_labels_for_label_encoded_categories():
+    from src.interpretability.utils.style import discrete_feature_ticks, resolve_feature_display_spec
+
+    X_eval = pd.DataFrame({"Product_Info_2": [0.0, 1.0, 0.0]})
+    X_raw = pd.DataFrame({"Product_Info_2": ["D3", "E1", "D3"]})
+    spec = resolve_feature_display_spec(
+        "Product_Info_2",
+        feat_types={"Product_Info_2": "categorical"},
+        preprocessing_recipe="kan_paper",
+    )
+
+    positions, labels = discrete_feature_ticks(spec, X_eval, X_raw)
+
+    np.testing.assert_allclose(positions, np.array([0.0, 1.0]))
+    assert labels == ["D3", "E1"]
+
+
 def test_savefig_pdf_creates_file(tmp_path):
     import matplotlib
     matplotlib.use("Agg")

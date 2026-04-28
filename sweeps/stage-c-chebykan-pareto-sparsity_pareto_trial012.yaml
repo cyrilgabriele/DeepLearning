@@ -1,7 +1,7 @@
 trainer:
   experiment_name: stage-c-chebykan-pareto-sparsity-pareto-q0.601-s0.94
-  train_csv: C:\Users\chris\source\repos\DeepLearning\data\prudential-life-insurance-assessment\train.csv
-  test_csv: C:\Users\chris\source\repos\DeepLearning\data\prudential-life-insurance-assessment\test.csv
+  train_csv: data/prudential-life-insurance-assessment/train.csv
+  test_csv: data/prudential-life-insurance-assessment/test.csv
   seed: 42
 preprocessing:
   contract_version: 1
@@ -25,7 +25,7 @@ model:
     sparsity_lambda: 0.00291971
 tune:
   name: stage-c-chebykan-pareto-sparsity
-  storage: C:\Users\chris\source\repos\DeepLearning\sweeps\stage-c-chebykan-pareto-sparsity.db
+  storage: C:/Users/chris/source/repos/DeepLearning/sweeps/stage-c-chebykan-pareto-sparsity.db
   n_trials: 30
   timeout: null
   directions:

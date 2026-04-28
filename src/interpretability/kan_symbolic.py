@@ -81,6 +81,42 @@ def sample_edge(layer, out_idx: int, in_idx: int, n: int = 1000):
     raise TypeError(f"Unsupported layer: {type(layer)}")
 
 
+def evaluate_edge_on_inputs(
+    layer,
+    out_idx: int,
+    in_idx: int,
+    *,
+    x_values,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Evaluate one edge on explicit model-input values."""
+    import math
+    import torch
+
+    x = torch.as_tensor(x_values, dtype=torch.float32)
+    if x.ndim != 1:
+        x = x.reshape(-1)
+    x_norm = torch.tanh(x)
+
+    if hasattr(layer, "cheby_coeffs"):
+        coeffs = layer.cheby_coeffs[out_idx, in_idx, :].detach()
+        cheby = [torch.ones_like(x_norm), x_norm]
+        for _ in range(2, layer.degree + 1):
+            cheby.append(2 * x_norm * cheby[-1] - cheby[-2])
+        basis = torch.stack(cheby, dim=-1)
+        y = (basis * coeffs).sum(dim=-1)
+    elif hasattr(layer, "fourier_a") and hasattr(layer, "fourier_b"):
+        k = torch.arange(1, layer.grid_size + 1, dtype=torch.float32)
+        x_scaled = (x_norm + 1.0) * math.pi
+        x_k = x_scaled.unsqueeze(-1) * k
+        y = (torch.cos(x_k) * layer.fourier_a[out_idx, in_idx, :].detach()).sum(dim=-1)
+        y = y + (torch.sin(x_k) * layer.fourier_b[out_idx, in_idx, :].detach()).sum(dim=-1)
+    else:  # pragma: no cover - defensive branch
+        raise TypeError(f"Unsupported layer: {type(layer)}")
+
+    y = y + layer.base_weight[out_idx, in_idx].detach() * x
+    return x.numpy(), y.detach().numpy()
+
+
 # ── Symbolic fitting ──────────────────────────────────────────────────────────
 
 def _r2(y_true: np.ndarray, y_pred: np.ndarray) -> float:
@@ -378,6 +414,7 @@ def _plot_activation_grid(
     feat_types: dict,
     X_eval: pd.DataFrame | None,
     X_raw: pd.DataFrame | None,
+    preprocessing_recipe: str | None = None,
 ) -> None:
     """TabKAN-style 2×5 grid: one subplot per top-10 input feature."""
     import matplotlib
@@ -387,7 +424,9 @@ def _plot_activation_grid(
     from src.interpretability.utils.kan_coefficients import top_features_by_coefficients
     from src.interpretability.utils.style import (
         apply_paper_style, savefig_pdf, MODEL_COLORS,
-        encode_to_raw_lookup, FEATURE_TYPE_MARKERS,
+        FEATURE_TYPE_MARKERS, build_feature_grid,
+        display_feature_values, discrete_feature_ticks,
+        feature_axis_label, resolve_feature_display_spec,
     )
 
     apply_paper_style()
@@ -410,10 +449,24 @@ def _plot_activation_grid(
             ax.set_visible(False)
             continue
 
-        ftype = feat_types.get(feat, "unknown")
-        is_binary = ftype in ("binary", "missing_indicator")
-        is_numeric_raw = ftype in ("continuous", "ordinal")
-        has_raw = X_raw is not None and feat in X_raw.columns and is_numeric_raw
+        spec = resolve_feature_display_spec(
+            feat,
+            feat_types=feat_types,
+            preprocessing_recipe=preprocessing_recipe,
+        )
+        grid_model = (
+            build_feature_grid(spec, X_eval, grid_resolution=300, percentile_range=None)
+            if X_eval is not None and feat in feature_names
+            else np.linspace(-3.0, 3.0, 300, dtype=float)
+        )
+        if grid_model.size == 0:
+            ax.set_visible(False)
+            continue
+        x_plot, use_raw_axis = (
+            display_feature_values(spec, X_eval, X_raw, grid_model)
+            if X_eval is not None
+            else (grid_model, False)
+        )
 
         active_edges = df[(df["layer"] == 0) & (df["input_feature"] == feat)]
 
@@ -429,23 +482,26 @@ def _plot_activation_grid(
         # Plot all edges with opacity proportional to L1 norm
         for _, erow in active_edges.iterrows():
             out_i = int(erow["edge_out"])
-            x_norm, y_vals = sample_edge(first_layer, out_i, feat_i, n=300)
-            x_plot = (encode_to_raw_lookup(feat, X_eval, X_raw, x_norm)
-                      if (has_raw and not is_binary) else x_norm)
+            _, y_vals = evaluate_edge_on_inputs(
+                first_layer,
+                out_i,
+                feat_i,
+                x_values=grid_model,
+            )
             rel_strength = edge_l1s[out_i] / max_l1 if max_l1 > 0 else 0.0
             alpha = 0.1 + 0.8 * rel_strength
             lw = 1.0 + 1.5 * rel_strength
             ax.plot(x_plot, y_vals, color=model_color, lw=lw, alpha=alpha)
-            if is_binary and rel_strength > 0.8:
-                for enc_pos in [-1.0, 1.0]:
-                    y_mark = float(np.interp(enc_pos, x_norm, y_vals))
-                    ax.axvline(enc_pos, color="gray", lw=1, ls="--", alpha=0.5)
-                    ax.scatter([enc_pos], [y_mark], s=40, color="black", zorder=5)
+            if spec.model_input_kind == "discrete" and rel_strength > 0.8:
+                ax.scatter(x_plot, y_vals, s=40, color="black", zorder=5)
 
-        marker = FEATURE_TYPE_MARKERS.get(ftype, "")
+        marker = FEATURE_TYPE_MARKERS.get(spec.feature_type, "")
         ax.set_title(f"{feat[:18]} {marker}", fontsize=8, fontweight="bold")
-        x_lbl = "Encoded [-1,1]" if is_binary else ("Original scale" if has_raw else "Encoded")
-        ax.set_xlabel(x_lbl, fontsize=7)
+        if spec.model_input_kind == "discrete" and X_eval is not None:
+            tick_positions, tick_labels = discrete_feature_ticks(spec, X_eval, X_raw)
+            ax.set_xticks(tick_positions)
+            ax.set_xticklabels(tick_labels, fontsize=7, rotation=30, ha="right")
+        ax.set_xlabel(feature_axis_label(spec, use_raw_axis=use_raw_axis), fontsize=7)
         ax.set_ylabel("Edge output", fontsize=7)
 
     for ax in axes_flat[len(top_feats):]:
@@ -471,6 +527,181 @@ def _plot_activation_grid(
     plt.close()
 
 
+_FEATURE_RANKING_TYPE_ORDER = (
+    "continuous",
+    "binary",
+    "categorical",
+    "ordinal",
+    "missing_indicator",
+    "unknown",
+)
+
+_FEATURE_RANKING_TYPE_LABELS = {
+    "continuous": "Continuous",
+    "binary": "Binary",
+    "categorical": "Categorical",
+    "ordinal": "Ordinal",
+    "missing_indicator": "Missing flag",
+    "unknown": "Unknown",
+}
+
+_FEATURE_RANKING_COLORS = {
+    "continuous": "#4E79A7",
+    "binary": "#F28E2B",
+    "categorical": "#B07AA1",
+    "ordinal": "#59A14F",
+    "missing_indicator": "#8C8C8C",
+    "unknown": "#BAB0AC",
+}
+
+
+def _feature_ranking_display_name(feature: str) -> str:
+    if feature.startswith("missing_"):
+        return "Missing: " + feature.removeprefix("missing_").replace("_", " ")
+    return feature.replace("_", " ")
+
+
+def _feature_ranking_model_name(flavor: str) -> str:
+    return {"chebykan": "ChebyKAN", "fourierkan": "FourierKAN"}.get(flavor, flavor)
+
+
+def _save_feature_ranking_plot(
+    coeff_df: pd.DataFrame,
+    flavor: str,
+    output_dir: Path,
+    feat_types: dict,
+    *,
+    top_n: int = 30,
+) -> None:
+    """Save a compact feature-ranking chart from coefficient importances."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Patch
+    from src.interpretability.utils.style import (
+        apply_paper_style, savefig_pdf,
+    )
+
+    apply_paper_style()
+    if coeff_df.empty:
+        return
+
+    coeff_df = coeff_df[["feature", "importance"]].copy()
+    total_features = len(coeff_df)
+    coeff_df = coeff_df[coeff_df["importance"] > 0].sort_values(
+        "importance", ascending=False, ignore_index=True
+    )
+    if coeff_df.empty:
+        return
+
+    shown_df = coeff_df.head(top_n).copy()
+    sorted_feats = shown_df["feature"].tolist()
+    values = shown_df["importance"].astype(float).tolist()
+    labels = [_feature_ranking_display_name(f) for f in sorted_feats]
+    colors = [
+        _FEATURE_RANKING_COLORS.get(feat_types.get(f, "unknown"), _FEATURE_RANKING_COLORS["unknown"])
+        for f in sorted_feats
+    ]
+
+    fig_height = max(5.6, 1.35 + 0.28 * len(shown_df))
+    model_name = _feature_ranking_model_name(flavor)
+
+    with plt.rc_context({
+        "font.family": "DejaVu Sans",
+        "axes.titlesize": 13,
+        "axes.labelsize": 9,
+        "xtick.labelsize": 8,
+        "ytick.labelsize": 8,
+        "legend.fontsize": 7.5,
+    }):
+        fig, ax = plt.subplots(figsize=(8.4, fig_height), constrained_layout=True)
+        fig.patch.set_facecolor("white")
+        ax.set_facecolor("white")
+
+        y_pos = np.arange(len(shown_df))
+        for idx in y_pos:
+            if idx % 2:
+                ax.axhspan(idx - 0.48, idx + 0.48, color="#F7F8FA", zorder=0)
+
+        bars = ax.barh(
+            y_pos,
+            values,
+            color=colors,
+            height=0.68,
+            edgecolor="white",
+            linewidth=0.8,
+            zorder=2,
+        )
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels(labels)
+        ax.invert_yaxis()
+
+        max_value = max(values)
+        ax.set_xlim(0, max_value * 1.16)
+        ax.bar_label(
+            bars,
+            labels=[f"{value:.2f}" for value in values],
+            padding=3,
+            fontsize=7.5,
+            color="#343A40",
+        )
+
+        ax.xaxis.grid(True, color="#D9DEE7", linewidth=0.7)
+        ax.set_axisbelow(True)
+        ax.tick_params(axis="y", length=0, pad=7)
+        ax.tick_params(axis="x", colors="#4B5563")
+        ax.set_xlabel("Coefficient magnitude")
+        ax.set_ylabel("")
+        ax.set_title(f"{model_name} Feature Ranking", loc="left", fontweight="bold", pad=34)
+        ax.text(
+            0.0,
+            1.015,
+            (
+                f"Top {len(shown_df)} of {total_features} features; "
+                "score = sum of absolute layer-0 basis coefficients."
+            ),
+            transform=ax.transAxes,
+            ha="left",
+            va="bottom",
+            fontsize=8.2,
+            color="#5B6470",
+        )
+
+        for spine in ("top", "right", "left"):
+            ax.spines[spine].set_visible(False)
+        ax.spines["bottom"].set_color("#B8C0CC")
+
+        present_types = [
+            ftype for ftype in _FEATURE_RANKING_TYPE_ORDER
+            if any(feat_types.get(feature, "unknown") == ftype for feature in sorted_feats)
+        ]
+        legend_elements = [
+            Patch(
+                facecolor=_FEATURE_RANKING_COLORS[ftype],
+                edgecolor="none",
+                label=_FEATURE_RANKING_TYPE_LABELS[ftype],
+            )
+            for ftype in present_types
+        ]
+        if legend_elements:
+            ax.legend(
+                handles=legend_elements,
+                loc="lower right",
+                bbox_to_anchor=(1.0, 1.025),
+                ncol=min(5, len(legend_elements)),
+                frameon=False,
+                handlelength=1.1,
+                handletextpad=0.4,
+                columnspacing=0.9,
+            )
+
+        from src.interpretability.utils.paths import figures as fig_dir
+        out = fig_dir(output_dir) / f"{flavor}_feature_ranking.pdf"
+        savefig_pdf(fig, out)
+        print(f"Saved -> {out}")
+        plt.close(fig)
+
+
 def _plot_feature_ranking(
     module,
     flavor: str,
@@ -478,19 +709,10 @@ def _plot_feature_ranking(
     feature_names: list[str],
     feat_types: dict,
 ) -> None:
-    """Horizontal bar chart of all features ranked by basis-coefficient magnitude."""
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    from matplotlib.patches import Patch
+    """Horizontal bar chart of top features ranked by basis-coefficient magnitude."""
     from src.interpretability.utils.kan_coefficients import coefficient_importance_from_layer
     from src.models.kan_layers import ChebyKANLayer, FourierKANLayer
-    from src.interpretability.utils.style import (
-        apply_paper_style, savefig_pdf, FEATURE_TYPE_COLORS,
-        FEATURE_TYPE_MARKERS, feature_type_label,
-    )
 
-    apply_paper_style()
     first_layer = next(
         (l for l in module.kan_layers if isinstance(l, (ChebyKANLayer, FourierKANLayer))), None
     )
@@ -498,41 +720,7 @@ def _plot_feature_ranking(
         return
 
     coeff_df = coefficient_importance_from_layer(first_layer, feature_names)
-    if coeff_df.empty:
-        return
-    coeff_df = coeff_df[coeff_df["importance"] > 0]
-    if coeff_df.empty:
-        return
-    sorted_feats = coeff_df["feature"].tolist()
-
-    colors = [FEATURE_TYPE_COLORS.get(feat_types.get(f, "unknown"), "#AAAAAA") for f in sorted_feats]
-    labels = [feature_type_label(f, feat_types) for f in sorted_feats]
-    values = coeff_df["importance"].tolist()
-
-    fig_height = max(6, len(sorted_feats) * 0.25)
-    fig, ax = plt.subplots(figsize=(10, fig_height))
-    ax.barh(range(len(sorted_feats)), values, color=colors, alpha=0.85)
-    ax.set_yticks(range(len(sorted_feats)))
-    ax.set_yticklabels(labels, fontsize=7)
-    ax.invert_yaxis()
-    ax.set_xlabel("Coefficient magnitude (sum |coeff| across layer-0 outputs and basis terms)", fontsize=9)
-    ax.set_title(f"{flavor.title()} — Feature Importance (Paper-Native Coefficients)",
-                 fontsize=11, fontweight="bold")
-
-    present_types = sorted(set(feat_types.get(f, "unknown") for f in sorted_feats))
-    legend_elements = [
-        Patch(facecolor=FEATURE_TYPE_COLORS.get(t, "#AAAAAA"),
-              label=f"{t} {FEATURE_TYPE_MARKERS.get(t, '')}")
-        for t in present_types
-    ]
-    ax.legend(handles=legend_elements, fontsize=7, loc="lower right")
-    plt.tight_layout()
-
-    from src.interpretability.utils.paths import figures as fig_dir
-    out = fig_dir(output_dir) / f"{flavor}_feature_ranking.pdf"
-    savefig_pdf(fig, out)
-    print(f"Saved → {out}")
-    plt.close()
+    _save_feature_ranking_plot(coeff_df, flavor, output_dir, feat_types)
 
 
 # ── Symbolic lock-in (Liu et al. 2024, Section 2.5.1) ────────────────────────
@@ -794,6 +982,7 @@ def run(
     n_samples: int = 1000,
     feat_types: dict | None = None,
     X_raw: pd.DataFrame | None = None,
+    preprocessing_recipe: str | None = None,
 ) -> pd.DataFrame:
     import torch
     from src.models.tabkan import TabKAN
@@ -871,8 +1060,17 @@ def run(
             X_raw = pd.read_parquet(xr_path)
 
     # ── TabKAN-style activation grid and feature ranking ──────────────────────
-    _plot_activation_grid(module, df, flavor, output_dir, threshold,
-                          feat_types or {}, X_eval, X_raw)
+    _plot_activation_grid(
+        module,
+        df,
+        flavor,
+        output_dir,
+        threshold,
+        feat_types or {},
+        X_eval,
+        X_raw,
+        preprocessing_recipe=preprocessing_recipe,
+    )
     _plot_feature_ranking(module, flavor, output_dir, feature_names, feat_types or {})
 
     return df

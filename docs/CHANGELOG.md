@@ -17,6 +17,65 @@ Track what was changed, why it was changed, and any important notes.
 - Optional notes, issues, or future work
 ```
 
+### [2026-04-26] - Cyril Gabriele
+
+#### What
+- Added shared ordinal class-mapping helpers in `src/interpretability/ordinal.py` so interpretability code now maps continuous TabKAN scores through the stored optimized ordinal-threshold contract when available.
+- Updated the interpretability pipeline, local case explanations, closed-form surrogate reports, feature-validation curves, pruning helpers, quality-figure utilities, and final-comparison retention helper to use the same threshold contract instead of silently falling back to `round(score)`.
+- Added regression coverage for threshold-aware score-to-class conversion and threshold-aware local/surrogate interpretability outputs.
+- Retrained `stage-c-chebykan-best` so the dense ChebyKAN comparison checkpoint now persists `ordinal_thresholds.json`.
+- Regenerated threshold-consistent interpretability artifacts for:
+  - `stage-c-chebykan-best`
+  - `stage-c-fourierkan-best`
+  - `stage-c-chebykan-pareto-sparsity-pareto-q0.601-s0.94`
+  - `stage-c-fourierkan-pareto-sparsity-pareto-q0.579-s0.76`
+- Removed stale pre-threshold dense-Cheby artifacts and the obsolete `stage-c-chebykan-best-top20` eval/interpretability outputs.
+- Added the standalone paper-comparison package `src/interpretability/paper_comparison/`.
+- The package compares three already-materialized interpretability runs without coupling the comparison to the single-run `src/interpretability/pipeline.py`:
+  - XGBoost baseline: `outputs/interpretability/xgboost_paper/stage-c-xgboost-best`
+  - Pareto ChebyKAN: `outputs/interpretability/kan_paper/stage-c-chebykan-pareto-sparsity-pareto-q0.601-s0.94`
+  - Pareto FourierKAN: `outputs/interpretability/kan_paper/stage-c-fourierkan-pareto-sparsity-pareto-q0.579-s0.76`
+- Implemented `python -m src.interpretability.paper_comparison` as the CLI entrypoint for regenerating the paper comparison bundle.
+- Set the default output directory to `outputs/interpretability/comparison/pareto_kan_vs_xgboost/`.
+- Implemented cross-model feature-ranking comparison from:
+  - mean absolute predicted-class XGBoost SHAP values in `shap_xgb_values.parquet`
+  - native ChebyKAN feature rankings in `chebykan_feature_ranking.csv`
+  - native FourierKAN feature rankings in `fourierkan_feature_ranking.csv`
+- Exported the combined ranking table to `data/feature_ranking_comparison.csv`.
+- Exported top-k overlap diagnostics to `data/feature_overlap_summary.json`, including the three model top-20 lists, shared top-20 features, rank-scaled overlap scores, and a Kendall-like top-union rank agreement diagnostic.
+- Implemented deterministic feature-panel selection that prefers features available in all three models, high-ranking across all three rankings, and a mix of continuous and non-continuous feature semantics.
+- Exported the selected paper-panel features to `data/selected_features.json`.
+- Reconstructed the pruned ChebyKAN and FourierKAN modules from their run summaries and `models/*_pruned_module.pt` state dicts so the comparison figure uses the actual post-pruning models.
+- Generated the feature-effect comparison figure at `figures/feature_effect_comparison.pdf` and `figures/feature_effect_comparison.png`.
+- The figure is organized feature-first: columns are selected features, rows are XGBoost SHAP, ChebyKAN PDP, and FourierKAN PDP.
+- XGBoost panels show sample-wise SHAP values for each applicant's predicted class, with a binned/state mean overlay.
+- KAN panels show native partial-dependence curves from the pruned model modules, using observed states for discrete inputs and the preprocessing-aware display-domain helpers for axis labels.
+- Exported model-level metadata to `data/model_summary.json`, including run-summary QWK, accuracy, feature count, preprocessing recipe, random seed, post-pruning QWK, active edge count, and mean per-edge symbolic R² where applicable.
+- Exported a compact paper-facing Markdown summary to `reports/feature_effect_comparison.md`.
+- Added regression coverage in `tests/interpretability/test_paper_comparison.py` for ranking overlap construction, deterministic feature-panel selection, and end-to-end artifact writing with mocked KAN loaders.
+- Added `docs/interpretability/2026-04-26-paper-tex-handoff.md`, a self-contained handoff for generating the paper's LaTeX interpretability section from the comparison artifacts.
+
+#### Why
+- The training and pruning stages had been updated to persist and reuse optimized ordinal thresholds, but later interpretability stages still rounded raw KAN scores for feature-validation QWK, local class deltas, and surrogate QWK.
+- That made regenerated feature-retention curves and local class explanations inconsistent with the active model metric contract.
+- Using one score-to-class contract across training, pruning, and interpretability makes paper-facing QWK and class-delta artifacts comparable.
+
+#### Remarks
+- Verified with:
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest -q tests/interpretability/` → `100 passed`
+- Regenerated artifact audit:
+  - dense ChebyKAN: `qwk_after=0.596386`, `edges_after=21519`, feature-validation full-feature QWK `0.596386`
+  - dense FourierKAN: `qwk_after=0.591532`, `edges_after=41713`, feature-validation full-feature QWK `0.591532`
+  - Pareto ChebyKAN: `qwk_after=0.617183`, `edges_after=3302`, feature-validation full-feature QWK `0.617183`
+  - Pareto FourierKAN: `qwk_after=0.616046`, `edges_after=18147`, feature-validation full-feature QWK `0.616046`
+- Paper comparison bundle under `outputs/interpretability/comparison/pareto_kan_vs_xgboost/`:
+  - selected feature-effect panels: `BMI`, `Product_Info_4`, `Wt`, `Medical_Keyword_3`
+  - shared top-20 features across XGBoost, ChebyKAN, and FourierKAN: 6
+  - ChebyKAN vs XGBoost shared top-20 count: 9
+  - FourierKAN vs XGBoost shared top-20 count: 7
+  - XGBoost QWK: `0.558721`
+  - Pareto ChebyKAN post-pruning QWK: `0.617183`, active edges: `3302`, mean per-edge symbolic R²: `1.000000`
+  - Pareto FourierKAN post-pruning QWK: `0.616046`, active edges: `18147`, mean per-edge symbolic R²: `1.000000`
 ### [2026-04-25] - Gian Seifert
 
 #### What
@@ -163,6 +222,38 @@ Track what was changed, why it was changed, and any important notes.
   - Re-ran `--stage interpret` on `stage-c-chebykan-pareto-q0583-top20` (with LayerNorm): `symbolic_fits.csv` now reports mean R² = 1.0 across 976 edges (was 0.47 on the same run before). Graph-level exact correctly reports `exact_available=False, reason=layernorm_present` because composing through LayerNorm is not algebraic.
   - Trained and interpreted `stage-c-chebykan-pareto-q0583-top20-noln`: `exact_available=True`, `has_layernorm=False`. The fully expanded closed form is 605 907 operations / 5.6 M characters, so the report flags `usable=False` (too large to display). The exact symbolic structure is materialized; `end_to_end_r2` is skipped for the same size reason — a numeric-only verification via layer re-evaluation is future work.
 - No change to the FourierKAN path: it still uses the scipy candidate library.
+
+### [2026-04-24] - Cyril Gabriele
+
+#### What
+- Refactored the KAN interpretability plotting layer to be preprocessing-aware instead of assuming that model-input feature names always match raw feature names.
+- Added shared feature-domain resolution in `src/interpretability/utils/style.py` so interpretability code now derives:
+  - the preprocessing recipe from the resolved checkpoint-linked config
+  - the raw feature name corresponding to each model-input feature
+  - the transform family (`identity`, `cb_`, `qt_`, `mm_`, `missing_`)
+  - whether a feature should be treated as continuous or discrete in plots
+- Fixed `src/interpretability/partial_dependence.py` so PDPs now:
+  - use observed states for discrete inputs instead of sweeping impossible in-between values
+  - stop dropping valid categories through percentile clipping on discrete features
+  - label axes according to the true model-input / raw-input semantics instead of hardcoding `[-1,1]`
+- Updated KAN feature-function / activation plotting paths in:
+  - `src/interpretability/kan_symbolic.py`
+  - `src/interpretability/comparison_side_by_side.py`
+  - `src/interpretability/feature_risk_influence.py`
+  so they evaluate curves on actual model-input grids rather than conflating the internal `tanh` domain with the external input axis.
+- Added regression coverage in:
+  - `tests/interpretability/test_style.py`
+  - `tests/interpretability/test_partial_dependence.py`
+
+#### Why
+- The previous plots were only really safe for a narrow case where `X_eval` and `X_eval_raw` had the same feature names and the input domain could be read as if it were already normalized. That is true only for some current runs and breaks as soon as preprocessing uses prefixed transformed features such as `cb_`, `qt_`, or `mm_`.
+- The dense ChebyKAN PDP artifact was materially misleading because many plotted features were discrete coded variables, yet the code treated them as continuous sweeps and in some cases removed real categories via percentile clipping.
+- Making the interpretability layer preprocessing-aware now avoids a second rewrite later if the project switches from `kan_paper` to a transformed recipe such as `kan_sota`.
+
+#### Remarks
+- This change does not alter training, preprocessing, model weights, or the feature-importance metric itself. It changes how interpretability artifacts are generated and labeled.
+- The source of truth for the preprocessing recipe is the checkpoint-linked config resolved in `src/interpretability/pipeline.py`, not heuristic inspection of existing output files.
+- Existing files under `outputs/interpretability/...` remain historical artifacts until the interpret stage is rerun for the target checkpoints.
 
 ### [2026-04-22] - Cyril Gabriele
 

@@ -141,6 +141,7 @@ def _compute_qwk_retention_curve(
     from src.models.kan_layers import ChebyKANLayer, FourierKANLayer
     from src.config import load_experiment_config
     from src.models.tabkan import TabKAN
+    from src.interpretability.ordinal import classes_from_scores, load_ordinal_calibration
 
     X_eval = pd.read_parquet(eval_features_path)
     y_eval = pd.read_parquet(eval_labels_path)["Response"]
@@ -176,6 +177,12 @@ def _compute_qwk_retention_curve(
 
     cheby_ranked, cheby_module = _kan_feature_ranking(chebykan_ckpt, chebykan_cfg, "chebykan")
     fourier_ranked, fourier_module = _kan_feature_ranking(fourierkan_ckpt, fourierkan_cfg, "fourierkan")
+    cheby_calibration = load_ordinal_calibration(
+        checkpoint_path=chebykan_ckpt,
+    )
+    fourier_calibration = load_ordinal_calibration(
+        checkpoint_path=fourierkan_ckpt,
+    )
 
     rankings = {
         "GLM": glm_ranked,
@@ -191,17 +198,17 @@ def _compute_qwk_retention_curve(
     # For KAN inference, use the loaded modules directly via forward pass
     import torch
 
-    def _kan_predict(module, X_df):
+    def _kan_predict(module, X_df, ordinal_calibration):
         X_t = torch.tensor(X_df.values, dtype=torch.float32)
         with torch.no_grad():
             preds = module(X_t).cpu().numpy().flatten()
-        return np.clip(np.round(preds), 1, 8).astype(int)
+        return classes_from_scores(preds, ordinal_calibration)
 
     model_predict = {
         "GLM": lambda X: glm_wrapper.predict(X),
         "XGBoost": lambda X: xgb_wrapper.predict(X),
-        "ChebyKAN": lambda X: _kan_predict(cheby_module, X),
-        "FourierKAN": lambda X: _kan_predict(fourier_module, X),
+        "ChebyKAN": lambda X: _kan_predict(cheby_module, X, cheby_calibration),
+        "FourierKAN": lambda X: _kan_predict(fourier_module, X, fourier_calibration),
     }
 
     # Retention sweep

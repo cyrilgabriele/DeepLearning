@@ -193,6 +193,18 @@ def run_interpret(
 
     eval_features_path = _require_file(eval_dir / "X_eval.parquet", purpose="Eval features")
     eval_labels_path = _require_file(eval_dir / "y_eval.parquet", purpose="Eval labels")
+    from src.interpretability.ordinal import (
+        classes_from_scores,
+        load_ordinal_calibration,
+        qwk_metric_label,
+    )
+
+    ordinal_calibration = load_ordinal_calibration(
+        eval_features_path=eval_features_path,
+        checkpoint_path=checkpoint,
+    )
+    print(f"Ordinal class mapping: {qwk_metric_label(ordinal_calibration)}")
+
     run_kan_pruning(
         checkpoint,
         config,
@@ -272,6 +284,7 @@ def run_interpret(
         output_dir=interpret_dir,
         feat_types=feat_types,
         X_raw=X_raw,
+        preprocessing_recipe=recipe,
     )
     run_r2_pipeline(
         pruned_checkpoint_path,
@@ -339,6 +352,7 @@ def run_interpret(
         X_eval_raw=X_raw,
         candidate_features=case_features,
         row_position=0,
+        ordinal_calibration=ordinal_calibration,
     )
 
     surrogate_artifacts = None
@@ -353,6 +367,7 @@ def run_interpret(
             feature_names=surrogate_features,
             y_eval=y_eval,
             flavor=flavor,
+            ordinal_calibration=ordinal_calibration,
         )
 
     # R² distribution histogram + quality tier pie chart
@@ -378,6 +393,7 @@ def run_interpret(
     plot_partial_dependence(
         pruned_module, X_eval, pdp_feats, interpret_dir, flavor,
         X_raw=X_raw, feat_types=feat_types,
+        preprocessing_recipe=recipe,
     )
 
     # Feature subset validation (TabKAN Section 5.7)
@@ -393,7 +409,7 @@ def run_interpret(
         X_t = torch.tensor(X_df.values, dtype=torch.float32)
         with torch.no_grad():
             preds = pruned_module(X_t).cpu().numpy().flatten()
-        return np.clip(np.round(preds), 1, 8).astype(int)
+        return classes_from_scores(preds, ordinal_calibration)
 
     curves = compute_feature_validation_curves(
         {flavor: kan_ranked},

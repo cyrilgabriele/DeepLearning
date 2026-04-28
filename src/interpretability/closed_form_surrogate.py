@@ -13,16 +13,13 @@ from sklearn.metrics import cohen_kappa_score, r2_score
 from sklearn.preprocessing import PolynomialFeatures
 
 from src.interpretability.utils.paths import reports as reports_dir
+from src.interpretability.ordinal import classes_from_scores, qwk_metric_label
 
 
 def _predict_scores(module, X_df: pd.DataFrame) -> np.ndarray:
     X_tensor = torch.tensor(X_df.to_numpy(dtype=np.float32, copy=False), dtype=torch.float32)
     with torch.no_grad():
         return module(X_tensor).cpu().numpy().flatten()
-
-
-def _rounded_classes(scores: np.ndarray) -> np.ndarray:
-    return np.clip(np.round(scores), 1, 8).astype(int)
 
 
 def _format_polynomial_formula(
@@ -52,6 +49,7 @@ def run(
     feature_names: list[str] | None = None,
     y_eval: pd.Series | None = None,
     flavor: str = "chebykan",
+    ordinal_calibration: dict[str, object] | None = None,
 ) -> dict[str, object]:
     feature_names = list(feature_names or X_eval.columns.tolist())
     X_surrogate = X_eval.loc[:, feature_names].copy()
@@ -79,7 +77,7 @@ def run(
 
     assert best_payload is not None
     surrogate_predictions = np.asarray(best_payload["predictions"], dtype=float)
-    surrogate_classes = _rounded_classes(surrogate_predictions)
+    surrogate_classes = classes_from_scores(surrogate_predictions, ordinal_calibration)
     qwk_surrogate = None
     if y_eval is not None:
         qwk_surrogate = float(cohen_kappa_score(y_eval, surrogate_classes, weights="quadratic"))
@@ -96,6 +94,7 @@ def run(
         "degree": int(best_payload["degree"]),
         "alpha": float(best_payload["alpha"]),
         "fidelity_r2": round(float(best_payload["fidelity_r2"]), 6),
+        "qwk_metric": qwk_metric_label(ordinal_calibration),
         "qwk_surrogate": round(qwk_surrogate, 6) if qwk_surrogate is not None else None,
         "formula": formula,
     }
@@ -112,7 +111,7 @@ def run(
         f"- Degree: {report['degree']}",
         f"- Ridge alpha: {report['alpha']}",
         f"- Fidelity R^2: {report['fidelity_r2']}",
-        f"- Surrogate rounded QWK: {report['qwk_surrogate']}",
+        f"- Surrogate QWK ({report['qwk_metric']}): {report['qwk_surrogate']}",
         "",
         "## Formula",
         "",

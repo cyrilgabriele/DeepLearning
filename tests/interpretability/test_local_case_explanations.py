@@ -52,6 +52,10 @@ def test_local_case_explanations_smoke(tmp_path):
         X_eval_raw=X_eval_raw,
         candidate_features=["BMI", "Medical_Keyword_1", "Product_Info_2"],
         row_position=0,
+        ordinal_calibration={
+            "method": "optimized_thresholds",
+            "thresholds": [1.75, 2.75, 3.75, 4.75, 5.75, 6.75, 7.75],
+        },
     )
 
     assert artifacts["case_summary"].exists()
@@ -61,5 +65,6 @@ def test_local_case_explanations_smoke(tmp_path):
     sensitivities = pd.read_csv(artifacts["local_sensitivities"])
     what_if = pd.read_csv(artifacts["what_if"])
     assert {"feature", "contribution_vs_reference"}.issubset(sensitivities.columns)
-    assert {"feature", "scenario", "output_delta"}.issubset(what_if.columns)
+    assert {"feature", "scenario", "output_delta", "class_mapping"}.issubset(what_if.columns)
+    assert set(what_if["class_mapping"]) == {"optimized_thresholds"}
     assert len(what_if) >= 3

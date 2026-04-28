@@ -188,6 +188,36 @@ def sample_feature_function(
     import torch
 
     x = torch.linspace(-3.0, 3.0, n, dtype=torch.float32)
+    x_norm, y_feature, y_all = evaluate_feature_function(
+        layer,
+        feature_idx,
+        x_values=x.numpy(),
+        reduction=reduction,
+        return_internal_domain=True,
+    )
+    return x_norm, y_feature, y_all
+
+
+def evaluate_feature_function(
+    layer,
+    feature_idx: int,
+    *,
+    x_values,
+    reduction: str = "mean",
+    return_internal_domain: bool = False,
+):
+    """Evaluate the aggregated first-layer feature function on chosen inputs.
+
+    ``x_values`` are model-input values, i.e. the same domain consumed by the
+    learned residual linear path before the layer applies ``tanh`` internally.
+    When ``return_internal_domain=True`` the x-axis returned to the caller is
+    ``tanh(x_values)`` instead.
+    """
+    import torch
+
+    x = torch.as_tensor(x_values, dtype=torch.float32)
+    if x.ndim != 1:
+        x = x.reshape(-1)
     x_norm = torch.tanh(x)
 
     if hasattr(layer, "cheby_coeffs"):
@@ -219,4 +249,5 @@ def sample_feature_function(
     else:  # pragma: no cover - defensive branch
         raise ValueError(f"Unsupported reduction: {reduction}")
 
-    return x_norm.numpy(), y_feature.numpy(), y_all.numpy()
+    x_axis = x_norm if return_internal_domain else x
+    return x_axis.numpy(), y_feature.numpy(), y_all.numpy()
