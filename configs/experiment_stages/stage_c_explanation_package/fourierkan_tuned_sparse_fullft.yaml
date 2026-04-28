@@ -1,0 +1,29 @@
+trainer:
+  experiment_name: stage-c-fourierkan-tuned-sparse-fullft
+  train_csv: data/prudential-life-insurance-assessment/train.csv
+  test_csv: data/prudential-life-insurance-assessment/test.csv
+  seed: 42
+
+preprocessing:
+  contract_version: 1
+  recipe: kan_paper
+
+# Optuna-tuned FourierKAN hyperparameters (from
+# stage-c-fourierkan-top20-tune, best trial inner-val QWK 0.6037),
+# trained on ALL 140 features so we can derive its own top-20 features
+# from the SAME architecture/regularisation as will be used in the
+# 20-feature comparison row of Table 2.
+model:
+  name: tabkan-base
+  flavor: fourierkan
+  hidden_widths: [256, 256]
+  use_layernorm: false
+  params:
+    max_epochs: 150
+    grid_size: 8
+    lr: 0.0004234895323253983
+    weight_decay: 1.6914887817571163e-05
+    batch_size: 512
+    sparsity_lambda: 0.0249
+    l1_weight: 1.0
+    entropy_weight: 1.0

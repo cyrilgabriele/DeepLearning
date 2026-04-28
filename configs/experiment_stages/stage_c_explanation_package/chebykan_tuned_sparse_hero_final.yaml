@@ -1,0 +1,32 @@
+trainer:
+  experiment_name: chebykan-lambda-0.100
+  train_csv: data/prudential-life-insurance-assessment/train.csv
+  test_csv: data/prudential-life-insurance-assessment/test.csv
+  seed: 42
+
+# Final sparse ChebyKAN hero — all derived from a single Optuna-tuned
+# ChebyKAN config ([64, 64], degree 7, lr 0.00095) with the original
+# sparsity_lambda replaced by λ=0.1 (selected from a lambda scan as
+# the Pareto sweet spot: 85% sparsity, QWK 0.593 — actually improves
+# slightly after L1 pruning). The 20-feature list is derived from
+# this same tuned config trained on full 140 features (no inherited
+# Pareto-sweep list).
+preprocessing:
+  contract_version: 1
+  recipe: kan_paper
+  selected_features_path: configs/experiment_stages/stage_c_explanation_package/feature_lists/chebykan_tuned_top20_features.json
+
+model:
+  name: tabkan-base
+  flavor: chebykan
+  hidden_widths: [64, 64]
+  degree: 7
+  use_layernorm: false
+  params:
+    max_epochs: 100
+    lr: 0.0009492510093510513
+    weight_decay: 0.00012919049875653767
+    batch_size: 2048
+    sparsity_lambda: 0.1
+    l1_weight: 1.0
+    entropy_weight: 1.0

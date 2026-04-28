@@ -76,6 +76,126 @@ Track what was changed, why it was changed, and any important notes.
   - XGBoost QWK: `0.558721`
   - Pareto ChebyKAN post-pruning QWK: `0.617183`, active edges: `3302`, mean per-edge symbolic R²: `1.000000`
   - Pareto FourierKAN post-pruning QWK: `0.616046`, active edges: `18147`, mean per-edge symbolic R²: `1.000000`
+### [2026-04-25] - Gian Seifert
+
+#### What
+- **Tightened 20-feature methodology** by re-deriving each model's top-20 feature list from the *specific* implementation that ends up in Table 2:
+  - Trained tuned FourierKAN ([256, 256], grid 8, λ=0.0249) on full 140 features (`stage-c-fourierkan-tuned-sparse-fullft`); extracted top-20 by coefficient importance into `feature_lists/fourierkan_tuned_top20_features.json` (15/20 overlap with old Pareto-derived list).
+  - Computed SHAP `TreeExplainer` on the new `xgb-best` (XGBRegressor) checkpoint; saved top-20 by mean(|SHAP|) into `feature_lists/xgb_tuned_top20_features.json` (16/20 overlap with the old `xgboost-paper`-XGBClassifier-derived list).
+  - Re-ran both 50-trial Optuna sweeps on the corrected feature lists; retrained winners; recomputed bootstrap CIs.
+- **New Table 2 sparse-regime numbers** (outer-test, threshold-calibrated, 95 % bootstrap CI over n = 11 877):
+  - XGBoost, tuned: 0.611 [0.598, 0.624] (was 0.601 [0.587, 0.614])
+  - FourierKAN, tuned: 0.608 [0.596, 0.622] (was 0.604 [0.590, 0.618])
+  - ChebyKAN sparse hero: 0.592 [0.579, 0.606] (unchanged)
+  - All three remain statistically tied (CIs overlap pairwise).
+- **FourierKAN architecture flipped** with the new feature list: Optuna's winner is now [64, 64] grid 7 (vs the prior [256, 256] grid 8). KAN-edge count drops from 70 656 → 5 376 — same order of magnitude as the sparse ChebyKAN hero (806 edges) instead of 10× larger.
+- **Polished §3.2 prose** in `local_files/main (1).tex` for accuracy + concision:
+  - Tightened the methodology paragraph (5 packed topics → one focused paragraph).
+  - Replaced "polynomial of degree ≤ 6" with ≤ 7 (current tuned ChebyKAN config uses degree 7).
+  - Replaced "single closed-form polynomial in the inputs" with "single closed-form expression" (the composition has nested `tanh` terms — finite closed form, but not a polynomial in `x`).
+  - Removed "no surrogate, no sampling, no post-hoc approximation" (IG uses path integration, so "no sampling" over-claimed).
+  - Mentioned R² = 1.000 exactly once (in the methodology paragraph) instead of three times.
+  - Removed bold from FourierKAN's QWK cell — the prose said "tied", but the bold visually implied FourierKAN was the winner.
+  - Fixed FourierKAN edge count (70 912 → 70 656 → 5 376 across iterations) — the final linear head is not a KAN edge.
+  - Tightened the §3.2.2 summary by removing redundancy with paragraph 1.
+- **Blanked out full-feature QWK cells in Table 2** with `\textcolor{red}{fill from Cyril}` placeholders for the XGBoost / dense-ChebyKAN / dense-FourierKAN rows (those numbers belong to Cyril's §3.2.1 dense-regime sub-section). Added `\usepackage{xcolor}` to the preamble. Caption + summary paragraph updated to point to §3.2.1 for full-feature numbers.
+
+#### Why
+- Reviewer-likely objection: in the previous 20-feature comparison, the XGBoost top-20 was derived from SHAP of the *deprecated* `xgboost-paper` (XGBClassifier — a different model class), and the FourierKAN top-20 was derived from the OLD Pareto-sparsity FourierKAN (different architecture and λ). Each row's feature ranking should come from the same model implementation that gets reported, otherwise the comparison silently mixes implementations.
+- The architecture flip for FourierKAN-20 also revealed that with the *correct* feature list, Optuna prefers a much smaller network — strengthening rather than weakening the "compact KAN" claim.
+- The polish round addressed honest issues (technically wrong claims about polynomial composition, over-claimed IG semantics, visual bolding contradicting prose) that would have drawn reviewer pushback.
+
+#### Remarks
+- Verified statistical equivalence between the three sparse-regime rows: XGB − Fourier gap = +0.003, XGB − Cheby gap = +0.019, Fourier − Cheby gap = +0.016, all within 0.013–0.026 bootstrap-CI-overlap regions.
+- Generated `outputs/reports/table1_bootstrap_qwk.json` with the full updated bootstrap CI ledger for all six models.
+- `paper_draft/interpretability_section.tex` synced with `local_files/main (1).tex` after every edit so future merges have a clean reference.
+- Final commit: `5a3ef73`. Branch `gian-interpretability` is ready to ship modulo Cyril filling §3.2.1 + the three full-feature QWK cells.
+
+### [2026-04-24] - Gian Seifert
+
+#### What
+- **Re-derived the sparse ChebyKAN hero end-to-end from the Optuna-tuned config** (no mix-and-match between Pareto-sweep features and Optuna-tuned hyperparameters):
+  1. Trained tuned ChebyKAN ([64, 64], degree 7, lr 0.00095) on all 140 features with L1 sparsity at λ = 0.1 (`stage-c-chebykan-tuned-sparse-fullft`).
+  2. Extracted top-20 features from *that* model's coefficient importance → `feature_lists/chebykan_tuned_top20_features.json` (15/20 overlap with the prior Pareto-derived list).
+  3. 5-point sparsity-λ scan via `scripts/sparse_hero_lambda_scan.py`; λ = 0.1 selected as the Pareto sweet spot (85 % within-architecture pruning at essentially zero QWK loss).
+  4. Retrained on the new top-20 with no LayerNorm at λ = 0.1 → 5 376 trainable KAN edges.
+  5. L1-pruned at threshold 0.002 → **806 active edges**, outer-test QWK **0.592** (up from the original sparse hero's 0.533).
+- **Per-budget Optuna tuning for all three 20-feature baselines** (`stage-c-{xgb,chebykan,fourierkan}-top20-tune`, 50 trials each):
+  - Equalised the search spaces: added `gamma` to XGBoost; added `lr`/`weight_decay`/`batch_size` to both KAN configs (the existing tune YAMLs only varied architecture).
+  - Created `xgb_top20_tune.yaml`, `chebykan_top20_tune.yaml`, `fourierkan_top20_tune.yaml` with matched search spaces.
+  - Extended `src/tune/sweep.py` `_resolve_model_family` to recognise `"xgb"` (mapped to `"xgboost-paper"` family for sweep pipeline purposes).
+- **Fixed two real XGBoost reproducibility bugs** uncovered while investigating the 0.10 inner-val → outer-test gap:
+  1. `XGBoostPaperModel.__init__` did not accept `gamma` — Optuna-best `gamma = 3.8958` was being silently dropped.
+  2. `_build_estimator` constructed `xgb.XGBClassifier` without forwarding `gamma` even when present in `_base_params`.
+  3. `ModelConfig.allowed_param_keys()` rejected `gamma` as unknown — added a new `_XGBOOST_OPTIONAL_PARAMS` set so existing configs without `gamma` continue to validate.
+  4. Even after both fixes, `xgboost-paper` (XGBClassifier) peaks at ~ 0.55 outer-test, not 0.65 — because the §3.1 Table 1 number 0.6546 came from a *different* implementation (`model = xgb`, XGBRegressor + threshold calibration) that was orphaned by the April 9 refactor.
+- **Re-registered `XGBBaseline` (XGBRegressor + thresholds) under `"xgb"`** in `src/models/registry.py`:
+  - Updated `XGBBaseline.fit` to accept trainer-style kwargs (`validation_data`, `validation_splits`).
+  - Updated `build_xgb_model` to forward all tuned hyperparameters (was only passing `n_estimators`/`max_depth`/`learning_rate` and silently dropping the rest).
+  - Added `_XGB_REQUIRED_PARAMS` and `_XGB_OPTIONAL_PARAMS` to the config validator.
+  - New `xgb_best.yaml` and `xgb_top20.yaml` configs that point to the proper XGBoost implementation.
+  - Outer-test QWK on the full feature set: 0.642 [0.629, 0.655] — matches §3.1's 0.6546 within selection-bias variance (single retrain vs 100-trial Optuna best).
+- **Fair 20-feature XGBoost baseline added to Table 2** with retuned hyperparameters (max_depth 6, 300 trees, gamma 1) so XGBoost is no longer compared at default settings tuned for 126 features.
+- **Replaced the 2×2 edge-activation Figure 3 with an integrated-gradient waterfall** for applicant 55728 on the sparse ChebyKAN hero (`scripts/build_figure3_waterfall.py`); IG sums to f(applicant) − f(reference) exactly by construction. Reference applicant: lowest-scoring class-1 applicant (Id 44235, score −0.18); applicant 55728 score 4.58 → predicted class 5.
+- **Multi-seed dense KAN training** (3 seeds each: 42, 0, 1):
+  - ChebyKAN dense: 0.595 ± 0.027
+  - FourierKAN dense: 0.599 ± 0.007
+  - Replaces the previous single-seed dense numbers (0.607 / 0.592) which were Optuna-selection-biased.
+- **Trimmed Table 3 closed-form rows to top-3 terms** (was full 7-term expansion which overflowed in the spconf single-column layout).
+
+#### Why
+- Original sparse ChebyKAN hero was a mix of (a) features from the OLD Pareto-sparsity sweep and (b) hyperparameters from the new Optuna sweep. End-to-end re-derivation from one consistent source closes that loophole.
+- 50-trial per-budget Optuna sweeps replace ad-hoc hand-tuning; matched search spaces avoid asymmetric tuning advantages.
+- The XGBoost gap was the user's "are these numbers right?" prompt — turned out to be both a real bug (gamma dropped silently) and a deeper architecture mismatch (XGBClassifier vs the original XGBRegressor pipeline). Restoring `xgb_baseline.XGBBaseline` returns XGBoost to its proper baseline strength.
+- The waterfall figure visually demonstrates the unique sparse-ChebyKAN claim ("exact analytic per-feature decomposition") that no other row in Table 2 supports — much stronger than the old R² = 1 redundancy figure.
+
+#### Remarks
+- All commits touching this work: `7206c6e` (waterfall + multi-seed + Table 3 trim), `8666e4c` (XGBoost-20 fair baseline), `1e3a229` (gamma fix), `5627961` (re-register XGBBaseline), `00b438d` (per-budget tuning), `2d4e75a` (re-derive sparse hero).
+- All 25 interpretability tests pass after the changes.
+- `scripts/xgb_gamma_sweep.py` left in the tree — quick gamma grid for confirming the gamma-bug fix doesn't regress the baseline.
+
+### [2026-04-23] - Gian Seifert
+
+#### What
+- **Added native FourierKAN symbolic extractor** mirroring the ChebyKAN-native path:
+  - `_compose_exact_fourierkan_edge` in `src/interpretability/formula_composition.py` builds the exact symbolic edge `base_weight · x + Σₖ aₖ cos(k·π·(tanh(x)+1)) + bₖ sin(k·π·(tanh(x)+1))` (matches the runtime forward in `_sample_fourierkan_edge`).
+  - `fit_symbolic_edge_fourierkan_native` in `src/interpretability/kan_symbolic.py` reads `fourier_a`, `fourier_b`, `base_weight` directly and emits the closed form (R² = 1.000 by construction).
+  - Wired into `_build_edge_records` so FourierKAN rows now use `fit_mode = "fourierkan_native"`.
+  - Updated `lock_in_symbolic_edges` to skip both `chebykan_native` and `fourierkan_native` rows (projection is a no-op).
+  - All 25 existing interpretability tests pass.
+- **Trained the first sparse FourierKAN hero** (`stage-c-fourierkan-pareto-top20-noln`) using a top-20 feature list derived from the existing Pareto-sparsity FourierKAN run; outer-test QWK 0.562 with 7 158 active edges. Symbolic recovery R² jumped from 0.27 (scipy fallback) to 1.000 (native extractor).
+- **Built the paper content recommendation document** at `docs/interpretability/PAPER_CONTENT_INTERPRETABILITY.md` capturing the planned interpretability section: headline claim, hero models locked in, six-row Table 1 layout, single Figure 1 recommendation, appendix dump pointers, caveats, follow-up checklist.
+- **Iterated the doc through five design rounds**:
+  1. Initial recommendation (small-hero focus only).
+  2. **Option B** — six-row Pareto framing (full-feature dense baselines + sparse heroes in one table).
+  3. **Greeks integration** — added the exact-symbolic-derivative claim as a single-row addition + Table 2 cell update + appendix line.
+  4. **Gian / Cyril split** — explicit ownership map; new §11 hand-off block for Cyril's dense-regime work + six coordination items.
+  5. **Outer-test QWK convention** — locked the QWK regime; switched all six row numbers; flagged the 0.10 XGBoost gap as Optuna-selection bias (later disproved — see 2026-04-24 entry).
+- **Threshold-calibration fairness pass**:
+  - Discovered the dense ChebyKAN and FourierKAN runs (manifests dated 2026-04-12) used default `round()` rather than threshold calibration, while the sparse heroes used calibrated thresholds. This made the comparison apples-to-oranges.
+  - Re-trained `stage-c-chebykan-best` and `stage-c-fourierkan-best` on the current codebase so they use the same inner-validation threshold-fitting procedure as the sparse heroes.
+  - Reverted a stray `sparsity_lambda: 0.1` that had been inserted in `chebykan_best.yaml` → back to 0.0 (the original 2026-04-12 dense-baseline value).
+  - Trained GLM baseline (`stage-c-glm-baseline`) for the Table 2 row that was previously blank.
+- **Bootstrap CIs** for outer-test QWK across all six Table 1 rows via `scripts/bootstrap_qwk_table1.py` (n = 11 877, 1 000 resamples, seed 42).
+- **Worked Greek for applicant 55728** via `scripts/worked_greek_applicant_55728.py`: ∂score/∂BMI computed three ways:
+  - Symbolic chain rule (SymPy via `exact_partials.compose_exact_chebykan_symbolic_graph` + `build_continuous_partial_trace` + `evaluate_continuous_partial_trace_row`): −0.6505
+  - Autograd (PyTorch backward): −0.6505 (agrees to 3 × 10⁻⁶)
+  - Central finite difference (ε = 10⁻³): −0.6499 (agrees to 5 × 10⁻⁴, O(ε²) truncation)
+- **First Gian deliverables for the paper**: 2×2 edge-activation figure (BMI / Wt × ChebyKAN / FourierKAN sparse heroes), simplified closed-form table (top-3 terms × 5 representative edges from the sparse ChebyKAN hero), and the LaTeX section file `docs/interpretability/paper_draft/interpretability_section.tex` matching the spconf template at `local_files/main (1).tex`.
+
+#### Why
+- The previous comparison was unfair: FourierKAN edges were being fit by scipy candidates that only covered harmonics k = 1..4 while the model used `grid_size = 8`, giving R² = 0.27. Native readout closes that gap.
+- The PAPER_CONTENT doc started the editorial conversation; the five rounds reflect actual user feedback iterating from a single-row claim to the full Pareto comparison.
+- Threshold-calibration fairness was discovered while pulling Table 2 numbers — the dense-row "0.543 / 0.520" had nothing to do with model quality, only with whether `predict()` had been threshold-calibrated.
+- Bootstrap CIs are the standard reviewer-defence number for "is this gap real or noise?".
+- The worked Greek concretises the exact-Greeks claim: a number a reviewer can verify against the artifact, not just an abstract algebraic argument.
+
+#### Remarks
+- Branch created: `gian-interpretability` (from `main`).
+- All commits chronologically: `dd690c1`, `c46476d`, `2945814`, `bb46406`, `8d5967d`, `af5547f`, `3264038`, `b835782`, `0404717`.
+- New scripts under `scripts/`: `bootstrap_qwk_table1.py`, `worked_greek_applicant_55728.py`, `build_figure1_interpretability.py` (later renamed to `build_figure3_waterfall.py`), `simplified_closed_forms_table.py`.
+- New configs under `configs/experiment_stages/stage_c_explanation_package/`: `fourierkan_pareto_top20_noln.yaml`, plus per-seed dense KAN configs (`{cheby,fourier}kan_best_seed{0,1}.yaml`) used for the multi-seed averaging on 2026-04-24.
+- Open at end of day: full-feature comparison still showed XGBoost weaker than KAN heroes, which led to the 2026-04-24 deep-dive into the gamma bug and the `xgb`/`xgboost-paper` registry mismatch.
 
 ### [2026-04-22] - Gian Seifert
 

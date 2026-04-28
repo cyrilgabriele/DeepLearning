@@ -1,0 +1,102 @@
+{
+  "best_params": {
+    "batch_size": 1024,
+    "depth": 2,
+    "grid_size": 7,
+    "lr": 0.00017090418224181622,
+    "max_epochs": 100,
+    "weight_decay": 5.398006433472482e-06,
+    "width": 64
+  },
+  "best_qwk": 0.608349,
+  "best_trial_attrs": {
+    "checkpoint_path": "checkpoints/stage-c-fourierkan-top20-tune-trial-016/model-20260425-110020.pt",
+    "experiment_name": "stage-c-fourierkan-top20-tune-trial-016",
+    "metrics": {
+      "accuracy": 0.33308074429569756,
+      "f1_macro": 0.21041935600489528,
+      "mae": 1.3622968196868896,
+      "qwk": 0.6083488581419977
+    },
+    "summary_path": "artifacts/stage-c-fourierkan-top20-tune-trial-016/run-summary-20260425-110020.json"
+  },
+  "best_trial_number": 16,
+  "completed_trials": 50,
+  "model_family": "fourierkan",
+  "preprocessing_recipe": "kan_paper",
+  "search_space": {
+    "batch_size": {
+      "choices": [
+        256,
+        512,
+        1024,
+        2048
+      ],
+      "high": null,
+      "low": null,
+      "step": null,
+      "type": "categorical",
+      "values": null
+    },
+    "depth": {
+      "choices": null,
+      "high": 3.0,
+      "low": 1.0,
+      "step": null,
+      "type": "int",
+      "values": null
+    },
+    "grid_size": {
+      "choices": null,
+      "high": 8.0,
+      "low": 2.0,
+      "step": null,
+      "type": "int",
+      "values": null
+    },
+    "lr": {
+      "choices": null,
+      "high": 0.05,
+      "low": 0.0001,
+      "step": null,
+      "type": "log_uniform",
+      "values": null
+    },
+    "max_epochs": {
+      "choices": [
+        75,
+        100,
+        150,
+        200
+      ],
+      "high": null,
+      "low": null,
+      "step": null,
+      "type": "categorical",
+      "values": null
+    },
+    "weight_decay": {
+      "choices": null,
+      "high": 0.01,
+      "low": 1e-06,
+      "step": null,
+      "type": "log_uniform",
+      "values": null
+    },
+    "width": {
+      "choices": [
+        32,
+        64,
+        128,
+        256
+      ],
+      "high": null,
+      "low": null,
+      "step": null,
+      "type": "categorical",
+      "values": null
+    }
+  },
+  "study_name": "stage-c-fourierkan-top20-tune",
+  "total_trials": 50
+}

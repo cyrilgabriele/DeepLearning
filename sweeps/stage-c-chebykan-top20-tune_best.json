@@ -1,0 +1,102 @@
+{
+  "best_params": {
+    "batch_size": 2048,
+    "degree": 7,
+    "depth": 2,
+    "lr": 0.0009492510093510513,
+    "max_epochs": 100,
+    "weight_decay": 0.00012919049875653767,
+    "width": 64
+  },
+  "best_qwk": 0.564493,
+  "best_trial_attrs": {
+    "checkpoint_path": "checkpoints/stage-c-chebykan-top20-tune-trial-047/model-20260424-161457.pt",
+    "experiment_name": "stage-c-chebykan-top20-tune-trial-047",
+    "metrics": {
+      "accuracy": 0.35497179422413067,
+      "f1_macro": 0.2287344112684351,
+      "mae": 1.437063217163086,
+      "qwk": 0.5644931829343631
+    },
+    "summary_path": "artifacts/stage-c-chebykan-top20-tune-trial-047/run-summary-20260424-161457.json"
+  },
+  "best_trial_number": 47,
+  "completed_trials": 50,
+  "model_family": "chebykan",
+  "preprocessing_recipe": "kan_paper",
+  "search_space": {
+    "batch_size": {
+      "choices": [
+        256,
+        512,
+        1024,
+        2048
+      ],
+      "high": null,
+      "low": null,
+      "step": null,
+      "type": "categorical",
+      "values": null
+    },
+    "degree": {
+      "choices": null,
+      "high": 8.0,
+      "low": 2.0,
+      "step": null,
+      "type": "int",
+      "values": null
+    },
+    "depth": {
+      "choices": null,
+      "high": 3.0,
+      "low": 1.0,
+      "step": null,
+      "type": "int",
+      "values": null
+    },
+    "lr": {
+      "choices": null,
+      "high": 0.05,
+      "low": 0.0001,
+      "step": null,
+      "type": "log_uniform",
+      "values": null
+    },
+    "max_epochs": {
+      "choices": [
+        75,
+        100,
+        150,
+        200
+      ],
+      "high": null,
+      "low": null,
+      "step": null,
+      "type": "categorical",
+      "values": null
+    },
+    "weight_decay": {
+      "choices": null,
+      "high": 0.01,
+      "low": 1e-06,
+      "step": null,
+      "type": "log_uniform",
+      "values": null
+    },
+    "width": {
+      "choices": [
+        32,
+        64,
+        128,
+        256
+      ],
+      "high": null,
+      "low": null,
+      "step": null,
+      "type": "categorical",
+      "values": null
+    }
+  },
+  "study_name": "stage-c-chebykan-top20-tune",
+  "total_trials": 50
+}

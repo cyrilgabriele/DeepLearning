@@ -1,0 +1,89 @@
+{
+  "candidates": [
+    {
+      "candidate_id": "stage-c-fourierkan-top20-tune-trial-016",
+      "checkpoint_path": "checkpoints/stage-c-fourierkan-top20-tune-trial-016/model-20260425-110020.pt",
+      "metrics": {
+        "accuracy": 0.33308074429569756,
+        "f1_macro": 0.21041935600489528,
+        "mae": 1.3622968196868896,
+        "qwk": 0.6083488581419977
+      },
+      "model_config": {
+        "degree": null,
+        "depth": 2,
+        "flavor": "fourierkan",
+        "hidden_widths": [
+          64,
+          64
+        ],
+        "name": "tabkan-base",
+        "params": {
+          "batch_size": 1024,
+          "entropy_weight": 1.0,
+          "grid_size": 7,
+          "l1_weight": 1.0,
+          "lr": 0.00017090418224181622,
+          "max_epochs": 100,
+          "sparsity_lambda": 0.0249,
+          "weight_decay": 5.398006433472482e-06
+        },
+        "use_layernorm": false,
+        "width": 64
+      },
+      "preprocessing_config": {
+        "contract_version": 1,
+        "recipe": "kan_paper",
+        "selected_features_path": "/Users/gian1/CODE/HSG/FS26/DeepLearning/DeepLearning/configs/experiment_stages/stage_c_explanation_package/feature_lists/fourierkan_tuned_top20_features.json"
+      },
+      "qwk": 0.608349,
+      "rank": 1,
+      "selection_metadata": {
+        "architecture": {
+          "depth": 2,
+          "hidden_widths": [
+            64,
+            64
+          ],
+          "is_uniform": true,
+          "use_layernorm": false,
+          "width": 64
+        },
+        "basis_parameters": {
+          "flavor": "fourierkan",
+          "grid_size": 7
+        },
+        "notes": [
+          "Source experiment: stage-c-fourierkan-top20-tune-trial-016"
+        ],
+        "sampled_params": {
+          "batch_size": 1024,
+          "depth": 2,
+          "grid_size": 7,
+          "lr": 0.00017090418224181622,
+          "max_epochs": 100,
+          "weight_decay": 5.398006433472482e-06,
+          "width": 64
+        },
+        "sparsity_parameters": {
+          "entropy_weight": 1.0,
+          "l1_weight": 1.0,
+          "sparsity_lambda": 0.0249
+        }
+      },
+      "summary_path": "artifacts/stage-c-fourierkan-top20-tune-trial-016/run-summary-20260425-110020.json",
+      "trainer_config": {
+        "experiment_name": "stage-c-fourierkan-top20-tune-candidate-016",
+        "seed": 42,
+        "test_csv": "/Users/gian1/CODE/HSG/FS26/DeepLearning/DeepLearning/data/prudential-life-insurance-assessment/test.csv",
+        "train_csv": "/Users/gian1/CODE/HSG/FS26/DeepLearning/DeepLearning/data/prudential-life-insurance-assessment/train.csv"
+      },
+      "trial_number": 16
+    }
+  ],
+  "generated_at": "2026-04-25T11:38:12.641045+00:00",
+  "model_family": "fourierkan",
+  "preprocessing_recipe": "kan_paper",
+  "study_name": "stage-c-fourierkan-top20-tune",
+  "top_k": 1
+}

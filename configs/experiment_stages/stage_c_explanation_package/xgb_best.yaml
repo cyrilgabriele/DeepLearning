@@ -1,15 +1,19 @@
 trainer:
-  experiment_name: stage-c-xgboost-best
+  experiment_name: stage-c-xgb-best
   train_csv: data/prudential-life-insurance-assessment/train.csv
   test_csv: data/prudential-life-insurance-assessment/test.csv
   seed: 42
 
+# Same preprocessing the original xgb sweep used.
 preprocessing:
   contract_version: 1
   recipe: xgboost_paper
 
+# XGBRegressor + threshold-optimised ordinal output — the model used by the
+# original Optuna sweep that produced best_qwk=0.6546 (sweeps/xgb_xgb_paper_best.json).
+# Distinct from "xgboost-paper" (XGBClassifier) by architecture.
 model:
-  name: xgboost-paper
+  name: xgb
   params:
     n_estimators: 765
     max_depth: 11
@@ -20,7 +24,3 @@ model:
     reg_alpha: 0.12670481458419444
     reg_lambda: 1.246619007860089
     gamma: 3.895752493463711
-    num_classes: 8
-    tree_method: hist
-    eval_metric: mlogloss
-    refit_full_training: true

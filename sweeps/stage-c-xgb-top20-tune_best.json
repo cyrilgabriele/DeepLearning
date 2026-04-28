@@ -1,0 +1,105 @@
+{
+  "best_params": {
+    "colsample_bytree": 0.8290342388521728,
+    "gamma": 0.6494881149371003,
+    "learning_rate": 0.015566623578771902,
+    "max_depth": 6,
+    "min_child_weight": 2.7720325714166245,
+    "n_estimators": 700,
+    "reg_alpha": 8.679591476909849,
+    "reg_lambda": 0.47828838237973337,
+    "subsample": 0.7660296265870522
+  },
+  "best_qwk": 0.611261,
+  "best_trial_attrs": {
+    "checkpoint_path": "checkpoints/stage-c-xgb-top20-tune-trial-045/model-20260425-103901.joblib",
+    "experiment_name": "stage-c-xgb-top20-tune-trial-045",
+    "metrics": {
+      "accuracy": 0.3460469815610003,
+      "f1_macro": 0.20936159655517772,
+      "mae": 1.3640650510787964,
+      "qwk": 0.611261260316412
+    },
+    "summary_path": "artifacts/stage-c-xgb-top20-tune-trial-045/run-summary-20260425-103901.json"
+  },
+  "best_trial_number": 45,
+  "completed_trials": 50,
+  "model_family": "xgboost-paper",
+  "preprocessing_recipe": "kan_paper",
+  "search_space": {
+    "colsample_bytree": {
+      "choices": null,
+      "high": 1.0,
+      "low": 0.5,
+      "step": null,
+      "type": "uniform",
+      "values": null
+    },
+    "gamma": {
+      "choices": null,
+      "high": 10.0,
+      "low": 0.001,
+      "step": null,
+      "type": "log_uniform",
+      "values": null
+    },
+    "learning_rate": {
+      "choices": null,
+      "high": 0.3,
+      "low": 0.001,
+      "step": null,
+      "type": "log_uniform",
+      "values": null
+    },
+    "max_depth": {
+      "choices": null,
+      "high": 15.0,
+      "low": 3.0,
+      "step": null,
+      "type": "int",
+      "values": null
+    },
+    "min_child_weight": {
+      "choices": null,
+      "high": 15.0,
+      "low": 1.0,
+      "step": null,
+      "type": "uniform",
+      "values": null
+    },
+    "n_estimators": {
+      "choices": null,
+      "high": 1200.0,
+      "low": 100.0,
+      "step": 50,
+      "type": "int",
+      "values": null
+    },
+    "reg_alpha": {
+      "choices": null,
+      "high": 10.0,
+      "low": 0.0001,
+      "step": null,
+      "type": "log_uniform",
+      "values": null
+    },
+    "reg_lambda": {
+      "choices": null,
+      "high": 10.0,
+      "low": 0.0001,
+      "step": null,
+      "type": "log_uniform",
+      "values": null
+    },
+    "subsample": {
+      "choices": null,
+      "high": 1.0,
+      "low": 0.5,
+      "step": null,
+      "type": "uniform",
+      "values": null
+    }
+  },
+  "study_name": "stage-c-xgb-top20-tune",
+  "total_trials": 50
+}
