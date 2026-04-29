@@ -1,0 +1,49 @@
+trainer:
+  experiment_name: stage-a-xgboost-tuned
+  train_csv: /Users/cyrilgabriele/Documents/School/00_Courses/01_DL/03_Project/DeepLearning/data/prudential-life-insurance-assessment/train.csv
+  test_csv: /Users/cyrilgabriele/Documents/School/00_Courses/01_DL/03_Project/DeepLearning/data/prudential-life-insurance-assessment/test.csv
+  seed: 42
+preprocessing:
+  contract_version: 1
+  recipe: xgboost_paper
+  selected_features_path: null
+model:
+  name: xgb
+  flavor: null
+  depth: null
+  width: null
+  hidden_widths: null
+  degree: null
+  use_layernorm: true
+  params:
+    n_estimators: 950
+    max_depth: 3
+    min_child_weight: 1
+    learning_rate: 0.1
+    subsample: 1.0
+    colsample_bytree: 1.0
+    reg_alpha: 1.0
+    reg_lambda: 1.0
+tune:
+  name: stage-a-xgboost-tune
+  storage: /Users/cyrilgabriele/Documents/School/00_Courses/01_DL/03_Project/DeepLearning/sweeps/stage_a/xgboost/stage-a-xgboost-tune.db
+  n_trials: 50
+  timeout: null
+  directions: null
+  sampler: tpe
+  top_k_candidates: 1
+  search_space:
+    n_estimators:
+      type: int
+      low: 200.0
+      high: 1000.0
+      step: 50
+      choices: null
+      values: null
+    max_depth:
+      type: int
+      low: 3.0
+      high: 15.0
+      step: null
+      choices: null
+      values: null

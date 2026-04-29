@@ -1,0 +1,42 @@
+{
+  "best_params": {
+    "max_depth": 3,
+    "n_estimators": 950
+  },
+  "best_qwk": 0.647765,
+  "best_trial_attrs": {
+    "checkpoint_path": "checkpoints/stage-a-xgboost-trial-049/model-20260429-114732.joblib",
+    "experiment_name": "stage-a-xgboost-trial-049",
+    "metrics": {
+      "accuracy": 0.3873031910415088,
+      "f1_macro": 0.2579041870496714,
+      "mae": 1.2899722152058601,
+      "qwk": 0.6477649891251791
+    },
+    "summary_path": "artifacts/stage_a/stage-a-xgboost-trial-049/run-summary-20260429-114732.json"
+  },
+  "best_trial_number": 49,
+  "completed_trials": 50,
+  "model_family": "xgb",
+  "preprocessing_recipe": "xgboost_paper",
+  "search_space": {
+    "max_depth": {
+      "choices": null,
+      "high": 15.0,
+      "low": 3.0,
+      "step": null,
+      "type": "int",
+      "values": null
+    },
+    "n_estimators": {
+      "choices": null,
+      "high": 1000.0,
+      "low": 200.0,
+      "step": 50,
+      "type": "int",
+      "values": null
+    }
+  },
+  "study_name": "stage-a-xgboost-tune",
+  "total_trials": 50
+}

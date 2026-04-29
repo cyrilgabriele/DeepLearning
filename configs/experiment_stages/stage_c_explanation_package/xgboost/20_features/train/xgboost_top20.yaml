@@ -12,9 +12,9 @@ preprocessing:
   recipe: kan_paper
   selected_features_path: configs/experiment_stages/stage_c_explanation_package/feature_lists/chebykan_pareto_q0583_top20_features.json
 
-# Same Optuna-best XGBoost hyperparameters as the full-feature run.
+# Same Optuna-best XGBRegressor hyperparameters as the full-feature run.
 model:
-  name: xgboost-paper
+  name: xgb
   params:
     n_estimators: 765
     max_depth: 11
@@ -24,7 +24,4 @@ model:
     min_child_weight: 8
     reg_alpha: 0.12670481458419444
     reg_lambda: 1.246619007860089
-    num_classes: 8
-    tree_method: hist
-    eval_metric: mlogloss
-    refit_full_training: true
+    gamma: 3.895752493463711

@@ -16,7 +16,7 @@ from src.training.trainer import run_train
 
 
 _SWEEP_DIR = Path("sweeps")
-ModelFamily = Literal["glm", "xgboost-paper", "chebykan", "fourierkan", "bsplinekan"]
+ModelFamily = Literal["glm", "xgb", "xgboost-paper", "chebykan", "fourierkan", "bsplinekan"]
 
 
 def _compute_sparsity(checkpoint_path: str, config: ExperimentConfig, flavor: str) -> float:
@@ -349,7 +349,7 @@ def _stage_slug(experiment_name: str) -> str:
 
 
 def _model_slug(model_family: ModelFamily) -> str:
-    if model_family in {"xgboost-paper"}:
+    if model_family in {"xgb", "xgboost-paper"}:
         return "xgboost"
     return str(model_family).replace("-", "_")
 
@@ -477,7 +477,7 @@ def _resolve_model_family(config: ExperimentConfig) -> ModelFamily:
     if config.model.name == "xgboost-paper":
         return "xgboost-paper"
     if config.model.name == "xgb":
-        return "xgboost-paper"  # same pipeline role (tree baseline, threshold-calibrated)
+        return "xgb"
     if not config.model.name.startswith("tabkan"):
         raise ValueError(
             f"Tune stage does not support model '{config.model.name}'. "

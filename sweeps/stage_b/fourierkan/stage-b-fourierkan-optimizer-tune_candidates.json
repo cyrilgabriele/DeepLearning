@@ -1,0 +1,374 @@
+{
+  "candidates": [
+    {
+      "candidate_id": "stage-b-fourierkan-optimizer-tune-trial-028",
+      "checkpoint_path": "checkpoints/stage-b-fourierkan-optimizer-trial-028/model-20260429-121511.pt",
+      "metrics": {
+        "accuracy": 0.3472257304033005,
+        "f1_macro": 0.2369159719271083,
+        "mae": 1.333754301071167,
+        "qwk": 0.6352425863527633
+      },
+      "model_config": {
+        "degree": null,
+        "depth": 1,
+        "flavor": "fourierkan",
+        "hidden_widths": [
+          128
+        ],
+        "name": "tabkan-base",
+        "params": {
+          "batch_size": 256,
+          "entropy_weight": 1.0,
+          "grid_size": 5,
+          "l1_weight": 1.0,
+          "lr": 0.00041495195451630713,
+          "max_epochs": 100,
+          "sparsity_lambda": 0.0,
+          "weight_decay": 2.3494880310381893e-06
+        },
+        "use_layernorm": true,
+        "width": 128
+      },
+      "preprocessing_config": {
+        "contract_version": 1,
+        "recipe": "kan_paper",
+        "selected_features_path": null
+      },
+      "qwk": 0.635243,
+      "rank": 1,
+      "selection_metadata": {
+        "architecture": {
+          "depth": 1,
+          "hidden_widths": [
+            128
+          ],
+          "is_uniform": true,
+          "use_layernorm": true,
+          "width": 128
+        },
+        "basis_parameters": {
+          "flavor": "fourierkan",
+          "grid_size": 5
+        },
+        "notes": [
+          "Source experiment: stage-b-fourierkan-optimizer-trial-028"
+        ],
+        "sampled_params": {
+          "lr": 0.00041495195451630713,
+          "weight_decay": 2.3494880310381893e-06
+        },
+        "sparsity_parameters": {
+          "entropy_weight": 1.0,
+          "l1_weight": 1.0,
+          "sparsity_lambda": 0.0
+        }
+      },
+      "summary_path": "artifacts/stage_b/runs/stage-b-fourierkan-optimizer-trial-028/run-summary-20260429-121511.json",
+      "trainer_config": {
+        "experiment_name": "stage-b-fourierkan-optimizer-candidate-028",
+        "seed": 42,
+        "test_csv": "/Users/cyrilgabriele/Documents/School/00_Courses/01_DL/03_Project/DeepLearning/data/prudential-life-insurance-assessment/test.csv",
+        "train_csv": "/Users/cyrilgabriele/Documents/School/00_Courses/01_DL/03_Project/DeepLearning/data/prudential-life-insurance-assessment/train.csv"
+      },
+      "trial_number": 28
+    },
+    {
+      "candidate_id": "stage-b-fourierkan-optimizer-tune-trial-008",
+      "checkpoint_path": "checkpoints/stage-b-fourierkan-optimizer-trial-008/model-20260429-114605.pt",
+      "metrics": {
+        "accuracy": 0.3577502736381241,
+        "f1_macro": 0.23538784486473718,
+        "mae": 1.3283658027648926,
+        "qwk": 0.6337891751185245
+      },
+      "model_config": {
+        "degree": null,
+        "depth": 1,
+        "flavor": "fourierkan",
+        "hidden_widths": [
+          128
+        ],
+        "name": "tabkan-base",
+        "params": {
+          "batch_size": 256,
+          "entropy_weight": 1.0,
+          "grid_size": 5,
+          "l1_weight": 1.0,
+          "lr": 0.0004059611610484307,
+          "max_epochs": 100,
+          "sparsity_lambda": 0.0,
+          "weight_decay": 3.752055855124284e-05
+        },
+        "use_layernorm": true,
+        "width": 128
+      },
+      "preprocessing_config": {
+        "contract_version": 1,
+        "recipe": "kan_paper",
+        "selected_features_path": null
+      },
+      "qwk": 0.633789,
+      "rank": 2,
+      "selection_metadata": {
+        "architecture": {
+          "depth": 1,
+          "hidden_widths": [
+            128
+          ],
+          "is_uniform": true,
+          "use_layernorm": true,
+          "width": 128
+        },
+        "basis_parameters": {
+          "flavor": "fourierkan",
+          "grid_size": 5
+        },
+        "notes": [
+          "Source experiment: stage-b-fourierkan-optimizer-trial-008"
+        ],
+        "sampled_params": {
+          "lr": 0.0004059611610484307,
+          "weight_decay": 3.752055855124284e-05
+        },
+        "sparsity_parameters": {
+          "entropy_weight": 1.0,
+          "l1_weight": 1.0,
+          "sparsity_lambda": 0.0
+        }
+      },
+      "summary_path": "artifacts/stage_b/runs/stage-b-fourierkan-optimizer-trial-008/run-summary-20260429-114605.json",
+      "trainer_config": {
+        "experiment_name": "stage-b-fourierkan-optimizer-candidate-008",
+        "seed": 42,
+        "test_csv": "/Users/cyrilgabriele/Documents/School/00_Courses/01_DL/03_Project/DeepLearning/data/prudential-life-insurance-assessment/test.csv",
+        "train_csv": "/Users/cyrilgabriele/Documents/School/00_Courses/01_DL/03_Project/DeepLearning/data/prudential-life-insurance-assessment/train.csv"
+      },
+      "trial_number": 8
+    },
+    {
+      "candidate_id": "stage-b-fourierkan-optimizer-tune-trial-014",
+      "checkpoint_path": "checkpoints/stage-b-fourierkan-optimizer-trial-014/model-20260429-115456.pt",
+      "metrics": {
+        "accuracy": 0.3632230361202324,
+        "f1_macro": 0.24762008266210356,
+        "mae": 1.302264928817749,
+        "qwk": 0.6331076303646139
+      },
+      "model_config": {
+        "degree": null,
+        "depth": 1,
+        "flavor": "fourierkan",
+        "hidden_widths": [
+          128
+        ],
+        "name": "tabkan-base",
+        "params": {
+          "batch_size": 256,
+          "entropy_weight": 1.0,
+          "grid_size": 5,
+          "l1_weight": 1.0,
+          "lr": 0.0011202234168345851,
+          "max_epochs": 100,
+          "sparsity_lambda": 0.0,
+          "weight_decay": 1.0952927106776856e-06
+        },
+        "use_layernorm": true,
+        "width": 128
+      },
+      "preprocessing_config": {
+        "contract_version": 1,
+        "recipe": "kan_paper",
+        "selected_features_path": null
+      },
+      "qwk": 0.633108,
+      "rank": 3,
+      "selection_metadata": {
+        "architecture": {
+          "depth": 1,
+          "hidden_widths": [
+            128
+          ],
+          "is_uniform": true,
+          "use_layernorm": true,
+          "width": 128
+        },
+        "basis_parameters": {
+          "flavor": "fourierkan",
+          "grid_size": 5
+        },
+        "notes": [
+          "Source experiment: stage-b-fourierkan-optimizer-trial-014"
+        ],
+        "sampled_params": {
+          "lr": 0.0011202234168345851,
+          "weight_decay": 1.0952927106776856e-06
+        },
+        "sparsity_parameters": {
+          "entropy_weight": 1.0,
+          "l1_weight": 1.0,
+          "sparsity_lambda": 0.0
+        }
+      },
+      "summary_path": "artifacts/stage_b/runs/stage-b-fourierkan-optimizer-trial-014/run-summary-20260429-115456.json",
+      "trainer_config": {
+        "experiment_name": "stage-b-fourierkan-optimizer-candidate-014",
+        "seed": 42,
+        "test_csv": "/Users/cyrilgabriele/Documents/School/00_Courses/01_DL/03_Project/DeepLearning/data/prudential-life-insurance-assessment/test.csv",
+        "train_csv": "/Users/cyrilgabriele/Documents/School/00_Courses/01_DL/03_Project/DeepLearning/data/prudential-life-insurance-assessment/train.csv"
+      },
+      "trial_number": 14
+    },
+    {
+      "candidate_id": "stage-b-fourierkan-optimizer-tune-trial-015",
+      "checkpoint_path": "checkpoints/stage-b-fourierkan-optimizer-trial-015/model-20260429-115617.pt",
+      "metrics": {
+        "accuracy": 0.36263366169908223,
+        "f1_macro": 0.2365521806285356,
+        "mae": 1.311694860458374,
+        "qwk": 0.6322860069178899
+      },
+      "model_config": {
+        "degree": null,
+        "depth": 1,
+        "flavor": "fourierkan",
+        "hidden_widths": [
+          128
+        ],
+        "name": "tabkan-base",
+        "params": {
+          "batch_size": 256,
+          "entropy_weight": 1.0,
+          "grid_size": 5,
+          "l1_weight": 1.0,
+          "lr": 0.00035877559206833737,
+          "max_epochs": 100,
+          "sparsity_lambda": 0.0,
+          "weight_decay": 1.1261076718621043e-06
+        },
+        "use_layernorm": true,
+        "width": 128
+      },
+      "preprocessing_config": {
+        "contract_version": 1,
+        "recipe": "kan_paper",
+        "selected_features_path": null
+      },
+      "qwk": 0.632286,
+      "rank": 4,
+      "selection_metadata": {
+        "architecture": {
+          "depth": 1,
+          "hidden_widths": [
+            128
+          ],
+          "is_uniform": true,
+          "use_layernorm": true,
+          "width": 128
+        },
+        "basis_parameters": {
+          "flavor": "fourierkan",
+          "grid_size": 5
+        },
+        "notes": [
+          "Source experiment: stage-b-fourierkan-optimizer-trial-015"
+        ],
+        "sampled_params": {
+          "lr": 0.00035877559206833737,
+          "weight_decay": 1.1261076718621043e-06
+        },
+        "sparsity_parameters": {
+          "entropy_weight": 1.0,
+          "l1_weight": 1.0,
+          "sparsity_lambda": 0.0
+        }
+      },
+      "summary_path": "artifacts/stage_b/runs/stage-b-fourierkan-optimizer-trial-015/run-summary-20260429-115617.json",
+      "trainer_config": {
+        "experiment_name": "stage-b-fourierkan-optimizer-candidate-015",
+        "seed": 42,
+        "test_csv": "/Users/cyrilgabriele/Documents/School/00_Courses/01_DL/03_Project/DeepLearning/data/prudential-life-insurance-assessment/test.csv",
+        "train_csv": "/Users/cyrilgabriele/Documents/School/00_Courses/01_DL/03_Project/DeepLearning/data/prudential-life-insurance-assessment/train.csv"
+      },
+      "trial_number": 15
+    },
+    {
+      "candidate_id": "stage-b-fourierkan-optimizer-tune-trial-017",
+      "checkpoint_path": "checkpoints/stage-b-fourierkan-optimizer-trial-017/model-20260429-115936.pt",
+      "metrics": {
+        "accuracy": 0.349583228087901,
+        "f1_macro": 0.21964938091181602,
+        "mae": 1.3462153673171997,
+        "qwk": 0.6318707118216917
+      },
+      "model_config": {
+        "degree": null,
+        "depth": 1,
+        "flavor": "fourierkan",
+        "hidden_widths": [
+          128
+        ],
+        "name": "tabkan-base",
+        "params": {
+          "batch_size": 256,
+          "entropy_weight": 1.0,
+          "grid_size": 5,
+          "l1_weight": 1.0,
+          "lr": 0.0003007817058630463,
+          "max_epochs": 100,
+          "sparsity_lambda": 0.0,
+          "weight_decay": 1.1483953688804903e-06
+        },
+        "use_layernorm": true,
+        "width": 128
+      },
+      "preprocessing_config": {
+        "contract_version": 1,
+        "recipe": "kan_paper",
+        "selected_features_path": null
+      },
+      "qwk": 0.631871,
+      "rank": 5,
+      "selection_metadata": {
+        "architecture": {
+          "depth": 1,
+          "hidden_widths": [
+            128
+          ],
+          "is_uniform": true,
+          "use_layernorm": true,
+          "width": 128
+        },
+        "basis_parameters": {
+          "flavor": "fourierkan",
+          "grid_size": 5
+        },
+        "notes": [
+          "Source experiment: stage-b-fourierkan-optimizer-trial-017"
+        ],
+        "sampled_params": {
+          "lr": 0.0003007817058630463,
+          "weight_decay": 1.1483953688804903e-06
+        },
+        "sparsity_parameters": {
+          "entropy_weight": 1.0,
+          "l1_weight": 1.0,
+          "sparsity_lambda": 0.0
+        }
+      },
+      "summary_path": "artifacts/stage_b/runs/stage-b-fourierkan-optimizer-trial-017/run-summary-20260429-115936.json",
+      "trainer_config": {
+        "experiment_name": "stage-b-fourierkan-optimizer-candidate-017",
+        "seed": 42,
+        "test_csv": "/Users/cyrilgabriele/Documents/School/00_Courses/01_DL/03_Project/DeepLearning/data/prudential-life-insurance-assessment/test.csv",
+        "train_csv": "/Users/cyrilgabriele/Documents/School/00_Courses/01_DL/03_Project/DeepLearning/data/prudential-life-insurance-assessment/train.csv"
+      },
+      "trial_number": 17
+    }
+  ],
+  "generated_at": "2026-04-29T12:16:22.391835+00:00",
+  "model_family": "fourierkan",
+  "preprocessing_recipe": "kan_paper",
+  "study_name": "stage-b-fourierkan-optimizer-tune",
+  "top_k": 5
+}

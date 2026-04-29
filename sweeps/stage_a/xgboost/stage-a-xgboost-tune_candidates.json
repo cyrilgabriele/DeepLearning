@@ -1,0 +1,71 @@
+{
+  "candidates": [
+    {
+      "candidate_id": "stage-a-xgboost-tune-trial-049",
+      "checkpoint_path": "checkpoints/stage-a-xgboost-trial-049/model-20260429-114732.joblib",
+      "metrics": {
+        "accuracy": 0.3873031910415088,
+        "f1_macro": 0.2579041870496714,
+        "mae": 1.2899722152058601,
+        "qwk": 0.6477649891251791
+      },
+      "model_config": {
+        "degree": null,
+        "depth": null,
+        "flavor": null,
+        "hidden_widths": null,
+        "name": "xgb",
+        "params": {
+          "colsample_bytree": 1.0,
+          "learning_rate": 0.1,
+          "max_depth": 3,
+          "min_child_weight": 1,
+          "n_estimators": 950,
+          "reg_alpha": 1.0,
+          "reg_lambda": 1.0,
+          "subsample": 1.0
+        },
+        "use_layernorm": true,
+        "width": null
+      },
+      "preprocessing_config": {
+        "contract_version": 1,
+        "recipe": "xgboost_paper",
+        "selected_features_path": null
+      },
+      "qwk": 0.647765,
+      "rank": 1,
+      "selection_metadata": {
+        "architecture": {
+          "depth": 0,
+          "hidden_widths": [],
+          "is_uniform": false,
+          "use_layernorm": true,
+          "width": null
+        },
+        "basis_parameters": {},
+        "notes": [
+          "Source experiment: stage-a-xgboost-trial-049"
+        ],
+        "sampled_params": {
+          "max_depth": 3,
+          "n_estimators": 950
+        },
+        "sparsity_parameters": {}
+      },
+      "summary_path": "artifacts/stage_a/stage-a-xgboost-trial-049/run-summary-20260429-114732.json",
+      "trainer_config": {
+        "experiment_name": "stage-a-xgboost-candidate-049",
+        "seed": 42,
+        "test_csv": "/Users/cyrilgabriele/Documents/School/00_Courses/01_DL/03_Project/DeepLearning/data/prudential-life-insurance-assessment/test.csv",
+        "train_csv": "/Users/cyrilgabriele/Documents/School/00_Courses/01_DL/03_Project/DeepLearning/data/prudential-life-insurance-assessment/train.csv"
+      },
+      "trial_number": 49
+    }
+  ],
+  "generated_at": "2026-04-29T11:47:32.541394+00:00",
+  "model_family": "xgb",
+  "preprocessing_recipe": "xgboost_paper",
+  "study_name": "stage-a-xgboost-tune",
+  "top_k": 1
+}

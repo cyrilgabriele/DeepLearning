@@ -9,18 +9,13 @@ preprocessing:
   recipe: xgboost_paper
 
 model:
-  name: xgboost-paper
+  name: xgb
   params:
-    n_estimators: 765
-    max_depth: 11
-    learning_rate: 0.012836785304264764
-    subsample: 0.620710169201981
-    colsample_bytree: 0.5071615942406114
-    min_child_weight: 8
-    reg_alpha: 0.12670481458419444
-    reg_lambda: 1.246619007860089
-    gamma: 3.895752493463711
-    num_classes: 8
-    tree_method: hist
-    eval_metric: mlogloss
-    refit_full_training: true
+    n_estimators: 950
+    max_depth: 3
+    learning_rate: 0.08367544058924387
+    subsample: 1.0
+    colsample_bytree: 1.0
+    min_child_weight: 1
+    reg_alpha: 1.0
+    reg_lambda: 7.25884254519818

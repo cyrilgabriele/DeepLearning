@@ -4,15 +4,28 @@ stage_a_inputs:
   tune_config: configs/experiment_stages/stage_a_performance_tuning/stage_a_fourierkan/fourierkan_tune.yaml
   candidate_manifest: sweeps/stage_a/fourierkan/stage-a-fourierkan-tune_candidates.json
 
+stage_b_optimizer_tuning:
+  tune_config: configs/experiment_stages/stage_b_robust_performance_tuning/fourierkan_optimizer_tune.yaml
+  candidate_manifest: sweeps/stage_b/fourierkan/stage-b-fourierkan-optimizer-tune_candidates.json
+  search_space:
+    lr:
+      type: log_uniform
+      low: 0.0001
+      high: 0.01
+    weight_decay:
+      type: log_uniform
+      low: 0.000001
+      high: 0.001
+
 stage_b_controls:
   top_k: 5
   seeds: [13, 29, 47]
-  selection_name: stage-b-fourierkan-shortlist
+  selection_name: stage-b-fourierkan-optimizer-shortlist
   output_experiment_prefix: stage-b-fourierkan
   qwk_tolerance: 0.01
 
 stage_b_outputs:
-  retrain_manifest: artifacts/stage_b/retrain/fourierkan/stage-b-fourierkan-shortlist/manifest.json
+  retrain_manifest: artifacts/stage_b/retrain/fourierkan/stage-b-fourierkan-optimizer-shortlist/manifest.json
   selection_manifest: artifacts/stage_b/selection/fourierkan_selection.json
 
 stage_c_materialized_configs:

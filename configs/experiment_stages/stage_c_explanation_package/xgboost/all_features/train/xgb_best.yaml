@@ -9,18 +9,16 @@ preprocessing:
   contract_version: 1
   recipe: xgboost_paper
 
-# XGBRegressor + threshold-optimised ordinal output — the model used by the
-# original Optuna sweep that produced best_qwk=0.6546 (sweeps/xgb_xgb_paper_best.json).
-# Distinct from "xgboost-paper" (XGBClassifier) by architecture.
+# XGBRegressor + threshold-optimised ordinal output, frozen from the current
+# Stage B robust retrain candidate.
 model:
   name: xgb
   params:
-    n_estimators: 765
-    max_depth: 11
-    learning_rate: 0.012836785304264764
-    subsample: 0.620710169201981
-    colsample_bytree: 0.5071615942406114
-    min_child_weight: 8
-    reg_alpha: 0.12670481458419444
-    reg_lambda: 1.246619007860089
-    gamma: 3.895752493463711
+    n_estimators: 950
+    max_depth: 3
+    learning_rate: 0.08367544058924387
+    subsample: 1.0
+    colsample_bytree: 1.0
+    min_child_weight: 1
+    reg_alpha: 1.0
+    reg_lambda: 7.25884254519818

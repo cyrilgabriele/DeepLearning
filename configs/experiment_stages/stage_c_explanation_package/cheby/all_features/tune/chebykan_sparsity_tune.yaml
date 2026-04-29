@@ -11,20 +11,19 @@ preprocessing:
 model:
   name: tabkan-base
   flavor: chebykan
-  hidden_widths: [128, 64]
-  degree: 6
+  hidden_widths: [128]
+  degree: 5
   params:
     max_epochs: 100
-    lr: 0.005469718211738354
-    weight_decay: 0.0005425921367964894
-    batch_size: 2048
-    sparsity_lambda: 0.01
+    lr: 0.0008814400571473658
+    weight_decay: 0.00009472373311076866
+    batch_size: 256
     l1_weight: 1.0
     entropy_weight: 1.0
 
 tune:
   name: stage-c-chebykan-sparsity-tune
-  storage: sweeps/stage-c-chebykan-sparsity-tune.db
+  storage: sweeps/stage_c/chebykan/all_features/stage-c-chebykan-sparsity-tune.db
   n_trials: 60
   directions: [maximize, maximize]   # QWK, sparsity_ratio
   sampler: tpe
@@ -42,7 +41,3 @@ tune:
       type: log_uniform
       low: 0.1
       high: 10.0
-    degree:
-      type: int
-      low: 3
-      high: 8

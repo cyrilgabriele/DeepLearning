@@ -1,0 +1,49 @@
+trainer:
+  experiment_name: stage-b-chebykan-optimizer-tuned
+  train_csv: /Users/cyrilgabriele/Documents/School/00_Courses/01_DL/03_Project/DeepLearning/data/prudential-life-insurance-assessment/train.csv
+  test_csv: /Users/cyrilgabriele/Documents/School/00_Courses/01_DL/03_Project/DeepLearning/data/prudential-life-insurance-assessment/test.csv
+  seed: 42
+preprocessing:
+  contract_version: 1
+  recipe: kan_paper
+  selected_features_path: null
+model:
+  name: tabkan-base
+  flavor: chebykan
+  depth: 1
+  width: 128
+  hidden_widths:
+  - 128
+  degree: 5
+  use_layernorm: true
+  params:
+    max_epochs: 100
+    lr: 0.001081440662876616
+    weight_decay: 0.00025811664980013316
+    batch_size: 256
+    sparsity_lambda: 0.0
+    l1_weight: 1.0
+    entropy_weight: 1.0
+tune:
+  name: stage-b-chebykan-optimizer-tune
+  storage: /Users/cyrilgabriele/Documents/School/00_Courses/01_DL/03_Project/DeepLearning/sweeps/stage_b/chebykan/stage-b-chebykan-optimizer-tune.db
+  n_trials: 30
+  timeout: null
+  directions: null
+  sampler: tpe
+  top_k_candidates: 5
+  search_space:
+    lr:
+      type: log_uniform
+      low: 0.0001
+      high: 0.01
+      step: null
+      choices: null
+      values: null
+    weight_decay:
+      type: log_uniform
+      low: 1.0e-06
+      high: 0.001
+      step: null
+      choices: null
+      values: null

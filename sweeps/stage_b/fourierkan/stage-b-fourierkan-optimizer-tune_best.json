@@ -1,0 +1,42 @@
+{
+  "best_params": {
+    "lr": 0.00041495195451630713,
+    "weight_decay": 2.3494880310381893e-06
+  },
+  "best_qwk": 0.635243,
+  "best_trial_attrs": {
+    "checkpoint_path": "checkpoints/stage-b-fourierkan-optimizer-trial-028/model-20260429-121511.pt",
+    "experiment_name": "stage-b-fourierkan-optimizer-trial-028",
+    "metrics": {
+      "accuracy": 0.3472257304033005,
+      "f1_macro": 0.2369159719271083,
+      "mae": 1.333754301071167,
+      "qwk": 0.6352425863527633
+    },
+    "summary_path": "artifacts/stage_b/runs/stage-b-fourierkan-optimizer-trial-028/run-summary-20260429-121511.json"
+  },
+  "best_trial_number": 28,
+  "completed_trials": 30,
+  "model_family": "fourierkan",
+  "preprocessing_recipe": "kan_paper",
+  "search_space": {
+    "lr": {
+      "choices": null,
+      "high": 0.01,
+      "low": 0.0001,
+      "step": null,
+      "type": "log_uniform",
+      "values": null
+    },
+    "weight_decay": {
+      "choices": null,
+      "high": 0.001,
+      "low": 1e-06,
+      "step": null,
+      "type": "log_uniform",
+      "values": null
+    }
+  },
+  "study_name": "stage-b-fourierkan-optimizer-tune",
+  "total_trials": 30
+}

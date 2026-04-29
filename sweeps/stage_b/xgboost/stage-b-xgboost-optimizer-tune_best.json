@@ -1,0 +1,42 @@
+{
+  "best_params": {
+    "learning_rate": 0.08367544058924387,
+    "reg_lambda": 7.25884254519818
+  },
+  "best_qwk": 0.645505,
+  "best_trial_attrs": {
+    "checkpoint_path": "checkpoints/stage-b-xgboost-optimizer-trial-025/model-20260429-130749.joblib",
+    "experiment_name": "stage-b-xgboost-optimizer-trial-025",
+    "metrics": {
+      "accuracy": 0.3783783783783784,
+      "f1_macro": 0.24668485699059034,
+      "mae": 1.2823103477309086,
+      "qwk": 0.6455047508841065
+    },
+    "summary_path": "artifacts/stage_b/runs/stage-b-xgboost-optimizer-trial-025/run-summary-20260429-130749.json"
+  },
+  "best_trial_number": 25,
+  "completed_trials": 30,
+  "model_family": "xgb",
+  "preprocessing_recipe": "xgboost_paper",
+  "search_space": {
+    "learning_rate": {
+      "choices": null,
+      "high": 0.3,
+      "low": 0.01,
+      "step": null,
+      "type": "log_uniform",
+      "values": null
+    },
+    "reg_lambda": {
+      "choices": null,
+      "high": 10.0,
+      "low": 0.1,
+      "step": null,
+      "type": "log_uniform",
+      "values": null
+    }
+  },
+  "study_name": "stage-b-xgboost-optimizer-tune",
+  "total_trials": 30
+}

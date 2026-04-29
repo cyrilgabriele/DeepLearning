@@ -11,27 +11,30 @@ preprocessing:
 model:
   name: tabkan-base
   flavor: fourierkan
-  hidden_widths: [64, 256, 64]
+  hidden_widths: [128]
   params:
     max_epochs: 100
-    grid_size: 8
-    lr: 0.0031887242971171403
-    weight_decay: 2.393884747850709e-05
+    grid_size: 5
+    lr: 0.0011202234168345851
+    weight_decay: 0.0000010952927106776856
     batch_size: 256
     l1_weight: 1.0
     entropy_weight: 1.0
 
 tune:
   name: stage-c-fourierkan-pareto-sparsity
-  storage: sweeps/stage-c-fourierkan-pareto-sparsity.db
-  n_trials: 30
+  storage: sweeps/stage_c/fourierkan/all_features/stage-c-fourierkan-pareto-sparsity.db
+  n_trials: 33
   directions: [maximize, maximize]   # (qwk, sparsity_ratio)
   sampler: grid
-  top_k_candidates: 30
+  top_k_candidates: 33
   search_space:
     sparsity_lambda:
       type: grid
       values:
+        - 0.0
+        - 0.0001
+        - 0.0005
         - 0.001
         - 0.00123899
         - 0.0015351

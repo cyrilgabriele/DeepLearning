@@ -35,9 +35,9 @@ Supported stages:
   - `configs/experiment_stages/stage_a_performance_tuning/chebykan_tune.yaml`
   - `configs/experiment_stages/stage_a_performance_tuning/fourierkan_tune.yaml`
   - `configs/experiment_stages/stage_a_performance_tuning/xgboost_tune.yaml`
-- Stage B interpretability tuning plans:
-  - `configs/experiment_stages/stage_b_interpretability_tuning/chebykan_retrain_plan.yaml`
-  - `configs/experiment_stages/stage_b_interpretability_tuning/fourierkan_retrain_plan.yaml`
+- Stage B robust performance tuning plans:
+  - `configs/experiment_stages/stage_b_robust_performance_tuning/chebykan_retrain_plan.yaml`
+  - `configs/experiment_stages/stage_b_robust_performance_tuning/fourierkan_retrain_plan.yaml`
 - Stage C explanation package:
   - `configs/experiment_stages/stage_c_explanation_package/glm_baseline.yaml`
   - `configs/experiment_stages/stage_c_explanation_package/explanation_package_plan.yaml`

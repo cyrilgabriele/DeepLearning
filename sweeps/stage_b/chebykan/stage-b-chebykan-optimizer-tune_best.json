@@ -1,0 +1,42 @@
+{
+  "best_params": {
+    "lr": 0.001081440662876616,
+    "weight_decay": 0.00025811664980013316
+  },
+  "best_qwk": 0.626592,
+  "best_trial_attrs": {
+    "checkpoint_path": "checkpoints/stage-b-chebykan-optimizer-trial-023/model-20260429-120638.pt",
+    "experiment_name": "stage-b-chebykan-optimizer-trial-023",
+    "metrics": {
+      "accuracy": 0.3494148353961438,
+      "f1_macro": 0.227616924094676,
+      "mae": 1.3504252433776855,
+      "qwk": 0.6265921671670149
+    },
+    "summary_path": "artifacts/stage_b/runs/stage-b-chebykan-optimizer-trial-023/run-summary-20260429-120638.json"
+  },
+  "best_trial_number": 23,
+  "completed_trials": 30,
+  "model_family": "chebykan",
+  "preprocessing_recipe": "kan_paper",
+  "search_space": {
+    "lr": {
+      "choices": null,
+      "high": 0.01,
+      "low": 0.0001,
+      "step": null,
+      "type": "log_uniform",
+      "values": null
+    },
+    "weight_decay": {
+      "choices": null,
+      "high": 0.001,
+      "low": 1e-06,
+      "step": null,
+      "type": "log_uniform",
+      "values": null
+    }
+  },
+  "study_name": "stage-b-chebykan-optimizer-tune",
+  "total_trials": 30
+}

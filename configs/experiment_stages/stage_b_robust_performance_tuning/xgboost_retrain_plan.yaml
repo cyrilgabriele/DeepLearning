@@ -1,0 +1,28 @@
+family: xgb
+
+stage_a_inputs:
+  tune_config: configs/experiment_stages/stage_a_performance_tuning/stage_a_xgboost/xgboost_tune.yaml
+  candidate_manifest: sweeps/stage_a/xgboost/stage-a-xgboost-tune_candidates.json
+
+stage_b_optimizer_tuning:
+  tune_config: configs/experiment_stages/stage_b_robust_performance_tuning/xgboost_optimizer_tune.yaml
+  candidate_manifest: sweeps/stage_b/xgboost/stage-b-xgboost-optimizer-tune_candidates.json
+  search_space:
+    learning_rate:
+      type: log_uniform
+      low: 0.01
+      high: 0.3
+    reg_lambda:
+      type: log_uniform
+      low: 0.1
+      high: 10.0
+
+stage_b_controls:
+  top_k: 1
+  seeds: [13, 29, 47]
+  selection_name: stage-b-xgboost-optimizer-shortlist
+  output_experiment_prefix: stage-b-xgboost
+  qwk_tolerance: 0.01
+
+stage_b_outputs:
+  retrain_manifest: artifacts/stage_b/retrain/xgb/stage-b-xgboost-optimizer-shortlist/manifest.json

@@ -11,27 +11,30 @@ preprocessing:
 model:
   name: tabkan-base
   flavor: chebykan
-  hidden_widths: [128, 64]
-  degree: 6
+  hidden_widths: [128]
+  degree: 5
   params:
     max_epochs: 100
-    lr: 0.005469718211738354
-    weight_decay: 0.0005425921367964894
-    batch_size: 2048
+    lr: 0.0008814400571473658
+    weight_decay: 0.00009472373311076866
+    batch_size: 256
     l1_weight: 1.0
     entropy_weight: 1.0
 
 tune:
   name: stage-c-chebykan-pareto-sparsity
-  storage: sweeps/stage-c-chebykan-pareto-sparsity.db
-  n_trials: 30
+  storage: sweeps/stage_c/chebykan/all_features/stage-c-chebykan-pareto-sparsity.db
+  n_trials: 33
   directions: [maximize, maximize]   # (qwk, sparsity_ratio)
   sampler: grid
-  top_k_candidates: 30
+  top_k_candidates: 33
   search_space:
     sparsity_lambda:
       type: grid
       values:
+        - 0.0
+        - 0.0001
+        - 0.0005
         - 0.001
         - 0.00123899
         - 0.0015351

@@ -11,9 +11,9 @@ Run every command from the repository root.
   - `configs/experiment_stages/stage_a_performance_tuning/stage_a_fourierkan/fourierkan_tune.yaml`
   - `configs/experiment_stages/stage_a_performance_tuning/stage_a_xgboost/xgboost_tune.yaml`
 - Stage B administrative plans:
-  - `configs/experiment_stages/stage_b_interpretability_tuning/chebykan_retrain_plan.yaml`
-  - `configs/experiment_stages/stage_b_interpretability_tuning/fourierkan_retrain_plan.yaml`
-  - `configs/experiment_stages/stage_b_interpretability_tuning/xgboost_retrain_plan.yaml`
+  - `configs/experiment_stages/stage_b_robust_performance_tuning/chebykan_retrain_plan.yaml`
+  - `configs/experiment_stages/stage_b_robust_performance_tuning/fourierkan_retrain_plan.yaml`
+  - `configs/experiment_stages/stage_b_robust_performance_tuning/xgboost_retrain_plan.yaml`
 - Stage C runnable and materialized configs:
   - `configs/experiment_stages/stage_c_explanation_package/glm_baseline.yaml`
   - `configs/experiment_stages/stage_c_explanation_package/explanation_package_plan.yaml`
@@ -78,7 +78,7 @@ Main outputs:
 
 ## Stage B: Robust Performance Tuning
 
-The Stage B YAMLs are run-control records. The actual pipeline input is the candidate manifest emitted by Stage A.
+The Stage B YAMLs first tune narrowed optimizer intervals with the Stage A architecture fixed, then validate the optimizer candidates across shared seeds.
 
 The fixed controls are:
 
@@ -87,33 +87,36 @@ The fixed controls are:
 
 ChebyKAN and FourierKAN use `top_k=5`; XGBoost uses `top_k=1`.
 
-### B1. ChebyKAN shortlist and robust selection
+### B1. ChebyKAN optimizer tuning and robust selection
 
 ```bash
-uv run python main.py --stage retrain --candidate-manifest sweeps/stage_a/chebykan/stage-a-chebykan-tune_candidates.json --top-k 5 --seeds 13 29 47 --selection-name stage-b-chebykan-shortlist --output-experiment-prefix stage-b-chebykan
-uv run python main.py --stage select --retrain-manifest artifacts/stage_b/retrain/chebykan/stage-b-chebykan-shortlist/manifest.json --qwk-tolerance 0.01
+uv run python main.py --stage tune --config configs/experiment_stages/stage_b_robust_performance_tuning/chebykan_optimizer_tune.yaml
+uv run python main.py --stage retrain --candidate-manifest sweeps/stage_b/chebykan/stage-b-chebykan-optimizer-tune_candidates.json --top-k 5 --seeds 13 29 47 --selection-name stage-b-chebykan-optimizer-shortlist --output-experiment-prefix stage-b-chebykan
+uv run python main.py --stage select --retrain-manifest artifacts/stage_b/retrain/chebykan/stage-b-chebykan-optimizer-shortlist/manifest.json --qwk-tolerance 0.01
 uv run python -m src.selection.materialize_config --selection-manifest artifacts/stage_b/selection/chebykan_selection.json --role best_performance_candidate --output configs/experiment_stages/stage_c_explanation_package/materialized/chebykan_best_performance.yaml
 ```
 
-### B2. FourierKAN shortlist and robust selection
+### B2. FourierKAN optimizer tuning and robust selection
 
 ```bash
-uv run python main.py --stage retrain --candidate-manifest sweeps/stage_a/fourierkan/stage-a-fourierkan-tune_candidates.json --top-k 5 --seeds 13 29 47 --selection-name stage-b-fourierkan-shortlist --output-experiment-prefix stage-b-fourierkan
-uv run python main.py --stage select --retrain-manifest artifacts/stage_b/retrain/fourierkan/stage-b-fourierkan-shortlist/manifest.json --qwk-tolerance 0.01
+uv run python main.py --stage tune --config configs/experiment_stages/stage_b_robust_performance_tuning/fourierkan_optimizer_tune.yaml
+uv run python main.py --stage retrain --candidate-manifest sweeps/stage_b/fourierkan/stage-b-fourierkan-optimizer-tune_candidates.json --top-k 5 --seeds 13 29 47 --selection-name stage-b-fourierkan-optimizer-shortlist --output-experiment-prefix stage-b-fourierkan
+uv run python main.py --stage select --retrain-manifest artifacts/stage_b/retrain/fourierkan/stage-b-fourierkan-optimizer-shortlist/manifest.json --qwk-tolerance 0.01
 uv run python -m src.selection.materialize_config --selection-manifest artifacts/stage_b/selection/fourierkan_selection.json --role best_performance_candidate --output configs/experiment_stages/stage_c_explanation_package/materialized/fourierkan_best_performance.yaml
 ```
 
-### B3. XGBoost robust validation
+### B3. XGBoost optimizer tuning and robust validation
 
 ```bash
-uv run python main.py --stage retrain --candidate-manifest sweeps/stage_a/xgboost/stage-a-xgboost-tune_candidates.json --top-k 1 --seeds 13 29 47 --selection-name stage-b-xgboost-shortlist --output-experiment-prefix stage-b-xgboost
+uv run python main.py --stage tune --config configs/experiment_stages/stage_b_robust_performance_tuning/xgboost_optimizer_tune.yaml
+uv run python main.py --stage retrain --candidate-manifest sweeps/stage_b/xgboost/stage-b-xgboost-optimizer-tune_candidates.json --top-k 1 --seeds 13 29 47 --selection-name stage-b-xgboost-optimizer-shortlist --output-experiment-prefix stage-b-xgboost
 ```
 
 Main Stage B outputs:
 
-- `artifacts/stage_b/retrain/chebykan/stage-b-chebykan-shortlist/manifest.json`
-- `artifacts/stage_b/retrain/fourierkan/stage-b-fourierkan-shortlist/manifest.json`
-- `artifacts/stage_b/retrain/xgboost-paper/stage-b-xgboost-shortlist/manifest.json`
+- `artifacts/stage_b/retrain/chebykan/stage-b-chebykan-optimizer-shortlist/manifest.json`
+- `artifacts/stage_b/retrain/fourierkan/stage-b-fourierkan-optimizer-shortlist/manifest.json`
+- `artifacts/stage_b/retrain/xgb/stage-b-xgboost-optimizer-shortlist/manifest.json`
 - `artifacts/stage_b/selection/chebykan_selection.json`
 - `artifacts/stage_b/selection/fourierkan_selection.json`
 - `configs/experiment_stages/stage_c_explanation_package/materialized/*.yaml`
@@ -166,6 +169,6 @@ Main Stage C outputs:
 ## Practical Notes
 
 - Stage A uses predictive tuning only. `sparsity_lambda` is fixed to `0.0` there on purpose.
-- Stage B is where sparsity regularization matters; the retrain stage enforces it if a candidate comes in dense.
+- Stage B tunes dense optimizer settings and validates them across shared seeds. Sparsity regularization belongs to Stage C.
 - Stage C uses `scipy` symbolic fitting by default so the workflow does not require Julia or PySR.
 - If you rerun any stage, the pipeline will append new timestamped artifacts; the commands above always target the latest matching summary/checkpoint for the chosen experiment name.

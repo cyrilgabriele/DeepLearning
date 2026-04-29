@@ -11,12 +11,12 @@ preprocessing:
 model:
   name: tabkan-base
   flavor: fourierkan
-  hidden_widths: [64, 256, 64]
+  hidden_widths: [128]
   params:
     max_epochs: 100
-    grid_size: 8
-    lr: 0.0031887242971171403
-    weight_decay: 2.393884747850709e-05
+    grid_size: 5
+    lr: 0.0011202234168345851
+    weight_decay: 0.0000010952927106776856
     batch_size: 256
     sparsity_lambda: 0.0
     l1_weight: 1.0
