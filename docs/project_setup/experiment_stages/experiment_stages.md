@@ -7,12 +7,13 @@ Run every command from the repository root.
 ## Stage Config Tree
 
 - Stage A runnable tune configs:
-  - `configs/experiment_stages/stage_a_performance_tuning/chebykan_tune.yaml`
-  - `configs/experiment_stages/stage_a_performance_tuning/fourierkan_tune.yaml`
-  - `configs/experiment_stages/stage_a_performance_tuning/xgboost_tune.yaml`
+  - `configs/experiment_stages/stage_a_performance_tuning/stage_a_chebykan/chebykan_tune.yaml`
+  - `configs/experiment_stages/stage_a_performance_tuning/stage_a_fourierkan/fourierkan_tune.yaml`
+  - `configs/experiment_stages/stage_a_performance_tuning/stage_a_xgboost/xgboost_tune.yaml`
 - Stage B administrative plans:
   - `configs/experiment_stages/stage_b_interpretability_tuning/chebykan_retrain_plan.yaml`
   - `configs/experiment_stages/stage_b_interpretability_tuning/fourierkan_retrain_plan.yaml`
+  - `configs/experiment_stages/stage_b_interpretability_tuning/xgboost_retrain_plan.yaml`
 - Stage C runnable and materialized configs:
   - `configs/experiment_stages/stage_c_explanation_package/glm_baseline.yaml`
   - `configs/experiment_stages/stage_c_explanation_package/explanation_package_plan.yaml`
@@ -37,78 +38,82 @@ Tune each family, then immediately materialize the best full-data run from the g
 ### A1. ChebyKAN
 
 ```bash
-uv run python main.py --stage tune --config configs/experiment_stages/stage_a_performance_tuning/chebykan_tune.yaml
-uv run python main.py --stage train --config sweeps/stage-a-chebykan-tune_best.yaml
+uv run python main.py --stage tune --config configs/experiment_stages/stage_a_performance_tuning/stage_a_chebykan/chebykan_tune.yaml
+uv run python main.py --stage train --config sweeps/stage_a/chebykan/stage-a-chebykan-tune_best.yaml
 ```
 
 Main outputs:
 
-- `sweeps/stage-a-chebykan-tune_best.yaml`
-- `sweeps/stage-a-chebykan-tune_candidates.json`
+- `sweeps/stage_a/chebykan/stage-a-chebykan-tune_best.yaml`
+- `sweeps/stage_a/chebykan/stage-a-chebykan-tune_candidates.json`
 - `artifacts/stage-a-chebykan-tuned/run-summary-*.json`
 - `checkpoints/stage-a-chebykan-tuned/model-*.pt`
 
 ### A2. FourierKAN
 
 ```bash
-uv run python main.py --stage tune --config configs/experiment_stages/stage_a_performance_tuning/fourierkan_tune.yaml
-uv run python main.py --stage train --config sweeps/stage-a-fourierkan-tune_best.yaml
+uv run python main.py --stage tune --config configs/experiment_stages/stage_a_performance_tuning/stage_a_fourierkan/fourierkan_tune.yaml
+uv run python main.py --stage train --config sweeps/stage_a/fourierkan/stage-a-fourierkan-tune_best.yaml
 ```
 
 Main outputs:
 
-- `sweeps/stage-a-fourierkan-tune_best.yaml`
-- `sweeps/stage-a-fourierkan-tune_candidates.json`
+- `sweeps/stage_a/fourierkan/stage-a-fourierkan-tune_best.yaml`
+- `sweeps/stage_a/fourierkan/stage-a-fourierkan-tune_candidates.json`
 - `artifacts/stage-a-fourierkan-tuned/run-summary-*.json`
 - `checkpoints/stage-a-fourierkan-tuned/model-*.pt`
 
 ### A3. XGBoost
 
 ```bash
-uv run python main.py --stage tune --config configs/experiment_stages/stage_a_performance_tuning/xgboost_tune.yaml
-uv run python main.py --stage train --config sweeps/stage-a-xgboost-tune_best.yaml
+uv run python main.py --stage tune --config configs/experiment_stages/stage_a_performance_tuning/stage_a_xgboost/xgboost_tune.yaml
+uv run python main.py --stage train --config sweeps/stage_a/xgboost/stage-a-xgboost-tune_best.yaml
 ```
 
 Main outputs:
 
-- `sweeps/stage-a-xgboost-tune_best.yaml`
+- `sweeps/stage_a/xgboost/stage-a-xgboost-tune_best.yaml`
 - `artifacts/stage-a-xgboost-tuned/run-summary-*.json`
 - `checkpoints/stage-a-xgboost-tuned/model-*.joblib`
 
-## Stage B: Interpretability Tuning
+## Stage B: Robust Performance Tuning
 
 The Stage B YAMLs are run-control records. The actual pipeline input is the candidate manifest emitted by Stage A.
 
 The fixed controls are:
 
-- `top_k=5`
 - `seeds=13 29 47`
 - `qwk_tolerance=0.01`
-- `pruning_threshold=0.01`
-- `candidate_library=scipy`
 
-### B1. ChebyKAN shortlist, selection, and config materialization
+ChebyKAN and FourierKAN use `top_k=5`; XGBoost uses `top_k=1`.
+
+### B1. ChebyKAN shortlist and robust selection
 
 ```bash
-uv run python main.py --stage retrain --candidate-manifest sweeps/stage-a-chebykan-tune_candidates.json --top-k 5 --seeds 13 29 47 --selection-name stage-b-chebykan-shortlist --output-experiment-prefix stage-b-chebykan
+uv run python main.py --stage retrain --candidate-manifest sweeps/stage_a/chebykan/stage-a-chebykan-tune_candidates.json --top-k 5 --seeds 13 29 47 --selection-name stage-b-chebykan-shortlist --output-experiment-prefix stage-b-chebykan
 uv run python main.py --stage select --retrain-manifest artifacts/retrain/chebykan/stage-b-chebykan-shortlist/manifest.json --qwk-tolerance 0.01
 uv run python -m src.selection.materialize_config --selection-manifest artifacts/selection/chebykan_selection.json --role best_performance_candidate --output configs/experiment_stages/stage_c_explanation_package/materialized/chebykan_best_performance.yaml
-uv run python -m src.selection.materialize_config --selection-manifest artifacts/selection/chebykan_selection.json --role best_interpretable_candidate --output configs/experiment_stages/stage_c_explanation_package/materialized/chebykan_best_interpretable.yaml
 ```
 
-### B2. FourierKAN shortlist, selection, and config materialization
+### B2. FourierKAN shortlist and robust selection
 
 ```bash
-uv run python main.py --stage retrain --candidate-manifest sweeps/stage-a-fourierkan-tune_candidates.json --top-k 5 --seeds 13 29 47 --selection-name stage-b-fourierkan-shortlist --output-experiment-prefix stage-b-fourierkan
+uv run python main.py --stage retrain --candidate-manifest sweeps/stage_a/fourierkan/stage-a-fourierkan-tune_candidates.json --top-k 5 --seeds 13 29 47 --selection-name stage-b-fourierkan-shortlist --output-experiment-prefix stage-b-fourierkan
 uv run python main.py --stage select --retrain-manifest artifacts/retrain/fourierkan/stage-b-fourierkan-shortlist/manifest.json --qwk-tolerance 0.01
 uv run python -m src.selection.materialize_config --selection-manifest artifacts/selection/fourierkan_selection.json --role best_performance_candidate --output configs/experiment_stages/stage_c_explanation_package/materialized/fourierkan_best_performance.yaml
-uv run python -m src.selection.materialize_config --selection-manifest artifacts/selection/fourierkan_selection.json --role best_interpretable_candidate --output configs/experiment_stages/stage_c_explanation_package/materialized/fourierkan_best_interpretable.yaml
+```
+
+### B3. XGBoost robust validation
+
+```bash
+uv run python main.py --stage retrain --candidate-manifest sweeps/stage_a/xgboost/stage-a-xgboost-tune_candidates.json --top-k 1 --seeds 13 29 47 --selection-name stage-b-xgboost-shortlist --output-experiment-prefix stage-b-xgboost
 ```
 
 Main Stage B outputs:
 
 - `artifacts/retrain/chebykan/stage-b-chebykan-shortlist/manifest.json`
 - `artifacts/retrain/fourierkan/stage-b-fourierkan-shortlist/manifest.json`
+- `artifacts/retrain/xgboost-paper/stage-b-xgboost-shortlist/manifest.json`
 - `artifacts/selection/chebykan_selection.json`
 - `artifacts/selection/fourierkan_selection.json`
 - `configs/experiment_stages/stage_c_explanation_package/materialized/*.yaml`
@@ -127,7 +132,7 @@ uv run python main.py --stage interpret --config configs/experiment_stages/stage
 ### C2. Interpret the Stage A XGBoost winner
 
 ```bash
-uv run python main.py --stage interpret --config sweeps/stage-a-xgboost-tune_best.yaml
+uv run python main.py --stage interpret --config sweeps/stage_a/xgboost/stage-a-xgboost-tune_best.yaml
 ```
 
 ### C3. Interpret the selected ChebyKAN and FourierKAN runs
@@ -145,7 +150,7 @@ uv run python main.py --stage interpret --config configs/experiment_stages/stage
 uv run python -m src.interpretability.final_comparison \
   --selection-manifest artifacts/selection/chebykan_selection.json \
   --selection-manifest artifacts/selection/fourierkan_selection.json \
-  --baseline-config sweeps/stage-a-xgboost-tune_best.yaml \
+  --baseline-config sweeps/stage_a/xgboost/stage-a-xgboost-tune_best.yaml \
   --baseline-config configs/experiment_stages/stage_c_explanation_package/glm_baseline.yaml \
   --output-root outputs
 ```

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
@@ -69,14 +70,15 @@ def run_tune(
     tune_config = _require_tune_config(base_config)
     model_family = _resolve_model_family(base_config)
     study_name = tune_config.name or f"{base_config.trainer.experiment_name}-{model_family}-tune"
-    storage_path = tune_config.storage or (_SWEEP_DIR / f"{study_name}.db")
+    output_dir = _resolve_sweep_output_dir(base_config, model_family, tune_config)
+    storage_path = tune_config.storage or (output_dir / f"{study_name}.db")
     storage_path.parent.mkdir(parents=True, exist_ok=True)
     db_path = storage_path.resolve()
     storage = f"sqlite:///{db_path}"
     n_trials = n_trials_override if n_trials_override is not None else tune_config.n_trials
     timeout = timeout_override if timeout_override is not None else tune_config.timeout
 
-    _SWEEP_DIR.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     multi_objective = tune_config.directions is not None and len(tune_config.directions) > 1
 
@@ -169,9 +171,9 @@ def run_tune(
         raise RuntimeError("Tune stage finished without any completed trials.")
 
     if multi_objective:
-        _report_pareto(study, base_config, model_family, study_name, tune_config)
+        _report_pareto(study, base_config, model_family, study_name, tune_config, output_dir)
     else:
-        _report_single_objective(study, base_config, model_family, study_name, tune_config)
+        _report_single_objective(study, base_config, model_family, study_name, tune_config, output_dir)
 
     return study
 
@@ -182,6 +184,7 @@ def _report_pareto(
     model_family: ModelFamily,
     study_name: str,
     tune_config,
+    output_dir: Path,
 ) -> None:
     """Report results for a multi-objective (Pareto) sweep."""
     completed_trials = [
@@ -215,7 +218,7 @@ def _report_pareto(
         "completed_trials": len(completed_trials),
         "pareto_front": pareto_entries,
     }
-    results_path = _SWEEP_DIR / f"{study_name}_pareto.json"
+    results_path = output_dir / f"{study_name}_pareto.json"
     results_path.write_text(json.dumps(results_payload, indent=2, sort_keys=True))
 
     # Save configs for each Pareto trial
@@ -232,7 +235,7 @@ def _report_pareto(
             ),
             include_test_csv=True,
         )
-        config_path = _SWEEP_DIR / (
+        config_path = output_dir / (
             f"{study_name}_pareto_trial{entry['trial_number']:03d}.yaml"
         )
         config_path.write_text(yaml.safe_dump(config.model_dump(mode="json"), sort_keys=False))
@@ -257,6 +260,7 @@ def _report_single_objective(
     model_family: ModelFamily,
     study_name: str,
     tune_config,
+    output_dir: Path,
 ) -> None:
     """Report results for a single-objective sweep (original behaviour)."""
     completed_trials = [
@@ -284,10 +288,10 @@ def _report_single_objective(
         "best_trial_number": study.best_trial.number,
         "best_trial_attrs": dict(study.best_trial.user_attrs),
     }
-    results_path = _SWEEP_DIR / f"{study_name}_best.json"
+    results_path = output_dir / f"{study_name}_best.json"
     results_path.write_text(json.dumps(results_payload, indent=2, sort_keys=True))
 
-    config_path = _SWEEP_DIR / f"{study_name}_best.yaml"
+    config_path = output_dir / f"{study_name}_best.yaml"
     config_path.write_text(
         yaml.safe_dump(
             best_config.model_dump(mode="json"),
@@ -295,7 +299,7 @@ def _report_single_objective(
         )
     )
 
-    candidates_path = _SWEEP_DIR / f"{study_name}_candidates.json"
+    candidates_path = output_dir / f"{study_name}_candidates.json"
     candidate_manifest = _build_candidate_manifest(
         study=study,
         base_config=base_config,
@@ -320,6 +324,34 @@ def _report_single_objective(
     print("\nTop trials:")
     for rank, trial in enumerate(top_trials, start=1):
         print(f"  {rank}. qwk={trial.value:.4f} | params={trial.params}")
+
+
+def _resolve_sweep_output_dir(
+    base_config: ExperimentConfig,
+    model_family: ModelFamily,
+    tune_config,
+) -> Path:
+    """Return the directory where all artifacts for this sweep should be written."""
+
+    if tune_config.storage is not None:
+        return Path(tune_config.storage).parent
+
+    stage = _stage_slug(base_config.trainer.experiment_name)
+    model = _model_slug(model_family)
+    return _SWEEP_DIR / stage / model
+
+
+def _stage_slug(experiment_name: str) -> str:
+    match = re.match(r"^(stage)-([a-zA-Z0-9]+)", experiment_name)
+    if match:
+        return f"{match.group(1)}_{match.group(2).lower()}"
+    return "misc"
+
+
+def _model_slug(model_family: ModelFamily) -> str:
+    if model_family in {"xgboost-paper"}:
+        return "xgboost"
+    return str(model_family).replace("-", "_")
 
 
 def _build_candidate_manifest(

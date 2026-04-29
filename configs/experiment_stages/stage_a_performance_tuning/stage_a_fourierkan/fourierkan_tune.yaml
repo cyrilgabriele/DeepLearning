@@ -24,7 +24,7 @@ model:
 
 tune:
   name: stage-a-fourierkan-tune
-  storage: sweeps/stage-a-fourierkan-tune.db
+  storage: sweeps/stage_a/fourierkan/stage-a-fourierkan-tune.db
   n_trials: 50
   timeout: null
   sampler: tpe
@@ -37,9 +37,6 @@ tune:
     width:
       type: categorical
       choices: [32, 64, 128, 256]
-    max_epochs:
-      type: categorical
-      choices: [75, 100, 150, 200]
     grid_size:
       type: int
       low: 2

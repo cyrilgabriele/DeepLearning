@@ -1,7 +1,7 @@
 output_root: outputs
 
 stage_a_baseline_inputs:
-  xgboost_best_config: sweeps/stage-a-xgboost-tune_best.yaml
+  xgboost_best_config: sweeps/stage_a/xgboost/stage-a-xgboost-tune_best.yaml
 
 stage_c_baseline_inputs:
   glm_config: configs/experiment_stages/stage_c_explanation_package/glm_baseline.yaml
