@@ -11,9 +11,6 @@ from src.config import ExperimentConfig
 from src.training.trainer import run_train
 
 
-DEFAULT_SPARSITY_LAMBDA = 1e-3
-
-
 def run_retrain(
     candidate_manifest_path: Path,
     *,
@@ -135,9 +132,6 @@ def _build_retrain_config(
     model_params = dict(payload["model"].get("params") or {})
     model_name = str(payload["model"].get("name", ""))
     if model_name.startswith("tabkan"):
-        sparsity = float(model_params.get("sparsity_lambda", 0.0) or 0.0)
-        if sparsity <= 0.0:
-            model_params["sparsity_lambda"] = DEFAULT_SPARSITY_LAMBDA
         model_params.setdefault("l1_weight", 1.0)
         model_params.setdefault("entropy_weight", 1.0)
     payload["model"]["params"] = model_params

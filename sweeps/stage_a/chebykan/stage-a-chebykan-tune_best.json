@@ -1,0 +1,56 @@
+{
+  "best_params": {
+    "degree": 5,
+    "depth": 1,
+    "width": 128
+  },
+  "best_qwk": 0.62565,
+  "best_trial_attrs": {
+    "checkpoint_path": "checkpoints/stage-a-chebykan-trial-046/model-20260429-075253.pt",
+    "experiment_name": "stage-a-chebykan-trial-046",
+    "metrics": {
+      "accuracy": 0.35673991748758105,
+      "f1_macro": 0.23777938821951808,
+      "mae": 1.3178411722183228,
+      "qwk": 0.6256498836124921
+    },
+    "summary_path": "artifacts/stage-a-chebykan-trial-046/run-summary-20260429-075253.json"
+  },
+  "best_trial_number": 46,
+  "completed_trials": 50,
+  "model_family": "chebykan",
+  "preprocessing_recipe": "kan_paper",
+  "search_space": {
+    "degree": {
+      "choices": null,
+      "high": 8.0,
+      "low": 2.0,
+      "step": null,
+      "type": "int",
+      "values": null
+    },
+    "depth": {
+      "choices": null,
+      "high": 3.0,
+      "low": 1.0,
+      "step": null,
+      "type": "int",
+      "values": null
+    },
+    "width": {
+      "choices": [
+        32,
+        64,
+        128,
+        256
+      ],
+      "high": null,
+      "low": null,
+      "step": null,
+      "type": "categorical",
+      "values": null
+    }
+  },
+  "study_name": "stage-a-chebykan-tune",
+  "total_trials": 50
+}

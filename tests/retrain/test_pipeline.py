@@ -91,7 +91,7 @@ def test_run_retrain_materializes_candidate_seed_runs(tmp_path, monkeypatch):
     assert len(recorded) == 2
     assert recorded[0][0].trainer.seed == 101
     assert recorded[1][0].trainer.seed == 202
-    assert recorded[0][0].model.params["sparsity_lambda"] > 0
+    assert recorded[0][0].model.params["sparsity_lambda"] == 0.0
     assert result["model_family"] == "chebykan"
     assert result["selection_name"] == "shortlist"
     assert len(result["runs"]) == 2

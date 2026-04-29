@@ -1,0 +1,61 @@
+trainer:
+  experiment_name: stage-a-fourierkan-tuned
+  train_csv: /Users/cyrilgabriele/Documents/School/00_Courses/01_DL/03_Project/DeepLearning/data/prudential-life-insurance-assessment/train.csv
+  test_csv: /Users/cyrilgabriele/Documents/School/00_Courses/01_DL/03_Project/DeepLearning/data/prudential-life-insurance-assessment/test.csv
+  seed: 42
+preprocessing:
+  contract_version: 1
+  recipe: kan_paper
+  selected_features_path: null
+model:
+  name: tabkan-base
+  flavor: fourierkan
+  depth: 1
+  width: 128
+  hidden_widths:
+  - 128
+  degree: null
+  use_layernorm: true
+  params:
+    max_epochs: 100
+    lr: 0.001
+    weight_decay: 1.0e-05
+    batch_size: 256
+    grid_size: 5
+    sparsity_lambda: 0.0
+    l1_weight: 1.0
+    entropy_weight: 1.0
+tune:
+  name: stage-a-fourierkan-tune
+  storage: /Users/cyrilgabriele/Documents/School/00_Courses/01_DL/03_Project/DeepLearning/sweeps/stage_a/fourierkan/stage-a-fourierkan-tune.db
+  n_trials: 50
+  timeout: null
+  directions: null
+  sampler: tpe
+  top_k_candidates: 5
+  search_space:
+    depth:
+      type: int
+      low: 1.0
+      high: 3.0
+      step: null
+      choices: null
+      values: null
+    width:
+      type: categorical
+      low: null
+      high: null
+      step: null
+      choices:
+      - 32
+      - 64
+      - 128
+      - 256
+      values: null
+    grid_size:
+      type: int
+      low: 2.0
+      high: 8.0
+      step: null
+      choices: null
+      values: null

@@ -1,0 +1,56 @@
+{
+  "best_params": {
+    "depth": 1,
+    "grid_size": 5,
+    "width": 128
+  },
+  "best_qwk": 0.632383,
+  "best_trial_attrs": {
+    "checkpoint_path": "checkpoints/stage-a-fourierkan-trial-023/model-20260429-072345.pt",
+    "experiment_name": "stage-a-fourierkan-trial-023",
+    "metrics": {
+      "accuracy": 0.35286688557716595,
+      "f1_macro": 0.24897089432146646,
+      "mae": 1.3018438816070557,
+      "qwk": 0.6323830821533437
+    },
+    "summary_path": "artifacts/stage-a-fourierkan-trial-023/run-summary-20260429-072345.json"
+  },
+  "best_trial_number": 23,
+  "completed_trials": 50,
+  "model_family": "fourierkan",
+  "preprocessing_recipe": "kan_paper",
+  "search_space": {
+    "depth": {
+      "choices": null,
+      "high": 3.0,
+      "low": 1.0,
+      "step": null,
+      "type": "int",
+      "values": null
+    },
+    "grid_size": {
+      "choices": null,
+      "high": 8.0,
+      "low": 2.0,
+      "step": null,
+      "type": "int",
+      "values": null
+    },
+    "width": {
+      "choices": [
+        32,
+        64,
+        128,
+        256
+      ],
+      "high": null,
+      "low": null,
+      "step": null,
+      "type": "categorical",
+      "values": null
+    }
+  },
+  "study_name": "stage-a-fourierkan-tune",
+  "total_trials": 50
+}

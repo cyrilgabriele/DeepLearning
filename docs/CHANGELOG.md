@@ -17,6 +17,18 @@ Track what was changed, why it was changed, and any important notes.
 - Optional notes, issues, or future work
 ```
 
+### [2026-04-29] - Cyril Gabriele
+
+#### What
+- Removed the hidden Stage B retrain sparsity override from `src/retrain/pipeline.py`.
+- Deleted `DEFAULT_SPARSITY_LAMBDA` and stopped replacing TabKAN candidates' `sparsity_lambda: 0.0` with `1e-3` during retraining.
+- Updated retrain regression coverage so Stage B preserves the candidate's original sparsity setting.
+
+#### Why
+- Stage B is now defined as robust performance validation across shared seeds, not sparsity or interpretability tuning.
+- Preserving the Stage A candidate config ensures Stage B evaluates the same architecture/performance setup selected in Stage A.
+- Sparsity regularization and pruning belong to Stage C, where the QWK-vs-sparsity Pareto tradeoff is explicitly evaluated.
+
 ### [2026-04-26] - Cyril Gabriele
 
 #### What

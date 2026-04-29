@@ -1,0 +1,374 @@
+{
+  "candidates": [
+    {
+      "candidate_id": "stage-a-chebykan-tune-trial-046",
+      "checkpoint_path": "checkpoints/stage-a-chebykan-trial-046/model-20260429-075253.pt",
+      "metrics": {
+        "accuracy": 0.35673991748758105,
+        "f1_macro": 0.23777938821951808,
+        "mae": 1.3178411722183228,
+        "qwk": 0.6256498836124921
+      },
+      "model_config": {
+        "degree": 5,
+        "depth": 1,
+        "flavor": "chebykan",
+        "hidden_widths": [
+          128
+        ],
+        "name": "tabkan-base",
+        "params": {
+          "batch_size": 256,
+          "entropy_weight": 1.0,
+          "l1_weight": 1.0,
+          "lr": 0.001,
+          "max_epochs": 100,
+          "sparsity_lambda": 0.0,
+          "weight_decay": 1e-05
+        },
+        "use_layernorm": true,
+        "width": 128
+      },
+      "preprocessing_config": {
+        "contract_version": 1,
+        "recipe": "kan_paper",
+        "selected_features_path": null
+      },
+      "qwk": 0.62565,
+      "rank": 1,
+      "selection_metadata": {
+        "architecture": {
+          "depth": 1,
+          "hidden_widths": [
+            128
+          ],
+          "is_uniform": true,
+          "use_layernorm": true,
+          "width": 128
+        },
+        "basis_parameters": {
+          "degree": 5,
+          "flavor": "chebykan"
+        },
+        "notes": [
+          "Source experiment: stage-a-chebykan-trial-046"
+        ],
+        "sampled_params": {
+          "degree": 5,
+          "depth": 1,
+          "width": 128
+        },
+        "sparsity_parameters": {
+          "entropy_weight": 1.0,
+          "l1_weight": 1.0,
+          "sparsity_lambda": 0.0
+        }
+      },
+      "summary_path": "artifacts/stage-a-chebykan-trial-046/run-summary-20260429-075253.json",
+      "trainer_config": {
+        "experiment_name": "stage-a-chebykan-candidate-046",
+        "seed": 42,
+        "test_csv": "/Users/cyrilgabriele/Documents/School/00_Courses/01_DL/03_Project/DeepLearning/data/prudential-life-insurance-assessment/test.csv",
+        "train_csv": "/Users/cyrilgabriele/Documents/School/00_Courses/01_DL/03_Project/DeepLearning/data/prudential-life-insurance-assessment/train.csv"
+      },
+      "trial_number": 46
+    },
+    {
+      "candidate_id": "stage-a-chebykan-tune-trial-047",
+      "checkpoint_path": "checkpoints/stage-a-chebykan-trial-047/model-20260429-075414.pt",
+      "metrics": {
+        "accuracy": 0.35673991748758105,
+        "f1_macro": 0.23777938821951808,
+        "mae": 1.3178411722183228,
+        "qwk": 0.6256498836124921
+      },
+      "model_config": {
+        "degree": 5,
+        "depth": 1,
+        "flavor": "chebykan",
+        "hidden_widths": [
+          128
+        ],
+        "name": "tabkan-base",
+        "params": {
+          "batch_size": 256,
+          "entropy_weight": 1.0,
+          "l1_weight": 1.0,
+          "lr": 0.001,
+          "max_epochs": 100,
+          "sparsity_lambda": 0.0,
+          "weight_decay": 1e-05
+        },
+        "use_layernorm": true,
+        "width": 128
+      },
+      "preprocessing_config": {
+        "contract_version": 1,
+        "recipe": "kan_paper",
+        "selected_features_path": null
+      },
+      "qwk": 0.62565,
+      "rank": 2,
+      "selection_metadata": {
+        "architecture": {
+          "depth": 1,
+          "hidden_widths": [
+            128
+          ],
+          "is_uniform": true,
+          "use_layernorm": true,
+          "width": 128
+        },
+        "basis_parameters": {
+          "degree": 5,
+          "flavor": "chebykan"
+        },
+        "notes": [
+          "Source experiment: stage-a-chebykan-trial-047"
+        ],
+        "sampled_params": {
+          "degree": 5,
+          "depth": 1,
+          "width": 128
+        },
+        "sparsity_parameters": {
+          "entropy_weight": 1.0,
+          "l1_weight": 1.0,
+          "sparsity_lambda": 0.0
+        }
+      },
+      "summary_path": "artifacts/stage-a-chebykan-trial-047/run-summary-20260429-075414.json",
+      "trainer_config": {
+        "experiment_name": "stage-a-chebykan-candidate-047",
+        "seed": 42,
+        "test_csv": "/Users/cyrilgabriele/Documents/School/00_Courses/01_DL/03_Project/DeepLearning/data/prudential-life-insurance-assessment/test.csv",
+        "train_csv": "/Users/cyrilgabriele/Documents/School/00_Courses/01_DL/03_Project/DeepLearning/data/prudential-life-insurance-assessment/train.csv"
+      },
+      "trial_number": 47
+    },
+    {
+      "candidate_id": "stage-a-chebykan-tune-trial-048",
+      "checkpoint_path": "checkpoints/stage-a-chebykan-trial-048/model-20260429-075530.pt",
+      "metrics": {
+        "accuracy": 0.35673991748758105,
+        "f1_macro": 0.23777938821951808,
+        "mae": 1.3178411722183228,
+        "qwk": 0.6256498836124921
+      },
+      "model_config": {
+        "degree": 5,
+        "depth": 1,
+        "flavor": "chebykan",
+        "hidden_widths": [
+          128
+        ],
+        "name": "tabkan-base",
+        "params": {
+          "batch_size": 256,
+          "entropy_weight": 1.0,
+          "l1_weight": 1.0,
+          "lr": 0.001,
+          "max_epochs": 100,
+          "sparsity_lambda": 0.0,
+          "weight_decay": 1e-05
+        },
+        "use_layernorm": true,
+        "width": 128
+      },
+      "preprocessing_config": {
+        "contract_version": 1,
+        "recipe": "kan_paper",
+        "selected_features_path": null
+      },
+      "qwk": 0.62565,
+      "rank": 3,
+      "selection_metadata": {
+        "architecture": {
+          "depth": 1,
+          "hidden_widths": [
+            128
+          ],
+          "is_uniform": true,
+          "use_layernorm": true,
+          "width": 128
+        },
+        "basis_parameters": {
+          "degree": 5,
+          "flavor": "chebykan"
+        },
+        "notes": [
+          "Source experiment: stage-a-chebykan-trial-048"
+        ],
+        "sampled_params": {
+          "degree": 5,
+          "depth": 1,
+          "width": 128
+        },
+        "sparsity_parameters": {
+          "entropy_weight": 1.0,
+          "l1_weight": 1.0,
+          "sparsity_lambda": 0.0
+        }
+      },
+      "summary_path": "artifacts/stage-a-chebykan-trial-048/run-summary-20260429-075530.json",
+      "trainer_config": {
+        "experiment_name": "stage-a-chebykan-candidate-048",
+        "seed": 42,
+        "test_csv": "/Users/cyrilgabriele/Documents/School/00_Courses/01_DL/03_Project/DeepLearning/data/prudential-life-insurance-assessment/test.csv",
+        "train_csv": "/Users/cyrilgabriele/Documents/School/00_Courses/01_DL/03_Project/DeepLearning/data/prudential-life-insurance-assessment/train.csv"
+      },
+      "trial_number": 48
+    },
+    {
+      "candidate_id": "stage-a-chebykan-tune-trial-007",
+      "checkpoint_path": "checkpoints/stage-a-chebykan-trial-007/model-20260429-065825.pt",
+      "metrics": {
+        "accuracy": 0.34924644270438665,
+        "f1_macro": 0.22027767406520382,
+        "mae": 1.3270186185836792,
+        "qwk": 0.6245699608040255
+      },
+      "model_config": {
+        "degree": 5,
+        "depth": 1,
+        "flavor": "chebykan",
+        "hidden_widths": [
+          32
+        ],
+        "name": "tabkan-base",
+        "params": {
+          "batch_size": 256,
+          "entropy_weight": 1.0,
+          "l1_weight": 1.0,
+          "lr": 0.001,
+          "max_epochs": 100,
+          "sparsity_lambda": 0.0,
+          "weight_decay": 1e-05
+        },
+        "use_layernorm": true,
+        "width": 32
+      },
+      "preprocessing_config": {
+        "contract_version": 1,
+        "recipe": "kan_paper",
+        "selected_features_path": null
+      },
+      "qwk": 0.62457,
+      "rank": 4,
+      "selection_metadata": {
+        "architecture": {
+          "depth": 1,
+          "hidden_widths": [
+            32
+          ],
+          "is_uniform": true,
+          "use_layernorm": true,
+          "width": 32
+        },
+        "basis_parameters": {
+          "degree": 5,
+          "flavor": "chebykan"
+        },
+        "notes": [
+          "Source experiment: stage-a-chebykan-trial-007"
+        ],
+        "sampled_params": {
+          "degree": 5,
+          "depth": 1,
+          "width": 32
+        },
+        "sparsity_parameters": {
+          "entropy_weight": 1.0,
+          "l1_weight": 1.0,
+          "sparsity_lambda": 0.0
+        }
+      },
+      "summary_path": "artifacts/stage-a-chebykan-trial-007/run-summary-20260429-065825.json",
+      "trainer_config": {
+        "experiment_name": "stage-a-chebykan-candidate-007",
+        "seed": 42,
+        "test_csv": "/Users/cyrilgabriele/Documents/School/00_Courses/01_DL/03_Project/DeepLearning/data/prudential-life-insurance-assessment/test.csv",
+        "train_csv": "/Users/cyrilgabriele/Documents/School/00_Courses/01_DL/03_Project/DeepLearning/data/prudential-life-insurance-assessment/train.csv"
+      },
+      "trial_number": 7
+    },
+    {
+      "candidate_id": "stage-a-chebykan-tune-trial-036",
+      "checkpoint_path": "checkpoints/stage-a-chebykan-trial-036/model-20260429-073903.pt",
+      "metrics": {
+        "accuracy": 0.34924644270438665,
+        "f1_macro": 0.22027767406520382,
+        "mae": 1.3270186185836792,
+        "qwk": 0.6245699608040255
+      },
+      "model_config": {
+        "degree": 5,
+        "depth": 1,
+        "flavor": "chebykan",
+        "hidden_widths": [
+          32
+        ],
+        "name": "tabkan-base",
+        "params": {
+          "batch_size": 256,
+          "entropy_weight": 1.0,
+          "l1_weight": 1.0,
+          "lr": 0.001,
+          "max_epochs": 100,
+          "sparsity_lambda": 0.0,
+          "weight_decay": 1e-05
+        },
+        "use_layernorm": true,
+        "width": 32
+      },
+      "preprocessing_config": {
+        "contract_version": 1,
+        "recipe": "kan_paper",
+        "selected_features_path": null
+      },
+      "qwk": 0.62457,
+      "rank": 5,
+      "selection_metadata": {
+        "architecture": {
+          "depth": 1,
+          "hidden_widths": [
+            32
+          ],
+          "is_uniform": true,
+          "use_layernorm": true,
+          "width": 32
+        },
+        "basis_parameters": {
+          "degree": 5,
+          "flavor": "chebykan"
+        },
+        "notes": [
+          "Source experiment: stage-a-chebykan-trial-036"
+        ],
+        "sampled_params": {
+          "degree": 5,
+          "depth": 1,
+          "width": 32
+        },
+        "sparsity_parameters": {
+          "entropy_weight": 1.0,
+          "l1_weight": 1.0,
+          "sparsity_lambda": 0.0
+        }
+      },
+      "summary_path": "artifacts/stage-a-chebykan-trial-036/run-summary-20260429-073903.json",
+      "trainer_config": {
+        "experiment_name": "stage-a-chebykan-candidate-036",
+        "seed": 42,
+        "test_csv": "/Users/cyrilgabriele/Documents/School/00_Courses/01_DL/03_Project/DeepLearning/data/prudential-life-insurance-assessment/test.csv",
+        "train_csv": "/Users/cyrilgabriele/Documents/School/00_Courses/01_DL/03_Project/DeepLearning/data/prudential-life-insurance-assessment/train.csv"
+      },
+      "trial_number": 36
+    }
+  ],
+  "generated_at": "2026-04-29T07:57:05.678566+00:00",
+  "model_family": "chebykan",
+  "preprocessing_recipe": "kan_paper",
+  "study_name": "stage-a-chebykan-tune",
+  "top_k": 5
+}
