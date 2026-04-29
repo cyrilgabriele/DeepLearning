@@ -40,4 +40,4 @@ uv run python main.py --stage tune --config configs/experiment_stages/stage_a_pe
 
 ## Expected Outputs
 
-Running a Stage A tune config writes the Optuna database, best full config, result JSON, and candidate manifest under `sweeps/stage_a/{model_name}/`. For example, ChebyKAN writes to `sweeps/stage_a/chebykan/`. The candidate manifest is the handoff into Stage B, where shortlisted architectures can be retrained and evaluated for stability and interpretability.
+Running a Stage A tune config writes the Optuna database, best full config, result JSON, and candidate manifest under `sweeps/stage_a/{model_name}/`. Trial run summaries and predictions are written under `artifacts/stage_a/{experiment_name}/`. The candidate manifest is the handoff into Stage B, where shortlisted architectures can be retrained and evaluated for stability.

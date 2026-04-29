@@ -14,7 +14,7 @@
       "mae": 1.3178411722183228,
       "qwk": 0.6256498836124921
     },
-    "summary_path": "artifacts/stage-a-chebykan-trial-046/run-summary-20260429-075253.json"
+    "summary_path": "artifacts/stage_a/stage-a-chebykan-trial-046/run-summary-20260429-075253.json"
   },
   "best_trial_number": 46,
   "completed_trials": 50,

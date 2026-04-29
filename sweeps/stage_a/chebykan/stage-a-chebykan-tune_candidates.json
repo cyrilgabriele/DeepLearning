@@ -64,7 +64,7 @@
           "sparsity_lambda": 0.0
         }
       },
-      "summary_path": "artifacts/stage-a-chebykan-trial-046/run-summary-20260429-075253.json",
+      "summary_path": "artifacts/stage_a/stage-a-chebykan-trial-046/run-summary-20260429-075253.json",
       "trainer_config": {
         "experiment_name": "stage-a-chebykan-candidate-046",
         "seed": 42,
@@ -137,7 +137,7 @@
           "sparsity_lambda": 0.0
         }
       },
-      "summary_path": "artifacts/stage-a-chebykan-trial-047/run-summary-20260429-075414.json",
+      "summary_path": "artifacts/stage_a/stage-a-chebykan-trial-047/run-summary-20260429-075414.json",
       "trainer_config": {
         "experiment_name": "stage-a-chebykan-candidate-047",
         "seed": 42,
@@ -210,7 +210,7 @@
           "sparsity_lambda": 0.0
         }
       },
-      "summary_path": "artifacts/stage-a-chebykan-trial-048/run-summary-20260429-075530.json",
+      "summary_path": "artifacts/stage_a/stage-a-chebykan-trial-048/run-summary-20260429-075530.json",
       "trainer_config": {
         "experiment_name": "stage-a-chebykan-candidate-048",
         "seed": 42,
@@ -283,7 +283,7 @@
           "sparsity_lambda": 0.0
         }
       },
-      "summary_path": "artifacts/stage-a-chebykan-trial-007/run-summary-20260429-065825.json",
+      "summary_path": "artifacts/stage_a/stage-a-chebykan-trial-007/run-summary-20260429-065825.json",
       "trainer_config": {
         "experiment_name": "stage-a-chebykan-candidate-007",
         "seed": 42,
@@ -356,7 +356,7 @@
           "sparsity_lambda": 0.0
         }
       },
-      "summary_path": "artifacts/stage-a-chebykan-trial-036/run-summary-20260429-073903.json",
+      "summary_path": "artifacts/stage_a/stage-a-chebykan-trial-036/run-summary-20260429-073903.json",
       "trainer_config": {
         "experiment_name": "stage-a-chebykan-candidate-036",
         "seed": 42,

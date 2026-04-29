@@ -12,8 +12,8 @@ stage_b_controls:
   qwk_tolerance: 0.01
 
 stage_b_outputs:
-  retrain_manifest: artifacts/retrain/fourierkan/stage-b-fourierkan-shortlist/manifest.json
-  selection_manifest: artifacts/selection/fourierkan_selection.json
+  retrain_manifest: artifacts/stage_b/retrain/fourierkan/stage-b-fourierkan-shortlist/manifest.json
+  selection_manifest: artifacts/stage_b/selection/fourierkan_selection.json
 
 stage_c_materialized_configs:
   best_performance: configs/experiment_stages/stage_c_explanation_package/materialized/fourierkan_best_performance.yaml

@@ -7,8 +7,8 @@ stage_c_baseline_inputs:
   glm_config: configs/experiment_stages/stage_c_explanation_package/glm_baseline.yaml
 
 stage_b_selection_inputs:
-  chebykan_selection_manifest: artifacts/selection/chebykan_selection.json
-  fourierkan_selection_manifest: artifacts/selection/fourierkan_selection.json
+  chebykan_selection_manifest: artifacts/stage_b/selection/chebykan_selection.json
+  fourierkan_selection_manifest: artifacts/stage_b/selection/fourierkan_selection.json
 
 materialized_selected_configs:
   chebykan_best_performance: configs/experiment_stages/stage_c_explanation_package/materialized/chebykan_best_performance.yaml

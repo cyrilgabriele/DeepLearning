@@ -185,7 +185,7 @@ class Trainer:
     ) -> Optional[Path]:
         """Write a JSON summary capturing config, seed, device, and metrics."""
 
-        output_root = Path("artifacts") / self.config.trainer.experiment_name
+        output_root = self._artifact_output_root()
         summary_path = output_root / f"run-summary-{timestamp}.json"
         preprocessing_contract = self._build_preprocessing_contract(dataset)
 
@@ -549,7 +549,7 @@ class Trainer:
         ids = test_df["Id"] if "Id" in test_df.columns else pd.Series(range(len(preds)))
         predictions_df = pd.DataFrame({"Id": ids, "Response": preds})
 
-        output_root = Path("artifacts") / self.config.trainer.experiment_name
+        output_root = self._artifact_output_root()
         predictions_path = output_root / f"test-predictions-{timestamp}.csv"
 
         try:
@@ -594,6 +594,16 @@ class Trainer:
             return processed_df.loc[:, list(dataset.feature_names or processed_df.columns)].copy()
 
         raise ValueError(f"Unknown preprocessing recipe for test transform: {dataset.recipe}")
+
+    def _artifact_output_root(self) -> Path:
+        """Return the artifact directory for this experiment run."""
+
+        experiment_name = self.config.trainer.experiment_name
+        if experiment_name.startswith("stage-a-"):
+            return Path("artifacts") / "stage_a" / experiment_name
+        if experiment_name.startswith("stage-b-"):
+            return Path("artifacts") / "stage_b" / "runs" / experiment_name
+        return Path("artifacts") / experiment_name
 
     def _build_kan_dataset(
         self,

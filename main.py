@@ -100,7 +100,7 @@ def run(argv: Sequence[str] | None = None) -> None:
         result = run_select(
             args.retrain_manifest,
             qwk_tolerance=args.qwk_tolerance,
-            selection_output_root=Path("artifacts") / "selection",
+            selection_output_root=Path("artifacts") / "stage_b" / "selection",
             output_root=args.output_root,
         )
         _print_selection_summary(result)

@@ -157,7 +157,7 @@ def test_main_dispatches_select_stage(tmp_path, monkeypatch):
     assert captured["retrain_manifest"] == retrain_manifest
     assert captured["qwk_tolerance"] == 0.02
     assert captured["output_root"] == output_root
-    assert captured["selection_output_root"] == Path("artifacts") / "selection"
+    assert captured["selection_output_root"] == Path("artifacts") / "stage_b" / "selection"
 
 
 def test_main_dispatches_retrain_stage(tmp_path, monkeypatch):
@@ -173,7 +173,7 @@ def test_main_dispatches_retrain_stage(tmp_path, monkeypatch):
             "model_family": "chebykan",
             "selection_name": kwargs["selection_name"],
             "runs": [],
-            "manifest_path": "artifacts/retrain/chebykan/shortlist/manifest.json",
+            "manifest_path": "artifacts/stage_b/retrain/chebykan/shortlist/manifest.json",
         }
 
     import src.retrain as retrain_module
@@ -246,5 +246,5 @@ def test_main_dispatches_select_stage(tmp_path, monkeypatch):
 
     assert captured["manifest_path"] == retrain_manifest
     assert captured["qwk_tolerance"] == 0.02
-    assert captured["selection_output_root"] == main_module.Path("artifacts") / "selection"
+    assert captured["selection_output_root"] == main_module.Path("artifacts") / "stage_b" / "selection"
     assert captured["output_root"] == output_root

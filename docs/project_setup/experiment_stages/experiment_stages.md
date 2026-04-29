@@ -46,7 +46,7 @@ Main outputs:
 
 - `sweeps/stage_a/chebykan/stage-a-chebykan-tune_best.yaml`
 - `sweeps/stage_a/chebykan/stage-a-chebykan-tune_candidates.json`
-- `artifacts/stage-a-chebykan-tuned/run-summary-*.json`
+- `artifacts/stage_a/stage-a-chebykan-tuned/run-summary-*.json`
 - `checkpoints/stage-a-chebykan-tuned/model-*.pt`
 
 ### A2. FourierKAN
@@ -60,7 +60,7 @@ Main outputs:
 
 - `sweeps/stage_a/fourierkan/stage-a-fourierkan-tune_best.yaml`
 - `sweeps/stage_a/fourierkan/stage-a-fourierkan-tune_candidates.json`
-- `artifacts/stage-a-fourierkan-tuned/run-summary-*.json`
+- `artifacts/stage_a/stage-a-fourierkan-tuned/run-summary-*.json`
 - `checkpoints/stage-a-fourierkan-tuned/model-*.pt`
 
 ### A3. XGBoost
@@ -73,7 +73,7 @@ uv run python main.py --stage train --config sweeps/stage_a/xgboost/stage-a-xgbo
 Main outputs:
 
 - `sweeps/stage_a/xgboost/stage-a-xgboost-tune_best.yaml`
-- `artifacts/stage-a-xgboost-tuned/run-summary-*.json`
+- `artifacts/stage_a/stage-a-xgboost-tuned/run-summary-*.json`
 - `checkpoints/stage-a-xgboost-tuned/model-*.joblib`
 
 ## Stage B: Robust Performance Tuning
@@ -91,16 +91,16 @@ ChebyKAN and FourierKAN use `top_k=5`; XGBoost uses `top_k=1`.
 
 ```bash
 uv run python main.py --stage retrain --candidate-manifest sweeps/stage_a/chebykan/stage-a-chebykan-tune_candidates.json --top-k 5 --seeds 13 29 47 --selection-name stage-b-chebykan-shortlist --output-experiment-prefix stage-b-chebykan
-uv run python main.py --stage select --retrain-manifest artifacts/retrain/chebykan/stage-b-chebykan-shortlist/manifest.json --qwk-tolerance 0.01
-uv run python -m src.selection.materialize_config --selection-manifest artifacts/selection/chebykan_selection.json --role best_performance_candidate --output configs/experiment_stages/stage_c_explanation_package/materialized/chebykan_best_performance.yaml
+uv run python main.py --stage select --retrain-manifest artifacts/stage_b/retrain/chebykan/stage-b-chebykan-shortlist/manifest.json --qwk-tolerance 0.01
+uv run python -m src.selection.materialize_config --selection-manifest artifacts/stage_b/selection/chebykan_selection.json --role best_performance_candidate --output configs/experiment_stages/stage_c_explanation_package/materialized/chebykan_best_performance.yaml
 ```
 
 ### B2. FourierKAN shortlist and robust selection
 
 ```bash
 uv run python main.py --stage retrain --candidate-manifest sweeps/stage_a/fourierkan/stage-a-fourierkan-tune_candidates.json --top-k 5 --seeds 13 29 47 --selection-name stage-b-fourierkan-shortlist --output-experiment-prefix stage-b-fourierkan
-uv run python main.py --stage select --retrain-manifest artifacts/retrain/fourierkan/stage-b-fourierkan-shortlist/manifest.json --qwk-tolerance 0.01
-uv run python -m src.selection.materialize_config --selection-manifest artifacts/selection/fourierkan_selection.json --role best_performance_candidate --output configs/experiment_stages/stage_c_explanation_package/materialized/fourierkan_best_performance.yaml
+uv run python main.py --stage select --retrain-manifest artifacts/stage_b/retrain/fourierkan/stage-b-fourierkan-shortlist/manifest.json --qwk-tolerance 0.01
+uv run python -m src.selection.materialize_config --selection-manifest artifacts/stage_b/selection/fourierkan_selection.json --role best_performance_candidate --output configs/experiment_stages/stage_c_explanation_package/materialized/fourierkan_best_performance.yaml
 ```
 
 ### B3. XGBoost robust validation
@@ -111,11 +111,11 @@ uv run python main.py --stage retrain --candidate-manifest sweeps/stage_a/xgboos
 
 Main Stage B outputs:
 
-- `artifacts/retrain/chebykan/stage-b-chebykan-shortlist/manifest.json`
-- `artifacts/retrain/fourierkan/stage-b-fourierkan-shortlist/manifest.json`
-- `artifacts/retrain/xgboost-paper/stage-b-xgboost-shortlist/manifest.json`
-- `artifacts/selection/chebykan_selection.json`
-- `artifacts/selection/fourierkan_selection.json`
+- `artifacts/stage_b/retrain/chebykan/stage-b-chebykan-shortlist/manifest.json`
+- `artifacts/stage_b/retrain/fourierkan/stage-b-fourierkan-shortlist/manifest.json`
+- `artifacts/stage_b/retrain/xgboost-paper/stage-b-xgboost-shortlist/manifest.json`
+- `artifacts/stage_b/selection/chebykan_selection.json`
+- `artifacts/stage_b/selection/fourierkan_selection.json`
 - `configs/experiment_stages/stage_c_explanation_package/materialized/*.yaml`
 
 ## Stage C: Explanation Package
@@ -148,8 +148,8 @@ uv run python main.py --stage interpret --config configs/experiment_stages/stage
 
 ```bash
 uv run python -m src.interpretability.final_comparison \
-  --selection-manifest artifacts/selection/chebykan_selection.json \
-  --selection-manifest artifacts/selection/fourierkan_selection.json \
+  --selection-manifest artifacts/stage_b/selection/chebykan_selection.json \
+  --selection-manifest artifacts/stage_b/selection/fourierkan_selection.json \
   --baseline-config sweeps/stage_a/xgboost/stage-a-xgboost-tune_best.yaml \
   --baseline-config configs/experiment_stages/stage_c_explanation_package/glm_baseline.yaml \
   --output-root outputs

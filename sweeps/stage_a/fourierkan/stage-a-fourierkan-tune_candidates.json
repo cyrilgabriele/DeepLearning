@@ -65,7 +65,7 @@
           "sparsity_lambda": 0.0
         }
       },
-      "summary_path": "artifacts/stage-a-fourierkan-trial-023/run-summary-20260429-072345.json",
+      "summary_path": "artifacts/stage_a/stage-a-fourierkan-trial-023/run-summary-20260429-072345.json",
       "trainer_config": {
         "experiment_name": "stage-a-fourierkan-candidate-023",
         "seed": 42,
@@ -139,7 +139,7 @@
           "sparsity_lambda": 0.0
         }
       },
-      "summary_path": "artifacts/stage-a-fourierkan-trial-024/run-summary-20260429-072503.json",
+      "summary_path": "artifacts/stage_a/stage-a-fourierkan-trial-024/run-summary-20260429-072503.json",
       "trainer_config": {
         "experiment_name": "stage-a-fourierkan-candidate-024",
         "seed": 42,
@@ -213,7 +213,7 @@
           "sparsity_lambda": 0.0
         }
       },
-      "summary_path": "artifacts/stage-a-fourierkan-trial-027/run-summary-20260429-072919.json",
+      "summary_path": "artifacts/stage_a/stage-a-fourierkan-trial-027/run-summary-20260429-072919.json",
       "trainer_config": {
         "experiment_name": "stage-a-fourierkan-candidate-027",
         "seed": 42,
@@ -287,7 +287,7 @@
           "sparsity_lambda": 0.0
         }
       },
-      "summary_path": "artifacts/stage-a-fourierkan-trial-031/run-summary-20260429-073524.json",
+      "summary_path": "artifacts/stage_a/stage-a-fourierkan-trial-031/run-summary-20260429-073524.json",
       "trainer_config": {
         "experiment_name": "stage-a-fourierkan-candidate-031",
         "seed": 42,
@@ -361,7 +361,7 @@
           "sparsity_lambda": 0.0
         }
       },
-      "summary_path": "artifacts/stage-a-fourierkan-trial-032/run-summary-20260429-073647.json",
+      "summary_path": "artifacts/stage_a/stage-a-fourierkan-trial-032/run-summary-20260429-073647.json",
       "trainer_config": {
         "experiment_name": "stage-a-fourierkan-candidate-032",
         "seed": 42,

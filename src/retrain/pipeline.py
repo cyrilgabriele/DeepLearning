@@ -21,7 +21,7 @@ def run_retrain(
     selection_name: str | None = None,
     experiment_prefix: str | None = None,
     output_experiment_prefix: str | None = None,
-    output_root: Path = Path("artifacts/retrain"),
+    output_root: Path = Path("artifacts/stage_b/retrain"),
 ) -> dict[str, Any]:
     """Retrain selected KAN candidates across multiple seeds and persist a manifest."""
 

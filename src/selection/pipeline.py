@@ -16,7 +16,7 @@ def run_select(
     *,
     qwk_tolerance: float = 0.01,
     output_root: Path = Path("outputs"),
-    selection_output_root: Path = Path("artifacts/selection"),
+    selection_output_root: Path = Path("artifacts/stage_b/selection"),
     interpretability_root: Path | None = None,
 ) -> dict[str, Any]:
     """Select best-performance and best-interpretable KAN candidates per family."""

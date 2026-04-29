@@ -14,7 +14,7 @@
       "mae": 1.3018438816070557,
       "qwk": 0.6323830821533437
     },
-    "summary_path": "artifacts/stage-a-fourierkan-trial-023/run-summary-20260429-072345.json"
+    "summary_path": "artifacts/stage_a/stage-a-fourierkan-trial-023/run-summary-20260429-072345.json"
   },
   "best_trial_number": 23,
   "completed_trials": 50,

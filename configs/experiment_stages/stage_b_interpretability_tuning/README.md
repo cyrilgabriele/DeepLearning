@@ -35,16 +35,16 @@ Run these commands from the project root after the Stage A candidate manifests e
 
 ```bash
 uv run python main.py --stage retrain --candidate-manifest sweeps/stage_a/chebykan/stage-a-chebykan-tune_candidates.json --top-k 5 --seeds 13 29 47 --selection-name stage-b-chebykan-shortlist --output-experiment-prefix stage-b-chebykan
-uv run python main.py --stage select --retrain-manifest artifacts/retrain/chebykan/stage-b-chebykan-shortlist/manifest.json --qwk-tolerance 0.01
-uv run python -m src.selection.materialize_config --selection-manifest artifacts/selection/chebykan_selection.json --role best_performance_candidate --output configs/experiment_stages/stage_c_explanation_package/materialized/chebykan_best_performance.yaml
+uv run python main.py --stage select --retrain-manifest artifacts/stage_b/retrain/chebykan/stage-b-chebykan-shortlist/manifest.json --qwk-tolerance 0.01
+uv run python -m src.selection.materialize_config --selection-manifest artifacts/stage_b/selection/chebykan_selection.json --role best_performance_candidate --output configs/experiment_stages/stage_c_explanation_package/materialized/chebykan_best_performance.yaml
 
 uv run python main.py --stage retrain --candidate-manifest sweeps/stage_a/fourierkan/stage-a-fourierkan-tune_candidates.json --top-k 5 --seeds 13 29 47 --selection-name stage-b-fourierkan-shortlist --output-experiment-prefix stage-b-fourierkan
-uv run python main.py --stage select --retrain-manifest artifacts/retrain/fourierkan/stage-b-fourierkan-shortlist/manifest.json --qwk-tolerance 0.01
-uv run python -m src.selection.materialize_config --selection-manifest artifacts/selection/fourierkan_selection.json --role best_performance_candidate --output configs/experiment_stages/stage_c_explanation_package/materialized/fourierkan_best_performance.yaml
+uv run python main.py --stage select --retrain-manifest artifacts/stage_b/retrain/fourierkan/stage-b-fourierkan-shortlist/manifest.json --qwk-tolerance 0.01
+uv run python -m src.selection.materialize_config --selection-manifest artifacts/stage_b/selection/fourierkan_selection.json --role best_performance_candidate --output configs/experiment_stages/stage_c_explanation_package/materialized/fourierkan_best_performance.yaml
 
 uv run python main.py --stage retrain --candidate-manifest sweeps/stage_a/xgboost/stage-a-xgboost-tune_candidates.json --top-k 1 --seeds 13 29 47 --selection-name stage-b-xgboost-shortlist --output-experiment-prefix stage-b-xgboost
 ```
 
 ## Expected Outputs
 
-Running the Stage B retrain command writes a retrain manifest under `artifacts/retrain/{family}/{selection_name}/manifest.json`. For KAN families, the downstream selection step can also write `artifacts/selection/{family}_selection.json` for choosing the robust performance candidate used by later stages.
+Running the Stage B retrain command writes per-run summaries under `artifacts/stage_b/runs/{experiment_name}/` and a retrain manifest under `artifacts/stage_b/retrain/{family}/{selection_name}/manifest.json`. For KAN families, the downstream selection step can also write `artifacts/stage_b/selection/{family}_selection.json` for choosing the robust performance candidate used by later stages.

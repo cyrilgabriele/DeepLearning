@@ -12,4 +12,4 @@ stage_b_controls:
   qwk_tolerance: 0.01
 
 stage_b_outputs:
-  retrain_manifest: artifacts/retrain/xgboost-paper/stage-b-xgboost-shortlist/manifest.json
+  retrain_manifest: artifacts/stage_b/retrain/xgboost-paper/stage-b-xgboost-shortlist/manifest.json

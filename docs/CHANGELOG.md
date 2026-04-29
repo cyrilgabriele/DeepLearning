@@ -23,11 +23,16 @@ Track what was changed, why it was changed, and any important notes.
 - Removed the hidden Stage B retrain sparsity override from `src/retrain/pipeline.py`.
 - Deleted `DEFAULT_SPARSITY_LAMBDA` and stopped replacing TabKAN candidates' `sparsity_lambda: 0.0` with `1e-3` during retraining.
 - Updated retrain regression coverage so Stage B preserves the candidate's original sparsity setting.
+- Updated training artifact routing so future Stage A run summaries and test predictions are written under `artifacts/stage_a/{experiment_name}/`.
+- Updated Stage B retrain outputs so per-run artifacts are written under `artifacts/stage_b/runs/{experiment_name}/` and retrain manifests under `artifacts/stage_b/retrain/{family}/{selection_name}/`.
+- Updated Stage B selection output routing to `artifacts/stage_b/selection/`.
+- Rewrote existing Stage A sweep JSON files and Stage B retrain manifests to point at the new artifact locations after the artifact tree was reorganized.
 
 #### Why
 - Stage B is now defined as robust performance validation across shared seeds, not sparsity or interpretability tuning.
 - Preserving the Stage A candidate config ensures Stage B evaluates the same architecture/performance setup selected in Stage A.
 - Sparsity regularization and pruning belong to Stage C, where the QWK-vs-sparsity Pareto tradeoff is explicitly evaluated.
+- Grouping generated artifacts by stage keeps new outputs aligned with the curated `artifacts/stage_a/`, `artifacts/stage_b/`, and `artifacts/legacy_tuning_christof/` layout.
 
 ### [2026-04-26] - Cyril Gabriele
 
