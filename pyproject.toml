@@ -30,6 +30,7 @@ where = ["."]
 [dependency-groups]
 dev = [
     "ipykernel>=7.2.0",
+    "optuna-dashboard>=0.20.0",
     "pytest>=8.0.0",
 ]
 
