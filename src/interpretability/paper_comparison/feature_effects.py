@@ -24,23 +24,23 @@ from src.interpretability.utils.paths import figures as figures_dir
 from src.interpretability.utils.paths import reports as reports_dir
 
 
-DEFAULT_XGB_DIR = Path("outputs/interpretability/xgboost_paper/stage-c-xgboost-best")
+DEFAULT_XGB_DIR = Path("outputs/interpretability/xgboost_paper/stage-c-xgb-best")
 DEFAULT_CHEBY_DIR = Path(
     "outputs/interpretability/kan_paper/"
-    "stage-c-chebykan-pareto-sparsity-pareto-q0.601-s0.94"
+    "stage-c-chebykan-pareto-sparsity-trial-009"
 )
 DEFAULT_FOURIER_DIR = Path(
     "outputs/interpretability/kan_paper/"
-    "stage-c-fourierkan-pareto-sparsity-pareto-q0.579-s0.76"
+    "stage-c-fourierkan-pareto-sparsity-trial-009"
 )
-DEFAULT_XGB_EVAL_DIR = Path("outputs/eval/xgboost_paper/stage-c-xgboost-best")
+DEFAULT_XGB_EVAL_DIR = Path("outputs/eval/xgboost_paper/stage-c-xgb-best")
 DEFAULT_CHEBY_EVAL_DIR = Path(
-    "outputs/eval/kan_paper/stage-c-chebykan-pareto-sparsity-pareto-q0.601-s0.94"
+    "outputs/eval/kan_paper/stage-c-chebykan-pareto-sparsity-trial-009"
 )
 DEFAULT_FOURIER_EVAL_DIR = Path(
-    "outputs/eval/kan_paper/stage-c-fourierkan-pareto-sparsity-pareto-q0.579-s0.76"
+    "outputs/eval/kan_paper/stage-c-fourierkan-pareto-sparsity-trial-009"
 )
-DEFAULT_OUTPUT_DIR = Path("outputs/interpretability/comparison/pareto_kan_vs_xgboost")
+DEFAULT_OUTPUT_DIR = Path("outputs/interpretability/comparison/tuned_big_kan_vs_xgboost")
 
 MODEL_LABELS = {
     "xgboost": "XGBoost SHAP",
@@ -665,13 +665,13 @@ def _write_report(
 ) -> Path:
     report_path = reports_dir(output_dir) / "feature_effect_comparison.md"
     lines = [
-        "# Pareto KAN vs XGBoost Interpretability Comparison",
+        "# Tuned Big KAN vs XGBoost Interpretability Comparison",
         "",
         "## Scope",
         "",
-        "- XGBoost baseline: `stage-c-xgboost-best` with predicted-class SHAP values.",
-        f"- ChebyKAN Pareto run: `{cheby.interpret_dir.name}`.",
-        f"- FourierKAN Pareto run: `{fourier.interpret_dir.name}`.",
+        "- XGBoost baseline: `stage-c-xgb-best` with predicted-class SHAP values.",
+        f"- ChebyKAN tuned big run: `{cheby.interpret_dir.name}`.",
+        f"- FourierKAN tuned big run: `{fourier.interpret_dir.name}`.",
         "",
         "## Model Summary",
         "",
@@ -682,12 +682,12 @@ def _write_report(
             "Tree SHAP, predicted-class slice |"
         ),
         (
-            f"| ChebyKAN Pareto | {cheby.pruning_summary.get('qwk_after', float('nan')):.6f} | "
+            f"| ChebyKAN tuned big | {cheby.pruning_summary.get('qwk_after', float('nan')):.6f} | "
             f"{cheby.pruning_summary.get('edges_after')} | "
             f"{_r2_mean(cheby.r2_report):.6f} | Native coefficient/PDP, per-edge symbolic recovery |"
         ),
         (
-            f"| FourierKAN Pareto | {fourier.pruning_summary.get('qwk_after', float('nan')):.6f} | "
+            f"| FourierKAN tuned big | {fourier.pruning_summary.get('qwk_after', float('nan')):.6f} | "
             f"{fourier.pruning_summary.get('edges_after')} | "
             f"{_r2_mean(fourier.r2_report):.6f} | Native coefficient/PDP, per-edge symbolic recovery |"
         ),
@@ -876,7 +876,7 @@ def run(
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Create paper-facing XGBoost SHAP vs Pareto KAN comparison artifacts."
+        description="Create paper-facing XGBoost SHAP vs tuned big KAN comparison artifacts."
     )
     parser.add_argument("--xgb-dir", type=Path, default=DEFAULT_XGB_DIR)
     parser.add_argument("--cheby-dir", type=Path, default=DEFAULT_CHEBY_DIR)
