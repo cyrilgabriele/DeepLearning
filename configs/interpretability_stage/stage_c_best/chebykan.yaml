@@ -1,0 +1,7 @@
+config: sweeps/stage_c/chebykan/all_features/stage-c-chebykan-pareto-sparsity_pareto_trial009.yaml
+checkpoint: checkpoints/stage-c-chebykan-pareto-sparsity-trial-009/model-20260429-134803.pt
+output_root: outputs
+pruning_threshold: 0.01
+qwk_tolerance: 0.01
+candidate_library: scipy
+max_features: 20

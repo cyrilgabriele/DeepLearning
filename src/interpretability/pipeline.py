@@ -158,7 +158,7 @@ def run_interpret(
         }
         return result
 
-    if config.model.name == "xgboost-paper":
+    if config.model.name in {"xgboost-paper", "xgb"}:
         from src.interpretability.shap_xgboost import run as run_shap_xgboost
 
         eval_features_path = _require_file(eval_dir / "X_eval.parquet", purpose="Eval features")

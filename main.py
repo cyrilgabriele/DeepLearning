@@ -14,7 +14,9 @@ def run(argv: Sequence[str] | None = None) -> None:
     """Parse CLI arguments and dispatch the requested experiment stage."""
 
     parser = _build_parser()
-    args = parser.parse_args(list(argv) if argv is not None else None)
+    raw_argv = list(argv) if argv is not None else None
+    args = parser.parse_args(raw_argv)
+    _apply_interpret_run_config(args, raw_argv)
 
     if args.stage in {"train", "tune"} and args.config is None:
         parser.error("--config is required for stages 'train' and 'tune'.")
@@ -164,6 +166,15 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--interpret-config",
+        type=Path,
+        default=None,
+        help=(
+            "YAML file with interpret-stage runtime controls such as checkpoint, "
+            "pruning threshold, QWK tolerance, symbolic backend, and max features."
+        ),
+    )
+    parser.add_argument(
         "--output-root",
         type=Path,
         default=Path("outputs"),
@@ -279,6 +290,59 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Eval labels parquet for the compare stage.",
     )
     return parser
+
+
+def _apply_interpret_run_config(
+    args: argparse.Namespace,
+    raw_argv: Sequence[str] | None,
+) -> None:
+    """Load optional interpret-stage runtime controls from YAML.
+
+    CLI flags override values from the YAML file. The experiment model config is
+    still loaded through `--config`; the interpret-run YAML only persists runtime
+    controls that used to be CLI-only.
+    """
+
+    if args.stage != "interpret" or args.interpret_config is None:
+        return
+
+    import yaml
+
+    payload = yaml.safe_load(args.interpret_config.read_text())
+    if payload is None:
+        payload = {}
+    if not isinstance(payload, dict):
+        raise ValueError(f"Interpret config at {args.interpret_config} must contain a mapping.")
+
+    fields = {
+        "config": "config",
+        "checkpoint": "checkpoint",
+        "output_root": "output_root",
+        "pruning_threshold": "pruning_threshold",
+        "qwk_tolerance": "qwk_tolerance",
+        "candidate_library": "candidate_library",
+        "max_features": "max_features",
+    }
+    path_fields = {"config", "checkpoint", "output_root"}
+
+    for yaml_key, arg_name in fields.items():
+        if yaml_key not in payload or _cli_flag_present(raw_argv, arg_name):
+            continue
+        value = payload[yaml_key]
+        if value is not None and arg_name in path_fields:
+            value = Path(value)
+        setattr(args, arg_name, value)
+
+
+def _cli_flag_present(raw_argv: Sequence[str] | None, dest: str) -> bool:
+    """Return whether an argparse destination was supplied explicitly."""
+
+    if raw_argv is None:
+        import sys
+
+        raw_argv = sys.argv[1:]
+    flag = "--" + dest.replace("_", "-")
+    return any(item == flag or item.startswith(f"{flag}=") for item in raw_argv)
 
 
 def _print_training_summary(artifacts: "TrainingArtifacts") -> None:

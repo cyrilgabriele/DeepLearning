@@ -1,0 +1,7 @@
+config: configs/experiment_stages/stage_c_explanation_package/xgboost/all_features/train/xgb_best.yaml
+checkpoint: checkpoints/stage-c-xgb-best/model-20260429-133411.joblib
+output_root: outputs
+pruning_threshold: 0.01
+qwk_tolerance: 0.01
+candidate_library: scipy
+max_features: 20
