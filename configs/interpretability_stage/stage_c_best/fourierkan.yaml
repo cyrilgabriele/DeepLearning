@@ -1,4 +1,4 @@
-config: sweeps/stage_c/fourierkan/all_features/stage-c-fourierkan-pareto-sparsity_pareto_trial009.yaml
+config: configs/interpretability_stage/stage_c_best/fourierkan_trial009.yaml
 checkpoint: checkpoints/stage-c-fourierkan-pareto-sparsity-trial-009/model-20260429-134914.pt
 output_root: outputs
 pruning_threshold: 0.01
