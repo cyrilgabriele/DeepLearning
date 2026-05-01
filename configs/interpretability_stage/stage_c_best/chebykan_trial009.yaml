@@ -26,7 +26,7 @@ model:
     sparsity_lambda: 0.0
 tune:
   name: stage-c-chebykan-pareto-sparsity
-  storage: /Users/cyrilgabriele/Documents/School/00_Courses/01_DL/03_Project/DeepLearning/sweeps/stage_c/chebykan/all_features/stage-c-chebykan-pareto-sparsity.db
+  storage: sweeps/stage_c/chebykan/all_features/stage-c-chebykan-pareto-sparsity.db
   n_trials: 33
   timeout: null
   directions:

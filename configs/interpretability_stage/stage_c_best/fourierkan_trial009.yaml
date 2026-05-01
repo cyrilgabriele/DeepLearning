@@ -27,7 +27,7 @@ model:
     sparsity_lambda: 0.0
 tune:
   name: stage-c-fourierkan-pareto-sparsity
-  storage: /Users/cyrilgabriele/Documents/School/00_Courses/01_DL/03_Project/DeepLearning/sweeps/stage_c/fourierkan/all_features/stage-c-fourierkan-pareto-sparsity.db
+  storage: sweeps/stage_c/fourierkan/all_features/stage-c-fourierkan-pareto-sparsity.db
   n_trials: 33
   timeout: null
   directions:
