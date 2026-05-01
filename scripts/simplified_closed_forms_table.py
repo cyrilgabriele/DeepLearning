@@ -29,8 +29,8 @@ from src.models.tabkan import TabKAN
 
 
 REPO = Path("/Users/gian1/CODE/HSG/FS26/DeepLearning/DeepLearning")
-CONFIG = REPO / "configs/experiment_stages/stage_c_explanation_package/chebykan_tuned_sparse_hero_final.yaml"
-CKPT = REPO / "outputs/interpretability/kan_paper/chebykan-lambda-0.100/models/chebykan_pruned_module.pt"
+CONFIG = REPO / "sweeps/stage_c/chebykan/20_features/stage-c-chebykan-top20-tune_best.yaml"
+CKPT = REPO / "outputs/interpretability/kan_paper/stage-c-chebykan-top20-tune-tuned/models/chebykan_pruned_module.pt"
 
 REPRESENTATIVE_FEATURES = [
     "BMI",

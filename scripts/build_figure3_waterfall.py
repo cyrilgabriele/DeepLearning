@@ -38,13 +38,13 @@ from src.models.tabkan import TabKAN
 
 
 REPO = Path("/Users/gian1/CODE/HSG/FS26/DeepLearning/DeepLearning")
-# Final sparse ChebyKAN hero derived entirely from the Optuna-tuned config
-# ([64,64], degree 7, lr 0.00095, λ=0.1) with its own top-20 feature list.
-# Run ID: chebykan-lambda-0.100 from scripts/sparse_hero_lambda_scan.py.
-EXP = "chebykan-lambda-0.100"
+# Sparse ChebyKAN winner from the 2026-05-01 rerun: 50-trial Optuna at the
+# 20-feature budget with λ fixed from the fresh 20-feature Pareto sparsity
+# scan. Architecture is the Optuna winner (depth=2, width=128, degree=8).
+EXP = "stage-c-chebykan-top20-tune-tuned"
 CKPT = REPO / "outputs" / "interpretability" / "kan_paper" / EXP / "models" / "chebykan_pruned_module.pt"
 EVAL = REPO / "outputs" / "eval" / "kan_paper" / EXP
-CONFIG = REPO / "configs" / "experiment_stages" / "stage_c_explanation_package" / "chebykan_tuned_sparse_hero_final.yaml"
+CONFIG = REPO / "sweeps" / "stage_c" / "chebykan" / "20_features" / "stage-c-chebykan-top20-tune_best.yaml"
 
 APPLICANT_ID = 55728.0
 TOP_K_TO_SHOW = 7  # remaining features bucketed as "other"

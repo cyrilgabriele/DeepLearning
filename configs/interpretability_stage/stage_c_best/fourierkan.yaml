@@ -1,5 +1,5 @@
-config: configs/interpretability_stage/stage_c_best/fourierkan_trial009.yaml
-checkpoint: checkpoints/stage-c-fourierkan-pareto-sparsity-trial-009/model-20260429-134914.pt
+config: configs/experiment_stages/stage_c_explanation_package/fourier/all_features/train/fourierkan_best.yaml
+checkpoint: checkpoints/stage-c-fourierkan-best/model-20260501-165658.pt
 output_root: outputs
 pruning_threshold: 0.01
 qwk_tolerance: 0.01

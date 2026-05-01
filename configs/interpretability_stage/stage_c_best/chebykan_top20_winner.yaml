@@ -1,0 +1,7 @@
+config: sweeps/stage_c/chebykan/20_features/stage-c-chebykan-top20-tune_best.yaml
+checkpoint: checkpoints/stage-c-chebykan-top20-tune-tuned/model-20260501-203940.pt
+output_root: outputs
+pruning_threshold: 0.002
+qwk_tolerance: 0.01
+candidate_library: scipy
+max_features: 20

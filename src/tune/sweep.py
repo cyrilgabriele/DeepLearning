@@ -25,12 +25,36 @@ def _compute_sparsity(checkpoint_path: str, config: ExperimentConfig, flavor: st
     from src.models.tabkan import TabKANClassifier, TabKAN
     from src.interpretability.kan_pruning import prune_kan
 
-    manifest_path = Path(checkpoint_path).with_suffix(".manifest.json")
-    if manifest_path.exists():
-        manifest = json.loads(manifest_path.read_text())
-        in_features = manifest.get("in_features", 140)
-    else:
-        in_features = 140
+    state = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    # Infer in_features directly from the first KAN-layer parameter shape so we
+    # don't depend on a manifest field that the trainer doesn't always emit.
+    # Layout per flavour:
+    #   chebykan  -> kan_layers.0.cheby_coeffs   shape (width, in_features, degree+1)
+    #   fourierkan -> kan_layers.0.fourier_*     shape (..., in_features, ...)
+    #   bsplinekan -> kan_layers.0.spline_*      shape (..., in_features, ...)
+    in_features: int | None = None
+    for key, tensor in state.items():
+        if "kan_layers.0" not in key or not hasattr(tensor, "shape"):
+            continue
+        if "cheby_coeffs" in key and len(tensor.shape) >= 2:
+            in_features = int(tensor.shape[1])
+            break
+        if "fourier" in key and "coeff" in key and len(tensor.shape) >= 2:
+            in_features = int(tensor.shape[1])
+            break
+        if "spline" in key and "coeff" in key and len(tensor.shape) >= 2:
+            in_features = int(tensor.shape[1])
+            break
+        if "base_weight" in key and len(tensor.shape) >= 2:
+            in_features = int(tensor.shape[1])
+            # Don't break: prefer the basis-coeff tensor over base_weight.
+    if in_features is None:
+        manifest_path = Path(checkpoint_path).with_suffix(".manifest.json")
+        if manifest_path.exists():
+            manifest = json.loads(manifest_path.read_text())
+            in_features = int(manifest.get("in_features", 140))
+        else:
+            in_features = 140
 
     wrapper = TabKANClassifier(
         config.model.name,
@@ -51,7 +75,7 @@ def _compute_sparsity(checkpoint_path: str, config: ExperimentConfig, flavor: st
         entropy_weight=wrapper.entropy_weight,
         use_layernorm=wrapper.use_layernorm,
     )
-    wrapper.module.load_state_dict(torch.load(checkpoint_path, map_location="cpu"))
+    wrapper.module.load_state_dict(state)
     wrapper.module.eval()
 
     _, stats, _ = prune_kan(wrapper.module, threshold=0.01)
