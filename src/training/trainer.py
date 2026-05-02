@@ -15,6 +15,7 @@ from src.config import ExperimentConfig, set_global_seed
 from src.preprocessing import preprocess_xgboost_paper as paper_prep
 from src.preprocessing import preprocess_kan_paper as kan_prep
 from src.preprocessing import preprocess_kan_sota as kan_sota_prep
+from src.preprocessing import preprocess_tabpfn_paper as tabpfn_prep
 from src.models import PrudentialModel, TrainingArtifacts, create_model
 
 
@@ -122,6 +123,32 @@ class Trainer:
             inner_val = None
             inner_train_y = None
             inner_val_y = None
+            if outputs["inner_splits"]:
+                inner_train, inner_val, inner_train_y, inner_val_y = outputs["inner_splits"][0]
+            dataset = PreparedDataset(
+                X_train=outputs["X_train_outer"],
+                y_train=outputs["y_train_outer"],
+                X_eval=outputs["X_test_outer"],
+                y_eval=outputs["y_test_outer"],
+                X_eval_raw=self._load_raw_eval_features(outputs["X_test_outer"].index),
+                recipe=recipe,
+                preprocess_artifacts=artifacts,
+                feature_names=list(outputs["X_train_outer"].columns),
+                X_train_inner=inner_train,
+                y_train_inner=inner_train_y,
+                X_val_inner=inner_val,
+                y_val_inner=inner_val_y,
+                all_feature_names=list(outputs["X_train_outer"].columns),
+            )
+            return self._apply_selected_features(dataset)
+
+        if recipe == "tabpfn_paper":
+            outputs = tabpfn_prep.run_pipeline(train_csv, random_seed=self.random_seed)
+            artifacts = {
+                "state": outputs["preprocessor_state"],
+                "inner_splits": outputs["inner_splits"],
+            }
+            inner_train = inner_val = inner_train_y = inner_val_y = None
             if outputs["inner_splits"]:
                 inner_train, inner_val, inner_train_y, inner_val_y = outputs["inner_splits"][0]
             dataset = PreparedDataset(
@@ -565,6 +592,14 @@ class Trainer:
 
         if dataset.recipe == "xgboost_paper":
             processed, _ = paper_prep.transform(
+                df,
+                dataset.preprocess_artifacts["state"],
+            )
+            processed_df = processed.copy()
+            return processed_df.loc[:, list(dataset.feature_names or processed_df.columns)].copy()
+
+        if dataset.recipe == "tabpfn_paper":
+            processed, _ = tabpfn_prep.transform(
                 df,
                 dataset.preprocess_artifacts["state"],
             )

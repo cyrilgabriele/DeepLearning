@@ -50,6 +50,7 @@ _XGB_REQUIRED_PARAMS = {
 }
 _XGB_OPTIONAL_PARAMS = {"gamma"}
 _GLM_REQUIRED_PARAMS = {"alpha"}
+_TABPFN_AUTO_OPTIONAL_PARAMS = {"n_estimators", "max_time"}
 
 
 class ModelConfig(BaseModel):
@@ -183,6 +184,8 @@ class ModelConfig(BaseModel):
             return set(_XGB_REQUIRED_PARAMS) | set(_XGB_OPTIONAL_PARAMS)
         if self.name == "glm":
             return set(_GLM_REQUIRED_PARAMS)
+        if self.name == "tabpfn-auto":
+            return set(_TABPFN_AUTO_OPTIONAL_PARAMS)
         return set()
 
     def allowed_tune_keys(self) -> set[str]:
