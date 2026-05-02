@@ -1,14 +1,23 @@
 """TabPFN regressor wrapper exposing the PrudentialModel interface.
 
 Option A: uses base ``tabpfn.TabPFNRegressor`` with
-``ignore_pretraining_limits=True`` to handle the >10k-row Prudential
-dataset directly (no AutoTabPFN ensembling — ``tabpfn-extensions`` pins
-``pandas<3`` and conflicts with this project's ``pandas>=3.0.1``).
+``ignore_pretraining_limits=True`` (no AutoTabPFN ensembling — the
+``tabpfn-extensions`` package pins ``pandas<3`` and conflicts with this
+project's ``pandas>=3.0.1``).
 
-Threshold calibration mirrors the XGBBaseline pattern: thresholds are fit
-on the training predictions inside ``fit()`` so ``predict()`` returns
-ordinal class labels 1-8 directly. ``evaluate()`` recalibrates thresholds
-on the supplied split and returns its QWK.
+Training-set subsampling: when the input training set exceeds
+``max_train_samples`` (default 10,000), the wrapper randomly subsamples
+to that size using ``numpy.random.default_rng(self.random_state)``.
+TabPFN-v2 is designed for ≤10k training samples; subsampling keeps
+inference within tractable wall-clock on CPU and matches the standard
+published TabPFN workflow at >10k. Each seed produces a different but
+reproducible subsample, so 3-seed variance reflects subsample variance
+in addition to TabPFN's internal randomness.
+
+Threshold calibration mirrors the XGBBaseline pattern: thresholds are
+fit on the (subsampled) training predictions inside ``fit()`` so
+``predict()`` returns ordinal class labels 1-8 directly. ``evaluate()``
+recalibrates thresholds on the supplied split and returns its QWK.
 """
 
 from __future__ import annotations
@@ -56,6 +65,7 @@ class TabPFNAutoRegressor(PrudentialModel):
         max_time: int = 300,
         device: str = "auto",
         random_state: int = 42,
+        max_train_samples: int = 10000,
         **kwargs: Any,
     ) -> None:
         # n_estimators and max_time are accepted (and stored) for config
@@ -67,11 +77,13 @@ class TabPFNAutoRegressor(PrudentialModel):
             max_time=max_time,
             device=device,
             random_state=random_state,
+            max_train_samples=max_train_samples,
         )
         self.n_estimators = n_estimators
         self.max_time = max_time
         self.device = device
         self.random_state = random_state
+        self.max_train_samples = max_train_samples
         self._estimator = None
         self.thresholds: Optional[np.ndarray] = None
         self.threshold_source_split: Optional[str] = None
@@ -87,6 +99,11 @@ class TabPFNAutoRegressor(PrudentialModel):
         **_kwargs: Any,
     ) -> None:
         _ = validation_data, validation_splits  # unused; thresholds fit on training
+        if len(X) > self.max_train_samples:
+            rng = np.random.default_rng(self.random_state)
+            idx = np.sort(rng.choice(len(X), size=self.max_train_samples, replace=False))
+            X = X.iloc[idx]
+            y = y.iloc[idx]
         self._estimator = _build_auto_tabpfn(
             device=self.device,
             random_state=self.random_state,
