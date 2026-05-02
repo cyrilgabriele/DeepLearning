@@ -12,67 +12,94 @@
   ],
   "pareto_front": [
     {
-      "checkpoint_path": "checkpoints/stage-c-chebykan-top20-pareto-sparsity-trial-001/model-20260501-170620.pt",
+      "checkpoint_path": "checkpoints/stage-c-chebykan-top20-pareto-sparsity-trial-016/model-20260501-234704.pt",
       "params": {
-        "sparsity_lambda": 0.0130862
+        "sparsity_lambda": 0.0001
       },
-      "qwk": 0.57952,
-      "sparsity_ratio": 0.9555,
-      "trial_number": 1
+      "qwk": 0.602823,
+      "sparsity_ratio": 0.1894,
+      "trial_number": 16
     },
     {
-      "checkpoint_path": "checkpoints/stage-c-chebykan-top20-pareto-sparsity-trial-003/model-20260501-170855.pt",
+      "checkpoint_path": "checkpoints/stage-c-chebykan-top20-pareto-sparsity-trial-019/model-20260501-235032.pt",
       "params": {
-        "sparsity_lambda": 0.0200887
+        "sparsity_lambda": 0.001
       },
-      "qwk": 0.576151,
-      "sparsity_ratio": 0.968,
-      "trial_number": 3
+      "qwk": 0.592992,
+      "sparsity_ratio": 0.7506,
+      "trial_number": 19
     },
     {
-      "checkpoint_path": "checkpoints/stage-c-chebykan-top20-pareto-sparsity-trial-024/model-20260501-173616.pt",
+      "checkpoint_path": "checkpoints/stage-c-chebykan-top20-pareto-sparsity-trial-029/model-20260502-000204.pt",
       "params": {
-        "sparsity_lambda": 0.0248897
+        "sparsity_lambda": 0.00235652
       },
-      "qwk": 0.571487,
-      "sparsity_ratio": 0.9707,
-      "trial_number": 24
+      "qwk": 0.592877,
+      "sparsity_ratio": 0.9153,
+      "trial_number": 29
     },
     {
-      "checkpoint_path": "checkpoints/stage-c-chebykan-top20-pareto-sparsity-trial-002/model-20260501-170738.pt",
+      "checkpoint_path": "checkpoints/stage-c-chebykan-top20-pareto-sparsity-trial-014/model-20260501-234446.pt",
       "params": {
-        "sparsity_lambda": 0.138217
+        "sparsity_lambda": 0.0055532
       },
-      "qwk": 0.567812,
-      "sparsity_ratio": 0.993,
-      "trial_number": 2
+      "qwk": 0.5899,
+      "sparsity_ratio": 0.9767,
+      "trial_number": 14
     },
     {
-      "checkpoint_path": "checkpoints/stage-c-chebykan-top20-pareto-sparsity-trial-018/model-20260501-172823.pt",
+      "checkpoint_path": "checkpoints/stage-c-chebykan-top20-pareto-sparsity-trial-013/model-20260501-234338.pt",
       "params": {
-        "sparsity_lambda": 0.262885
+        "sparsity_lambda": 0.0085247
       },
-      "qwk": 0.562734,
-      "sparsity_ratio": 0.9949,
-      "trial_number": 18
+      "qwk": 0.588347,
+      "sparsity_ratio": 0.9882,
+      "trial_number": 13
     },
     {
-      "checkpoint_path": "checkpoints/stage-c-chebykan-top20-pareto-sparsity-trial-000/model-20260501-170503.pt",
+      "checkpoint_path": "checkpoints/stage-c-chebykan-top20-pareto-sparsity-trial-025/model-20260501-235727.pt",
+      "params": {
+        "sparsity_lambda": 0.111556
+      },
+      "qwk": 0.586791,
+      "sparsity_ratio": 0.9955,
+      "trial_number": 25
+    },
+    {
+      "checkpoint_path": "checkpoints/stage-c-chebykan-top20-pareto-sparsity-trial-021/model-20260501-235250.pt",
+      "params": {
+        "sparsity_lambda": 0.0726706
+      },
+      "qwk": 0.575731,
+      "sparsity_ratio": 0.9958,
+      "trial_number": 21
+    },
+    {
+      "checkpoint_path": "checkpoints/stage-c-chebykan-top20-pareto-sparsity-trial-015/model-20260501-234555.pt",
+      "params": {
+        "sparsity_lambda": 0.0900381
+      },
+      "qwk": 0.57308,
+      "sparsity_ratio": 0.9959,
+      "trial_number": 15
+    },
+    {
+      "checkpoint_path": "checkpoints/stage-c-chebykan-top20-pareto-sparsity-trial-032/model-20260502-000531.pt",
+      "params": {
+        "sparsity_lambda": 0.212177
+      },
+      "qwk": 0.547285,
+      "sparsity_ratio": 0.9964,
+      "trial_number": 32
+    },
+    {
+      "checkpoint_path": "checkpoints/stage-c-chebykan-top20-pareto-sparsity-trial-000/model-20260501-232857.pt",
       "params": {
         "sparsity_lambda": 0.403554
       },
-      "qwk": 0.54078,
-      "sparsity_ratio": 0.9957,
+      "qwk": 0.477257,
+      "sparsity_ratio": 0.9983,
       "trial_number": 0
-    },
-    {
-      "checkpoint_path": "checkpoints/stage-c-chebykan-top20-pareto-sparsity-trial-028/model-20260501-174133.pt",
-      "params": {
-        "sparsity_lambda": 0.5
-      },
-      "qwk": 0.529992,
-      "sparsity_ratio": 0.9965,
-      "trial_number": 28
     }
   ],
   "preprocessing_recipe": "kan_paper",

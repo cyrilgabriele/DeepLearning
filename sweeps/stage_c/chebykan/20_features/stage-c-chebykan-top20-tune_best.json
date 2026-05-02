@@ -1,26 +1,26 @@
 {
   "best_params": {
-    "batch_size": 2048,
-    "degree": 8,
+    "batch_size": 512,
+    "degree": 7,
     "depth": 2,
-    "lr": 0.014040832922508916,
-    "max_epochs": 200,
-    "weight_decay": 3.0672964481154227e-06,
+    "lr": 0.00897807668007943,
+    "max_epochs": 100,
+    "weight_decay": 0.00019160146526767927,
     "width": 128
   },
-  "best_qwk": 0.60429,
+  "best_qwk": 0.601372,
   "best_trial_attrs": {
-    "checkpoint_path": "checkpoints/stage-c-chebykan-top20-tune-trial-025/model-20260501-190740.pt",
-    "experiment_name": "stage-c-chebykan-top20-tune-trial-025",
+    "checkpoint_path": "checkpoints/stage-c-chebykan-top20-tune-trial-031/model-20260501-220703.pt",
+    "experiment_name": "stage-c-chebykan-top20-tune-trial-031",
     "metrics": {
-      "accuracy": 0.34587858886924305,
-      "f1_macro": 0.21619703493461437,
-      "mae": 1.3971542119979858,
-      "qwk": 0.6042898941219359
+      "accuracy": 0.34099520080828494,
+      "f1_macro": 0.2308552567656591,
+      "mae": 1.3779573440551758,
+      "qwk": 0.6013718456457944
     },
-    "summary_path": "artifacts/stage-c-chebykan-top20-tune-trial-025/run-summary-20260501-190740.json"
+    "summary_path": "artifacts/stage-c-chebykan-top20-tune-trial-031/run-summary-20260501-220703.json"
   },
-  "best_trial_number": 25,
+  "best_trial_number": 31,
   "completed_trials": 50,
   "model_family": "chebykan",
   "preprocessing_recipe": "kan_paper",

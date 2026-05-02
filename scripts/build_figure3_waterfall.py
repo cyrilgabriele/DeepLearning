@@ -38,13 +38,14 @@ from src.models.tabkan import TabKAN
 
 
 REPO = Path("/Users/gian1/CODE/HSG/FS26/DeepLearning/DeepLearning")
-# Sparse ChebyKAN winner from the 2026-05-01 rerun: 50-trial Optuna at the
-# 20-feature budget with λ fixed from the fresh 20-feature Pareto sparsity
-# scan. Architecture is the Optuna winner (depth=2, width=128, degree=8).
-EXP = "stage-c-chebykan-top20-tune-tuned"
+# Sparse ChebyKAN winner from the 2026-05-02 v2 rerun (Cyril-style ordering:
+# 50-trial λ=0 architecture tune first, then 33-trial Pareto sparsity scan
+# on the winner architecture). Strong-sparse pick is trial 29
+# (depth=2, width=128, degree=7, λ=0.00235652, sparsity_ratio 0.9153).
+EXP = "stage-c-chebykan-top20-pareto-sparsity-trial-029"
 CKPT = REPO / "outputs" / "interpretability" / "kan_paper" / EXP / "models" / "chebykan_pruned_module.pt"
 EVAL = REPO / "outputs" / "eval" / "kan_paper" / EXP
-CONFIG = REPO / "sweeps" / "stage_c" / "chebykan" / "20_features" / "stage-c-chebykan-top20-tune_best.yaml"
+CONFIG = REPO / "sweeps" / "stage_c" / "chebykan" / "20_features" / "stage-c-chebykan-top20-pareto-sparsity_pareto_trial029.yaml"
 
 APPLICANT_ID = 55728.0
 TOP_K_TO_SHOW = 7  # remaining features bucketed as "other"

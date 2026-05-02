@@ -1,5 +1,5 @@
 trainer:
-  experiment_name: stage-c-fourierkan-top20-pareto-sparsity-pareto-q0.564-s0.88
+  experiment_name: stage-c-fourierkan-top20-pareto-sparsity-pareto-q0.567-s0.98
   train_csv: /Users/gian1/CODE/HSG/FS26/DeepLearning/DeepLearning/data/prudential-life-insurance-assessment/train.csv
   test_csv: /Users/gian1/CODE/HSG/FS26/DeepLearning/DeepLearning/data/prudential-life-insurance-assessment/test.csv
   seed: 42
@@ -17,10 +17,10 @@ model:
   degree: null
   use_layernorm: false
   params:
-    max_epochs: 100
-    grid_size: 5
-    lr: 0.0011202234168345851
-    weight_decay: 1.0952927106776856e-06
+    max_epochs: 200
+    grid_size: 8
+    lr: 0.008515719178275361
+    weight_decay: 0.00015604460552417506
     batch_size: 256
     l1_weight: 1.0
     entropy_weight: 1.0

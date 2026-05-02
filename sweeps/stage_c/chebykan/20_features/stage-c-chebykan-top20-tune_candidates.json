@@ -1,16 +1,16 @@
 {
   "candidates": [
     {
-      "candidate_id": "stage-c-chebykan-top20-tune-trial-025",
-      "checkpoint_path": "checkpoints/stage-c-chebykan-top20-tune-trial-025/model-20260501-190740.pt",
+      "candidate_id": "stage-c-chebykan-top20-tune-trial-031",
+      "checkpoint_path": "checkpoints/stage-c-chebykan-top20-tune-trial-031/model-20260501-220703.pt",
       "metrics": {
-        "accuracy": 0.34587858886924305,
-        "f1_macro": 0.21619703493461437,
-        "mae": 1.3971542119979858,
-        "qwk": 0.6042898941219359
+        "accuracy": 0.34099520080828494,
+        "f1_macro": 0.2308552567656591,
+        "mae": 1.3779573440551758,
+        "qwk": 0.6013718456457944
       },
       "model_config": {
-        "degree": 8,
+        "degree": 7,
         "depth": 2,
         "flavor": "chebykan",
         "hidden_widths": [
@@ -19,13 +19,13 @@
         ],
         "name": "tabkan-base",
         "params": {
-          "batch_size": 2048,
+          "batch_size": 512,
           "entropy_weight": 1.0,
           "l1_weight": 1.0,
-          "lr": 0.014040832922508916,
-          "max_epochs": 200,
-          "sparsity_lambda": 0.0130862,
-          "weight_decay": 3.0672964481154227e-06
+          "lr": 0.00897807668007943,
+          "max_epochs": 100,
+          "sparsity_lambda": 0.0,
+          "weight_decay": 0.00019160146526767927
         },
         "use_layernorm": false,
         "width": 128
@@ -35,7 +35,7 @@
         "recipe": "kan_paper",
         "selected_features_path": "/Users/gian1/CODE/HSG/FS26/DeepLearning/DeepLearning/configs/experiment_stages/stage_c_explanation_package/feature_lists/chebykan_pareto_q0583_top20_features.json"
       },
-      "qwk": 0.60429,
+      "qwk": 0.601372,
       "rank": 1,
       "selection_metadata": {
         "architecture": {
@@ -49,38 +49,38 @@
           "width": 128
         },
         "basis_parameters": {
-          "degree": 8,
+          "degree": 7,
           "flavor": "chebykan"
         },
         "notes": [
-          "Source experiment: stage-c-chebykan-top20-tune-trial-025"
+          "Source experiment: stage-c-chebykan-top20-tune-trial-031"
         ],
         "sampled_params": {
-          "batch_size": 2048,
-          "degree": 8,
+          "batch_size": 512,
+          "degree": 7,
           "depth": 2,
-          "lr": 0.014040832922508916,
-          "max_epochs": 200,
-          "weight_decay": 3.0672964481154227e-06,
+          "lr": 0.00897807668007943,
+          "max_epochs": 100,
+          "weight_decay": 0.00019160146526767927,
           "width": 128
         },
         "sparsity_parameters": {
           "entropy_weight": 1.0,
           "l1_weight": 1.0,
-          "sparsity_lambda": 0.0130862
+          "sparsity_lambda": 0.0
         }
       },
-      "summary_path": "artifacts/stage-c-chebykan-top20-tune-trial-025/run-summary-20260501-190740.json",
+      "summary_path": "artifacts/stage-c-chebykan-top20-tune-trial-031/run-summary-20260501-220703.json",
       "trainer_config": {
-        "experiment_name": "stage-c-chebykan-top20-tune-candidate-025",
+        "experiment_name": "stage-c-chebykan-top20-tune-candidate-031",
         "seed": 42,
         "test_csv": "/Users/gian1/CODE/HSG/FS26/DeepLearning/DeepLearning/data/prudential-life-insurance-assessment/test.csv",
         "train_csv": "/Users/gian1/CODE/HSG/FS26/DeepLearning/DeepLearning/data/prudential-life-insurance-assessment/train.csv"
       },
-      "trial_number": 25
+      "trial_number": 31
     }
   ],
-  "generated_at": "2026-05-01T19:38:51.235177+00:00",
+  "generated_at": "2026-05-01T22:24:04.442347+00:00",
   "model_family": "chebykan",
   "preprocessing_recipe": "kan_paper",
   "study_name": "stage-c-chebykan-top20-tune",

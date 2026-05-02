@@ -12,10 +12,10 @@ preprocessing:
 # Architecture/HP baseline mirrors Cyril's full-feature tuned dense ChebyKAN
 # (configs/.../cheby/all_features/train/chebykan_best.yaml). LayerNorm is
 # turned off so the §3.2 closed-form composition story holds at 20 features.
-# sparsity_lambda is fixed to the strong sparse-reference value picked from
-# the 20-feature Pareto sweep at sweeps/stage_c/chebykan/20_features/
-# stage-c-chebykan-top20-pareto-sparsity_pareto.json (trial 1, λ=0.0130862,
-# QWK 0.5795, sparsity_ratio 0.9555).
+# sparsity_lambda is fixed to 0.0 here so this 50-trial Optuna sweep tunes
+# architecture + optimizer on the *dense* objective (matches Cyril's full-
+# feature stage-A→B order). The follow-up 33-trial Pareto sparsity scan
+# then runs on the winner architecture from this sweep.
 model:
   name: tabkan-base
   flavor: chebykan
@@ -27,7 +27,7 @@ model:
     lr: 0.0008814400571473658
     weight_decay: 0.00009472373311076866
     batch_size: 256
-    sparsity_lambda: 0.0130862
+    sparsity_lambda: 0.0
     l1_weight: 1.0
     entropy_weight: 1.0
 

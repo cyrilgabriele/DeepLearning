@@ -12,121 +12,85 @@
   ],
   "pareto_front": [
     {
-      "checkpoint_path": "checkpoints/stage-c-fourierkan-top20-pareto-sparsity-trial-017/model-20260501-181059.pt",
+      "checkpoint_path": "checkpoints/stage-c-fourierkan-top20-pareto-sparsity-trial-017/model-20260502-005250.pt",
       "params": {
         "sparsity_lambda": 0.0005
       },
-      "qwk": 0.573452,
-      "sparsity_ratio": 0.4,
+      "qwk": 0.577414,
+      "sparsity_ratio": 0.8914,
       "trial_number": 17
     },
     {
-      "checkpoint_path": "checkpoints/stage-c-fourierkan-top20-pareto-sparsity-trial-019/model-20260501-181340.pt",
+      "checkpoint_path": "checkpoints/stage-c-fourierkan-top20-pareto-sparsity-trial-008/model-20260502-002948.pt",
       "params": {
-        "sparsity_lambda": 0.001
+        "sparsity_lambda": 0.00688036
       },
-      "qwk": 0.571425,
-      "sparsity_ratio": 0.4977,
-      "trial_number": 19
+      "qwk": 0.568026,
+      "sparsity_ratio": 0.9766,
+      "trial_number": 8
     },
     {
-      "checkpoint_path": "checkpoints/stage-c-fourierkan-top20-pareto-sparsity-trial-031/model-20260501-182939.pt",
+      "checkpoint_path": "checkpoints/stage-c-fourierkan-top20-pareto-sparsity-trial-031/model-20260502-012924.pt",
       "params": {
         "sparsity_lambda": 0.010562
       },
-      "qwk": 0.56393,
-      "sparsity_ratio": 0.8781,
+      "qwk": 0.567334,
+      "sparsity_ratio": 0.9848,
       "trial_number": 31
     },
     {
-      "checkpoint_path": "checkpoints/stage-c-fourierkan-top20-pareto-sparsity-trial-001/model-20260501-174952.pt",
+      "checkpoint_path": "checkpoints/stage-c-fourierkan-top20-pareto-sparsity-trial-019/model-20260502-005803.pt",
       "params": {
-        "sparsity_lambda": 0.0130862
+        "sparsity_lambda": 0.001
       },
-      "qwk": 0.563276,
-      "sparsity_ratio": 0.9289,
-      "trial_number": 1
+      "qwk": 0.566155,
+      "sparsity_ratio": 0.9867,
+      "trial_number": 19
     },
     {
-      "checkpoint_path": "checkpoints/stage-c-fourierkan-top20-pareto-sparsity-trial-011/model-20260501-180252.pt",
+      "checkpoint_path": "checkpoints/stage-c-fourierkan-top20-pareto-sparsity-trial-026/model-20260502-011621.pt",
       "params": {
-        "sparsity_lambda": 0.0162137
+        "sparsity_lambda": 0.00190197
       },
-      "qwk": 0.563138,
-      "sparsity_ratio": 0.9426,
-      "trial_number": 11
+      "qwk": 0.565992,
+      "sparsity_ratio": 0.9898,
+      "trial_number": 26
     },
     {
-      "checkpoint_path": "checkpoints/stage-c-fourierkan-top20-pareto-sparsity-trial-003/model-20260501-175232.pt",
+      "checkpoint_path": "checkpoints/stage-c-fourierkan-top20-pareto-sparsity-trial-003/model-20260502-001640.pt",
       "params": {
         "sparsity_lambda": 0.0200887
       },
-      "qwk": 0.556868,
-      "sparsity_ratio": 0.948,
+      "qwk": 0.558765,
+      "sparsity_ratio": 0.991,
       "trial_number": 3
     },
     {
-      "checkpoint_path": "checkpoints/stage-c-fourierkan-top20-pareto-sparsity-trial-024/model-20260501-182015.pt",
+      "checkpoint_path": "checkpoints/stage-c-fourierkan-top20-pareto-sparsity-trial-015/model-20260502-004735.pt",
       "params": {
-        "sparsity_lambda": 0.0248897
+        "sparsity_lambda": 0.0900381
       },
-      "qwk": 0.554699,
-      "sparsity_ratio": 0.9523,
-      "trial_number": 24
+      "qwk": 0.553408,
+      "sparsity_ratio": 0.9941,
+      "trial_number": 15
     },
     {
-      "checkpoint_path": "checkpoints/stage-c-fourierkan-top20-pareto-sparsity-trial-007/model-20260501-175748.pt",
+      "checkpoint_path": "checkpoints/stage-c-fourierkan-top20-pareto-sparsity-trial-032/model-20260502-013200.pt",
       "params": {
-        "sparsity_lambda": 0.0473394
+        "sparsity_lambda": 0.212177
       },
-      "qwk": 0.554523,
-      "sparsity_ratio": 0.9684,
-      "trial_number": 7
+      "qwk": 0.549478,
+      "sparsity_ratio": 0.9953,
+      "trial_number": 32
     },
     {
-      "checkpoint_path": "checkpoints/stage-c-fourierkan-top20-pareto-sparsity-trial-023/model-20260501-181856.pt",
+      "checkpoint_path": "checkpoints/stage-c-fourierkan-top20-pareto-sparsity-trial-028/model-20260502-012134.pt",
       "params": {
-        "sparsity_lambda": 0.0586531
+        "sparsity_lambda": 0.5
       },
-      "qwk": 0.553676,
-      "sparsity_ratio": 0.9738,
-      "trial_number": 23
-    },
-    {
-      "checkpoint_path": "checkpoints/stage-c-fourierkan-top20-pareto-sparsity-trial-021/model-20260501-181618.pt",
-      "params": {
-        "sparsity_lambda": 0.0726706
-      },
-      "qwk": 0.55274,
-      "sparsity_ratio": 0.9789,
-      "trial_number": 21
-    },
-    {
-      "checkpoint_path": "checkpoints/stage-c-fourierkan-top20-pareto-sparsity-trial-002/model-20260501-175112.pt",
-      "params": {
-        "sparsity_lambda": 0.138217
-      },
-      "qwk": 0.551909,
-      "sparsity_ratio": 0.9898,
-      "trial_number": 2
-    },
-    {
-      "checkpoint_path": "checkpoints/stage-c-fourierkan-top20-pareto-sparsity-trial-022/model-20260501-181737.pt",
-      "params": {
-        "sparsity_lambda": 0.325712
-      },
-      "qwk": 0.551058,
-      "sparsity_ratio": 0.9957,
-      "trial_number": 22
-    },
-    {
-      "checkpoint_path": "checkpoints/stage-c-fourierkan-top20-pareto-sparsity-trial-000/model-20260501-174831.pt",
-      "params": {
-        "sparsity_lambda": 0.403554
-      },
-      "qwk": 0.525782,
+      "qwk": 0.544315,
       "sparsity_ratio": 0.9961,
-      "trial_number": 0
+      "trial_number": 28
     }
   ],
   "preprocessing_recipe": "kan_paper",

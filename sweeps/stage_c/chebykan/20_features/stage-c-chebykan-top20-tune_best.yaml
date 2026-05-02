@@ -15,14 +15,14 @@ model:
   hidden_widths:
   - 128
   - 128
-  degree: 8
+  degree: 7
   use_layernorm: false
   params:
-    max_epochs: 200
-    lr: 0.014040832922508916
-    weight_decay: 3.0672964481154227e-06
-    batch_size: 2048
-    sparsity_lambda: 0.0130862
+    max_epochs: 100
+    lr: 0.00897807668007943
+    weight_decay: 0.00019160146526767927
+    batch_size: 512
+    sparsity_lambda: 0.0
     l1_weight: 1.0
     entropy_weight: 1.0
 tune:

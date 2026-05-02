@@ -1,5 +1,4 @@
-config: sweeps/stage_c/fourierkan/20_features/stage-c-fourierkan-top20-tune_best.yaml
-checkpoint: checkpoints/stage-c-fourierkan-top20-tune-tuned/model-20260501-204051.pt
+checkpoint: checkpoints/stage-c-fourierkan-top20-pareto-sparsity-trial-017/model-20260502-005250.pt
 output_root: outputs
 pruning_threshold: 0.002
 qwk_tolerance: 0.01

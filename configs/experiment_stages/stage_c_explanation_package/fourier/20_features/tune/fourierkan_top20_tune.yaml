@@ -12,10 +12,10 @@ preprocessing:
 # Architecture/HP baseline mirrors Cyril's full-feature tuned dense FourierKAN
 # (configs/.../fourier/all_features/train/fourierkan_best.yaml). LayerNorm is
 # turned off so the §3.2 closed-form composition story holds at 20 features.
-# sparsity_lambda is fixed to the strong sparse-reference value picked from
-# the 20-feature Pareto sweep at sweeps/stage_c/fourierkan/20_features/
-# stage-c-fourierkan-top20-pareto-sparsity_pareto.json (trial 31, λ=0.010562,
-# QWK 0.5639, sparsity_ratio 0.8781).
+# sparsity_lambda is fixed to 0.0 here so this 50-trial Optuna sweep tunes
+# architecture + optimizer on the *dense* objective (matches Cyril's full-
+# feature stage-A→B order). The follow-up 33-trial Pareto sparsity scan
+# then runs on the winner architecture from this sweep.
 model:
   name: tabkan-base
   flavor: fourierkan
@@ -27,7 +27,7 @@ model:
     lr: 0.0011202234168345851
     weight_decay: 0.0000010952927106776856
     batch_size: 256
-    sparsity_lambda: 0.010562
+    sparsity_lambda: 0.0
     l1_weight: 1.0
     entropy_weight: 1.0
 

@@ -1,5 +1,5 @@
 trainer:
-  experiment_name: stage-c-chebykan-top20-pareto-sparsity-pareto-q0.477-s1.00
+  experiment_name: stage-c-chebykan-top20-pareto-sparsity-pareto-q0.587-s1.00
   train_csv: /Users/gian1/CODE/HSG/FS26/DeepLearning/DeepLearning/data/prudential-life-insurance-assessment/train.csv
   test_csv: /Users/gian1/CODE/HSG/FS26/DeepLearning/DeepLearning/data/prudential-life-insurance-assessment/test.csv
   seed: 42
@@ -24,7 +24,7 @@ model:
     batch_size: 512
     l1_weight: 1.0
     entropy_weight: 1.0
-    sparsity_lambda: 0.403554
+    sparsity_lambda: 0.111556
 tune:
   name: stage-c-chebykan-top20-pareto-sparsity
   storage: /Users/gian1/CODE/HSG/FS26/DeepLearning/DeepLearning/sweeps/stage_c/chebykan/20_features/stage-c-chebykan-top20-pareto-sparsity.db

@@ -1,3 +1,7 @@
+# v2 (post-arch-tune): Pareto sparsity scan on the 50-trial Optuna winner's
+# architecture (depth=2, width=128, degree=7, lr=0.00898, wd=0.000192,
+# bs=512, max_epochs=100). 33-value λ grid identical to Cyril's full-feature
+# Pareto. Picking strong sparse-reference λ from the resulting pareto.json.
 trainer:
   experiment_name: stage-c-chebykan-top20-pareto-sparsity
   train_csv: data/prudential-life-insurance-assessment/train.csv
@@ -12,14 +16,14 @@ preprocessing:
 model:
   name: tabkan-base
   flavor: chebykan
-  hidden_widths: [128]
-  degree: 5
+  hidden_widths: [128, 128]
+  degree: 7
   use_layernorm: false
   params:
     max_epochs: 100
-    lr: 0.0008814400571473658
-    weight_decay: 0.00009472373311076866
-    batch_size: 256
+    lr: 0.00897807668007943
+    weight_decay: 0.00019160146526767927
+    batch_size: 512
     l1_weight: 1.0
     entropy_weight: 1.0
 
@@ -27,7 +31,7 @@ tune:
   name: stage-c-chebykan-top20-pareto-sparsity
   storage: sweeps/stage_c/chebykan/20_features/stage-c-chebykan-top20-pareto-sparsity.db
   n_trials: 33
-  directions: [maximize, maximize]   # (qwk, sparsity_ratio)
+  directions: [maximize, maximize]
   sampler: grid
   top_k_candidates: 33
   search_space:
