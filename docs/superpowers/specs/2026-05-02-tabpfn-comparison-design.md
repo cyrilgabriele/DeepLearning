@@ -299,18 +299,15 @@ All edits are small, targeted, and additive. No existing paragraph is rewritten 
 
 ### §5.1 §1 — one sentence (after line 46)
 
-> "Beyond architectural innovations, recent work introduces tabular foundation models that are pretrained on synthetic priors and applied to new tasks via in-context learning rather than per-task gradient updates; TabPFN \cite{Hollmann2025} is the principal example and serves here as a contemporary no-tuning baseline."
+> "Beyond architectural innovations, recent work introduces tabular foundation models that are pretrained on synthetic priors and applied to new tasks via in-context learning rather than per-task gradient updates; TabPFN \textcolor{red}{[tabpfn reference to add]} is the principal example and serves here as a contemporary no-tuning baseline."
 
-References update: add `\cite{Hollmann2025}` entry to `local_files/references.bib` (or the equivalent .bib file used by the paper). Actual bib entry text:
+The citation is **inserted as a visible red placeholder** rather than a real `\cite{...}` key. This makes the unfilled reference impossible to miss when the PDF is rendered for review. The user replaces the red marker with the correct `\cite{<keyname>}` after adding the actual bib entry to the paper's bibliography file.
 
-```bibtex
-@article{Hollmann2025,
-  title   = {Accurate predictions on small data with a tabular foundation model},
-  author  = {Hollmann, Noah and M{\"u}ller, Samuel and Purucker, Lennart and others},
-  journal = {Nature},
-  year    = {2025}
-}
-```
+Implementation requirements:
+
+- Verify `\usepackage{xcolor}` is already loaded by `local_files/main (1).tex`. If not, add it next to the other `\usepackage` declarations (the existing paper imports `graphicx` and others, so adding one more package is non-disruptive).
+- Do **not** add a guessed bib entry to the bibliography file. The user supplies the exact bib entry separately.
+- Do **not** invent a `\cite{Hollmann2025}` key elsewhere in the paper, since it would either compile to a "?" or trigger a BibTeX warning.
 
 ### §5.2 §2.2 — two sentences (end of paragraph at line 66)
 
