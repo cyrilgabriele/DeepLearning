@@ -7,6 +7,7 @@ from typing import Callable, Dict
 from .base import PrudentialModel
 from .glm_baseline import build_glm_model
 from .tabkan import build_tabkan_model
+from .tabpfn import build_tabpfn_auto_model
 from .xgb_baseline import build_xgb_model
 from .xgboost_paper import build_xgboost_paper_model
 
@@ -21,6 +22,7 @@ MODEL_REGISTRY: Dict[str, ModelFactory] = {
     "glm": build_glm_model,
     "xgb": build_xgb_model,
     "xgboost-paper": build_xgboost_paper_model,
+    "tabpfn-auto": build_tabpfn_auto_model,
 }
 
 
