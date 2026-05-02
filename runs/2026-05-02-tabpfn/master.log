@@ -1,0 +1,14 @@
+Run A — TabPFN full feature, 3 seeds (42, 1337, 2024). Started: Sat May  2 12:47:46 CEST 2026
+Run A — TabPFN full feature, 3 seeds (42, 1337, 2024). Started: Sat May  2 13:43:37 CEST 2026
+Run A — TabPFN full feature, 3 seeds (42, 1337, 2024). Started: Sat May  2 13:50:52 CEST 2026
+Run A — TabPFN full feature, 3 seeds. Started: Sat May  2 13:52:20 CEST 2026
+Run A retry 3 — TabPFN full feature, 3 seeds. Started: Sat May  2 13:55:11 CEST 2026
+Run A retry 4 (with device:cpu in YAML and allowlist) — Started: Sat May  2 13:56:47 CEST 2026
+Run A complete: Sat May  2 20:52:48 CEST 2026
+QWK summary:
+seed=42:
+  qwk = 0.6346949089736408
+seed=1337:
+  qwk = 0.6399481631253959
+seed=2024:
+  qwk = 0.6345722333294228
