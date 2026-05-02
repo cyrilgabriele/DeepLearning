@@ -1,0 +1,22 @@
+{
+  "mean_val_qwk": 0.6442217591455662,
+  "n_seeds": 3,
+  "per_seed": [
+    {
+      "experiment_name": "stage-c-tabpfn-full-seed42",
+      "seed": 42,
+      "val_qwk": 0.6370932832276193
+    },
+    {
+      "experiment_name": "stage-c-tabpfn-full-seed1337",
+      "seed": 1337,
+      "val_qwk": 0.6584687013252024
+    },
+    {
+      "experiment_name": "stage-c-tabpfn-full-seed2024",
+      "seed": 2024,
+      "val_qwk": 0.637103292883877
+    }
+  ],
+  "std_val_qwk": 0.012338214868883058
+}
