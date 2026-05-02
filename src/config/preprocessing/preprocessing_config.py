@@ -21,6 +21,7 @@ class PreprocessingConfig(BaseModel):
         "xgboost_paper",
         "kan_paper",
         "kan_sota",
+        "tabpfn_paper",
     ] = Field(
         ...,
         description="Choose between the paper baseline, the minimal KAN tweaks, or the SOTA KAN recipe.",
