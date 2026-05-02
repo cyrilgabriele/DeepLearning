@@ -50,7 +50,7 @@ _XGB_REQUIRED_PARAMS = {
 }
 _XGB_OPTIONAL_PARAMS = {"gamma"}
 _GLM_REQUIRED_PARAMS = {"alpha"}
-_TABPFN_AUTO_OPTIONAL_PARAMS = {"n_estimators", "max_time"}
+_TABPFN_AUTO_OPTIONAL_PARAMS = {"n_estimators", "max_time", "device"}
 
 
 class ModelConfig(BaseModel):
