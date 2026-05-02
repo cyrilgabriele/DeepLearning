@@ -6,6 +6,12 @@ import argparse
 from pathlib import Path
 from typing import TYPE_CHECKING, Sequence
 
+from dotenv import load_dotenv
+
+# Load .env from the project root so secrets like TABPFN_TOKEN are available
+# to model wrappers without manual `source` of the file in each shell.
+load_dotenv()
+
 if TYPE_CHECKING:
     from src.models import TrainingArtifacts
 

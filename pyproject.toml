@@ -23,6 +23,7 @@ dependencies = [
     "pyarrow>=23.0.1",
     "shap>=0.51.0",
     "tabpfn>=2.0.0",
+    "python-dotenv>=1.0.0",
 ]
 
 [tool.setuptools.packages.find]
