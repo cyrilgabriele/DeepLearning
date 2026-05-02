@@ -4,9 +4,9 @@
 
 **Goal:** Add TabPFN as a no-tuning tabular-foundation-model baseline to the paper comparison: two outer-test runs (full-feature, 20-feature), permutation-importance feature ranking, attention attribution for applicant 55728, and small targeted edits to `local_files/main (1).tex`.
 
-**Architecture:** TabPFN is wrapped in a `PrudentialModel` subclass that uses `tabpfn_extensions.AutoTabPFNRegressor` to handle the >10k-row dataset internally; the wrapper plugs into the existing `Trainer` pipeline by adding a thin `tabpfn_paper` preprocessing recipe (delegating to the shared `xgboost_paper` paper-base preprocessor) and a registry entry. Three seed-specific full-feature configs and one 20-feature config drive `main.py --stage train`; downstream scripts compute permutation importance, top-5 feature overlap, and attention attribution. Paper edits are surgical inserts into Tables 1–2 and §1/§2.2/§3.2.1/§3.2.2/§4/§5.
+**Architecture:** TabPFN is wrapped in a `PrudentialModel` subclass that uses base `tabpfn.TabPFNRegressor` with `ignore_pretraining_limits=True` to handle the >10k-row dataset directly; the wrapper plugs into the existing `Trainer` pipeline by adding a thin `tabpfn_paper` preprocessing recipe (delegating to the shared `xgboost_paper` paper-base preprocessor) and a registry entry. Three seed-specific full-feature configs and one 20-feature config drive `main.py --stage train`; downstream scripts compute permutation importance, top-5 feature overlap, and attention attribution. Paper edits are surgical inserts into Tables 1–2 and §1/§2.2/§3.2.1/§3.2.2/§4/§5.
 
-**Tech Stack:** Python 3.11+, `tabpfn>=2.0`, `tabpfn-extensions`, scikit-learn (permutation importance, bootstrap), torch (attention forward-hook), pandas, joblib. LaTeX for paper edits. Existing project orchestration: `main.py --stage train` via `uv run`.
+**Tech Stack:** Python 3.11+, `tabpfn>=2.0` (base only — `tabpfn-extensions` is **not** used because it pins `pandas<3` and conflicts with the project's `pandas>=3.0.1`), scikit-learn (permutation importance, bootstrap), torch (attention forward-hook), pandas, joblib. LaTeX for paper edits. Existing project orchestration: `main.py --stage train` via `uv run`.
 
 **Branch:** `tabpfn` (already created).
 
@@ -34,7 +34,7 @@ If any check fails, surface to the user before continuing.
 | File | Responsibility |
 |---|---|
 | `src/preprocessing/preprocess_tabpfn_paper.py` | Recipe shim: delegates to `preprocess_xgboost_paper.run_pipeline` and `transform`. Provides a separate recipe name in artifacts/manifests. |
-| `src/models/tabpfn.py` | `TabPFNAutoRegressor` class implementing `PrudentialModel`. Wraps `AutoTabPFNRegressor` from `tabpfn_extensions`; fits internal QWK thresholds on training predictions; `predict()` returns ordinal classes 1–8. |
+| `src/models/tabpfn.py` | `TabPFNAutoRegressor` class implementing `PrudentialModel`. Wraps `TabPFNRegressor` from base `tabpfn` with `ignore_pretraining_limits=True` (Option A: extended in-context inference over the full training set, no AutoTabPFN ensembling — see plan header for rationale); fits internal QWK thresholds on training predictions; `predict()` returns ordinal classes 1–8. |
 | `tests/preprocessing/test_preprocess_tabpfn_paper.py` | Unit tests asserting the shim returns the same output keys/shapes as `preprocess_xgboost_paper.run_pipeline` on a tiny synthetic CSV. |
 | `tests/models/test_tabpfn.py` | Unit tests for the wrapper using a mocked `AutoTabPFNRegressor` (no real model download). Asserts `predict()` returns class labels in {1..8}; thresholds are populated; `get_ordinal_calibration()` returns a valid payload. |
 | `tests/training/test_trainer_tabpfn_recipe.py` | Test asserting `Trainer._prepare_data` dispatches `recipe="tabpfn_paper"` correctly without erroring on a tiny CSV fixture. |
@@ -53,7 +53,7 @@ If any check fails, surface to the user before continuing.
 
 | File | Change |
 |---|---|
-| `pyproject.toml` | Add `tabpfn>=2.0.0` and `tabpfn-extensions>=0.1.0` to `[project].dependencies`. |
+| `pyproject.toml` | Add `tabpfn>=2.0.0` to `[project].dependencies`. (`tabpfn-extensions` is intentionally NOT added because of a `pandas<3` upper-bound conflict with the project's `pandas>=3.0.1` pin — see plan header.) |
 | `src/training/trainer.py` | Add `tabpfn_paper` dispatch case in `_prepare_data` (delegates to the new shim) and in `_transform_test_dataframe`. |
 | `src/models/registry.py` | Import `build_tabpfn_auto_model`; add `"tabpfn-auto"` registry entry. |
 | `src/models/__init__.py` | Re-export `TabPFNAutoRegressor` if the file currently re-exports other model classes (verify — many `__init__.py` files only export common helpers). |
@@ -62,43 +62,29 @@ If any check fails, surface to the user before continuing.
 
 ---
 
-## Task 1: Add dependencies and verify import
+## Task 1: Add dependency and verify import
 
 **Files:**
 - Modify: `pyproject.toml`
+- Create: `runs/2026-05-02-tabpfn/00_setup.log`
 - Run: `uv sync`
 
-- [ ] **Step 1: Add deps to pyproject.toml**
+**Note (Option A):** Only `tabpfn` is added, **not** `tabpfn-extensions`. The extensions package pins `pandas<3` and conflicts with this project's `pandas>=3.0.1`. The wrapper (Task 7) uses base `TabPFNRegressor` with `ignore_pretraining_limits=True` to handle the >10k-row dataset directly.
 
-Edit `pyproject.toml` `[project].dependencies` list — append two lines:
+- [ ] **Step 1: Add dep to pyproject.toml**
+
+Edit `pyproject.toml` `[project].dependencies` list — append one line:
 
 ```toml
     "tabpfn>=2.0.0",
-    "tabpfn-extensions>=0.1.0",
 ```
 
 - [ ] **Step 2: Sync**
 
 Run: `uv sync`
-Expected: install completes; no resolver errors. If the resolver complains about pinned torch versions, surface to user — do not attempt a unilateral pin change.
+Expected: install completes; no resolver errors. If the resolver complains about other dependency conflicts, surface to user — do not attempt unilateral pin changes.
 
-- [ ] **Step 3: Verify the import path for AutoTabPFNRegressor**
-
-Run:
-
-```bash
-uv run python -c "from tabpfn_extensions.post_hoc_ensembles.sklearn_interface import AutoTabPFNRegressor; print(AutoTabPFNRegressor)"
-```
-
-Expected: prints the class. If `ImportError` because the path differs in the installed version, search the installed package:
-
-```bash
-uv run python -c "import tabpfn_extensions, pkgutil; [print(m.name) for m in pkgutil.walk_packages(tabpfn_extensions.__path__, tabpfn_extensions.__name__ + '.')]"
-```
-
-Find the module exporting `AutoTabPFNRegressor` and update the import path used in Task 4 below. Record the actual import path in `runs/2026-05-02-tabpfn/00_setup.log`.
-
-- [ ] **Step 4: Verify TabPFN-v2 base regressor import**
+- [ ] **Step 3: Verify TabPFN-v2 base regressor import**
 
 Run:
 
@@ -106,13 +92,32 @@ Run:
 uv run python -c "from tabpfn import TabPFNRegressor; print(TabPFNRegressor)"
 ```
 
-Expected: prints the class. Record the version: `uv run python -c "import tabpfn; print(tabpfn.__version__)"`.
-
-- [ ] **Step 5: Commit**
+Expected: prints the class. Record the version:
 
 ```bash
-git add pyproject.toml uv.lock
-git commit -m "deps: add tabpfn and tabpfn-extensions"
+uv run python -c "import tabpfn; print(tabpfn.__version__)"
+```
+
+- [ ] **Step 4: Verify ignore_pretraining_limits is supported**
+
+Run:
+
+```bash
+uv run python -c "from tabpfn import TabPFNRegressor; import inspect; print('ignore_pretraining_limits' in inspect.signature(TabPFNRegressor.__init__).parameters)"
+```
+
+Expected: prints `True`. If `False`, the installed TabPFN version is too old; report BLOCKED.
+
+- [ ] **Step 5: Write setup log**
+
+Append the verified import, version, and `ignore_pretraining_limits` support flag to `runs/2026-05-02-tabpfn/00_setup.log` (create the directory if needed).
+
+- [ ] **Step 6: Commit**
+
+```bash
+mkdir -p runs/2026-05-02-tabpfn
+git add pyproject.toml uv.lock runs/2026-05-02-tabpfn/00_setup.log
+git commit -m "deps: add tabpfn for TabPFN baseline comparison"
 ```
 
 ---
@@ -582,29 +587,25 @@ from src.models.base import PrudentialModel
 
 def _build_auto_tabpfn(
     *,
-    n_estimators: int,
-    max_time: int,
     device: str,
     random_state: int,
+    ignore_pretraining_limits: bool = True,
 ):
-    """Construct and return an AutoTabPFNRegressor instance.
+    """Construct and return a TabPFNRegressor instance.
 
     Isolated as a free function so unit tests can patch it without
-    instantiating the real (large) pretrained model.
+    instantiating the real (large) pretrained model. Despite the legacy
+    function name, this returns the base ``TabPFNRegressor`` (Option A —
+    no AutoTabPFN ensemble; ignore_pretraining_limits=True allows the
+    >10k-row Prudential training set as in-context input).
     """
 
-    # Import path verified in Task 1 setup. If the installed version of
-    # tabpfn_extensions exposes AutoTabPFNRegressor at a different path,
-    # update this import accordingly and document the change.
-    from tabpfn_extensions.post_hoc_ensembles.sklearn_interface import (
-        AutoTabPFNRegressor,
-    )
+    from tabpfn import TabPFNRegressor
 
-    return AutoTabPFNRegressor(
-        n_estimators=n_estimators,
-        max_time=max_time,
+    return TabPFNRegressor(
         device=device,
         random_state=random_state,
+        ignore_pretraining_limits=ignore_pretraining_limits,
     )
 
 
@@ -620,6 +621,10 @@ class TabPFNAutoRegressor(PrudentialModel):
         random_state: int = 42,
         **kwargs: Any,
     ) -> None:
+        # n_estimators and max_time are accepted (and stored) for config
+        # compatibility, but they are unused under Option A. They remain in
+        # the constructor signature so the YAML configs and registry layer
+        # do not need to be reshaped.
         super().__init__(
             n_estimators=n_estimators,
             max_time=max_time,
@@ -646,8 +651,6 @@ class TabPFNAutoRegressor(PrudentialModel):
     ) -> None:
         _ = validation_data, validation_splits  # unused; thresholds fit on training
         self._estimator = _build_auto_tabpfn(
-            n_estimators=self.n_estimators,
-            max_time=self.max_time,
             device=self.device,
             random_state=self.random_state,
         )
