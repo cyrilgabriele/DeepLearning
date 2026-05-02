@@ -1,0 +1,3 @@
+TabPFN version: 7.1.1
+Import path: from tabpfn import TabPFNRegressor
+ignore_pretraining_limits supported: True
