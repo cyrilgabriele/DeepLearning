@@ -24,7 +24,7 @@ class PreprocessingConfig(BaseModel):
         "tabpfn_paper",
     ] = Field(
         ...,
-        description="Choose between the paper baseline, the minimal KAN tweaks, or the SOTA KAN recipe.",
+        description="Choose between the paper baseline, the minimal KAN tweaks, the SOTA KAN recipe, or the TabPFN recipe.",
     )
     selected_features_path: Path | None = Field(
         default=None,
