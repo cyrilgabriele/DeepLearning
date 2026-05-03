@@ -1,0 +1,34 @@
+{
+  "chebykan_top5": [
+    "BMI",
+    "Wt",
+    "Medical_Keyword_3",
+    "Medical_History_5",
+    "Product_Info_4"
+  ],
+  "tabpfn_chebykan_intersection": [
+    "BMI",
+    "Product_Info_4"
+  ],
+  "tabpfn_chebykan_intersection_count": 2,
+  "tabpfn_top5": [
+    "Medical_History_32",
+    "BMI",
+    "Product_Info_4",
+    "Medical_History_4",
+    "Ins_Age"
+  ],
+  "tabpfn_xgb_intersection": [
+    "BMI",
+    "Medical_History_4",
+    "Product_Info_4"
+  ],
+  "tabpfn_xgb_intersection_count": 3,
+  "xgb_top5": [
+    "BMI",
+    "Medical_History_15",
+    "Medical_History_23",
+    "Medical_History_4",
+    "Product_Info_4"
+  ]
+}
