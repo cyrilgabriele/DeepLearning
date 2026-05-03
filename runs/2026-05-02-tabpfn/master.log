@@ -12,3 +12,5 @@ seed=1337:
   qwk = 0.6399481631253959
 seed=2024:
   qwk = 0.6345722333294228
+Run B 20-feature complete: Sun May  3 17:59:07 CEST 2026
+top20 outer-test qwk: 0.5617

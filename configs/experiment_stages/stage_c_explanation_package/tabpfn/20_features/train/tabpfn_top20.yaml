@@ -1,0 +1,17 @@
+trainer:
+  experiment_name: stage-c-tabpfn-top20
+  train_csv: data/prudential-life-insurance-assessment/train.csv
+  test_csv: data/prudential-life-insurance-assessment/test.csv
+  seed: 42
+
+preprocessing:
+  contract_version: 1
+  recipe: tabpfn_paper
+  selected_features_path: configs/experiment_stages/stage_c_explanation_package/feature_lists/tabpfn_top20_features.json
+
+model:
+  name: tabpfn-auto
+  params:
+    n_estimators: 8
+    max_time: 300
+    device: cpu
