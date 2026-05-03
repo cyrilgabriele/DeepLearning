@@ -1,0 +1,11 @@
+[2026-05-03 18:10:01] Using stage-c-tabpfn-full-seed1337 (val_qwk=0.6585)
+[2026-05-03 18:10:03] Resolved inner transformer: TabPFNV2p6
+[2026-05-03 18:25:37] attention extraction FAILED after 936s: Forward hook captured no attention tensor.
+[2026-05-03 18:25:37] Traceback (most recent call last):
+  File "/Users/gian1/CODE/HSG/FS26/DeepLearning/DeepLearning/scripts/tabpfn_attention_55728.py", line 193, in main
+    _run_attention_extraction()
+  File "/Users/gian1/CODE/HSG/FS26/DeepLearning/DeepLearning/scripts/tabpfn_attention_55728.py", line 135, in _run_attention_extraction
+    raise RuntimeError("Forward hook captured no attention tensor.")
+RuntimeError: Forward hook captured no attention tensor.
+
+[2026-05-03 18:25:37] wrote fallback marker; paper §3.2.1 attention sentence will use mention-only wording
