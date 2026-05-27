@@ -58,7 +58,9 @@ If the ranking script still writes to the legacy non-seed path, copy or regenera
 outputs/interpretability/tabpfn_paper/stage-c-tabpfn-full-seed42/data/tabpfn_feature_ranking.csv
 ```
 
-## Regenerate Comparison Figure
+## Regenerate Default 4-Row Comparison Figure
+
+TabPFN is included by default. This is the normal paper-facing regeneration command:
 
 ```bash
 uv run python -m src.interpretability.paper_comparison \
@@ -68,6 +70,18 @@ uv run python -m src.interpretability.paper_comparison \
 ```
 
 Use `--tabpfn-checkpoint checkpoints/stage-c-tabpfn-full-seed42/model-<timestamp>.joblib` if the checkpoint should be selected explicitly.
+
+## Regenerate Legacy 3-Row Comparison Figure
+
+Use `--exclude-tabpfn` to omit the TabPFN row and skip all TabPFN checkpoint, evaluation, and ranking artifact requirements:
+
+```bash
+uv run python -m src.interpretability.paper_comparison \
+  --exclude-tabpfn \
+  --output-dir outputs/interpretability/comparison/tuned_big_kan_vs_xgboost_3row
+```
+
+Both modes write the same filenames under the selected `--output-dir`. Use different output directories when keeping the 4-row and 3-row bundles side by side.
 
 ## Expected Outputs
 

@@ -820,7 +820,7 @@ def plot_feature_effect_comparison(
     xgb_eval: pd.DataFrame,
     xgb_raw: pd.DataFrame | None,
     feature_types: dict[str, str],
-    tabpfn: TabPFNArtifacts,
+    tabpfn: TabPFNArtifacts | None,
     cheby: KanArtifacts,
     fourier: KanArtifacts,
     output_dir: Path,
@@ -834,14 +834,16 @@ def plot_feature_effect_comparison(
 
     apply_paper_style()
     n_features = len(features)
+    row_count = 4 if tabpfn is not None else 3
+    figsize_height = 10.6 if tabpfn is not None else 8.2
     fig, axes = plt.subplots(
-        4,
+        row_count,
         n_features,
-        figsize=(3.4 * n_features, 10.6),
+        figsize=(3.4 * n_features, figsize_height),
         constrained_layout=True,
     )
     if n_features == 1:
-        axes = axes.reshape(4, 1)
+        axes = axes.reshape(row_count, 1)
 
     for col, feature in enumerate(features):
         axes[0, col].set_title(_feature_label(feature, feature_types), fontsize=9, fontweight="bold")
@@ -855,9 +857,17 @@ def plot_feature_effect_comparison(
             preprocessing_recipe="xgboost_paper",
             show_ylabel=col == 0,
         )
-        _plot_tabpfn_pdp(ax=axes[1, col], artifacts=tabpfn, feature=feature, show_ylabel=col == 0)
-        _plot_kan_pdp(ax=axes[2, col], artifacts=cheby, feature=feature, show_ylabel=col == 0)
-        _plot_kan_pdp(ax=axes[3, col], artifacts=fourier, feature=feature, show_ylabel=col == 0)
+        row = 1
+        if tabpfn is not None:
+            _plot_tabpfn_pdp(
+                ax=axes[row, col],
+                artifacts=tabpfn,
+                feature=feature,
+                show_ylabel=col == 0,
+            )
+            row += 1
+        _plot_kan_pdp(ax=axes[row, col], artifacts=cheby, feature=feature, show_ylabel=col == 0)
+        _plot_kan_pdp(ax=axes[row + 1, col], artifacts=fourier, feature=feature, show_ylabel=col == 0)
 
     fig.suptitle(
         "Feature-Level Explanation Comparison: XGBoost SHAP vs. Model PDP",
@@ -896,13 +906,48 @@ def _write_report(
     output_dir: Path,
     selected_features: list[str],
     ranking_summary: dict[str, Any],
-    tabpfn: TabPFNArtifacts,
+    tabpfn: TabPFNArtifacts | None,
     cheby: KanArtifacts,
     fourier: KanArtifacts,
     xgb_summary: dict[str, Any],
-    tabpfn_summary: dict[str, Any],
+    tabpfn_summary: dict[str, Any] | None,
     figure_path: Path,
 ) -> Path:
+    tabpfn_scope = (
+        [f"- TabPFN seed-42 run: `{tabpfn.interpret_dir.name}` with model-agnostic PDP values."]
+        if tabpfn is not None
+        else []
+    )
+    tabpfn_model_row = (
+        [
+            (
+                f"| TabPFN seed 42 | {_fmt_metric((tabpfn_summary or {}).get('qwk'))} | - | - | "
+                "Model-agnostic PDP, mean-replacement ablation ranking |"
+            )
+        ]
+        if tabpfn is not None
+        else []
+    )
+    tabpfn_overlap = (
+        [
+            (
+                f"- TabPFN vs XGBoost shared top-{ranking_summary['top_n']} count: "
+                f"{ranking_summary['tabpfn_vs_xgboost']['shared_count']}; rank-scaled score: "
+                f"{ranking_summary['tabpfn_vs_xgboost']['rank_scaled_score']}."
+            )
+        ]
+        if tabpfn is not None
+        else []
+    )
+    shared_label = "all four models" if tabpfn is not None else "all three models"
+    tabpfn_convention = (
+        [
+            "- TabPFN panels show model-agnostic partial dependence over a fixed seed-42 evaluation subsample.",
+            "- TabPFN is included as a predictive baseline with ablation-based ranking, not as a native symbolic interpretability method.",
+        ]
+        if tabpfn is not None
+        else []
+    )
     report_path = reports_dir(output_dir) / "feature_effect_comparison.md"
     lines = [
         "# Tuned Big KAN vs XGBoost Interpretability Comparison",
@@ -910,7 +955,7 @@ def _write_report(
         "## Scope",
         "",
         "- XGBoost baseline: `stage-c-xgb-best` with predicted-class SHAP values.",
-        f"- TabPFN seed-42 run: `{tabpfn.interpret_dir.name}` with model-agnostic PDP values.",
+        *tabpfn_scope,
         f"- ChebyKAN tuned big run: `{cheby.interpret_dir.name}`.",
         f"- FourierKAN tuned big run: `{fourier.interpret_dir.name}`.",
         "",
@@ -922,10 +967,7 @@ def _write_report(
             f"| XGBoost | {_fmt_metric(xgb_summary.get('qwk'))} | - | - | "
             "Tree SHAP, predicted-class slice |"
         ),
-        (
-            f"| TabPFN seed 42 | {_fmt_metric(tabpfn_summary.get('qwk'))} | - | - | "
-            "Model-agnostic PDP, mean-replacement ablation ranking |"
-        ),
+        *tabpfn_model_row,
         (
             f"| ChebyKAN tuned big | {cheby.pruning_summary.get('qwk_after', float('nan')):.6f} | "
             f"{cheby.pruning_summary.get('edges_after')} | "
@@ -940,14 +982,10 @@ def _write_report(
         "## Ranking Overlap",
         "",
         (
-            f"- Shared top-{ranking_summary['top_n']} features across all four models: "
+            f"- Shared top-{ranking_summary['top_n']} features across {shared_label}: "
             f"{ranking_summary['shared_all_models_count']}."
         ),
-        (
-            f"- TabPFN vs XGBoost shared top-{ranking_summary['top_n']} count: "
-            f"{ranking_summary['tabpfn_vs_xgboost']['shared_count']}; rank-scaled score: "
-            f"{ranking_summary['tabpfn_vs_xgboost']['rank_scaled_score']}."
-        ),
+        *tabpfn_overlap,
         (
             f"- ChebyKAN vs XGBoost shared top-{ranking_summary['top_n']} count: "
             f"{ranking_summary['chebykan_vs_xgboost']['shared_count']}; rank-scaled score: "
@@ -968,10 +1006,9 @@ def _write_report(
         "Interpretation convention:",
         "",
         "- XGBoost panels show sample-wise SHAP values for each applicant's predicted class.",
-        "- TabPFN panels show model-agnostic partial dependence over a fixed seed-42 evaluation subsample.",
+        *tabpfn_convention,
         "- KAN panels show partial dependence: the average predicted risk score when one feature is swept and all other applicant features are kept fixed.",
         "- For discrete features, PDPs use observed states only.",
-        "- TabPFN is included as a predictive baseline with ablation-based ranking, not as a native symbolic interpretability method.",
         "- KAN per-edge symbolic recovery is exact in these artifacts, but these LayerNorm/Fourier models are not end-to-end closed-form expressions.",
         "",
     ]
@@ -1006,6 +1043,7 @@ def run(
     n_features: int = 4,
     top_n: int = 20,
     tabpfn_pdp_subsample: int = DEFAULT_TABPFN_PDP_SUBSAMPLE,
+    include_tabpfn: bool = True,
 ) -> dict[str, Path]:
     """Create paper-facing ranking and feature-effect comparison artifacts."""
     paths = RunPaths(
@@ -1029,19 +1067,21 @@ def run(
         if (paths.xgb_eval_dir / "X_eval_raw.parquet").exists()
         else None
     )
-    feature_types = _load_feature_types(
-        paths.xgb_eval_dir,
-        paths.tabpfn_eval_dir,
-        paths.cheby_eval_dir,
-        paths.fourier_eval_dir,
-    )
+    feature_type_dirs = [paths.xgb_eval_dir, paths.cheby_eval_dir, paths.fourier_eval_dir]
+    if include_tabpfn:
+        feature_type_dirs.insert(1, paths.tabpfn_eval_dir)
+    feature_types = _load_feature_types(*feature_type_dirs)
 
     xgb_ranking = _load_xgb_ranking(paths.xgb_dir)
-    tabpfn = _load_tabpfn(
-        interpret_dir=paths.tabpfn_dir,
-        eval_dir=paths.tabpfn_eval_dir,
-        checkpoint=tabpfn_checkpoint,
-        pdp_subsample_size=tabpfn_pdp_subsample,
+    tabpfn = (
+        _load_tabpfn(
+            interpret_dir=paths.tabpfn_dir,
+            eval_dir=paths.tabpfn_eval_dir,
+            checkpoint=tabpfn_checkpoint,
+            pdp_subsample_size=tabpfn_pdp_subsample,
+        )
+        if include_tabpfn
+        else None
     )
     cheby = _load_pruned_kan(
         interpret_dir=paths.cheby_dir,
@@ -1056,7 +1096,7 @@ def run(
 
     ranking_df, ranking_summary = build_ranking_comparison(
         xgb_ranking=xgb_ranking,
-        tabpfn_ranking=tabpfn.ranking,
+        tabpfn_ranking=tabpfn.ranking if tabpfn is not None else None,
         cheby_ranking=cheby.ranking,
         fourier_ranking=fourier.ranking,
         feature_types=feature_types,
@@ -1071,10 +1111,11 @@ def run(
     available = (
         set(shap_df.columns)
         & set(xgb_eval.columns)
-        & set(tabpfn.X_eval.columns)
         & set(cheby.X_eval.columns)
         & set(fourier.X_eval.columns)
     )
+    if tabpfn is not None:
+        available &= set(tabpfn.X_eval.columns)
     selected = (
         list(features)
         if features
@@ -1082,6 +1123,7 @@ def run(
             xgb_ranking=xgb_ranking,
             cheby_ranking=cheby.ranking,
             fourier_ranking=fourier.ranking,
+            tabpfn_ranking=tabpfn.ranking if tabpfn is not None else None,
             feature_types=feature_types,
             available_features=available,
             n_features=n_features,
@@ -1091,7 +1133,8 @@ def run(
         raise ValueError("No shared features are available for the feature-effect comparison.")
     missing = [feature for feature in selected if feature not in available]
     if missing:
-        raise ValueError(f"Selected features are not available in all four models: {missing}")
+        model_count = "four" if tabpfn is not None else "three"
+        raise ValueError(f"Selected features are not available in all {model_count} models: {missing}")
     selected_path = data_dir(output_dir) / "selected_features.json"
     selected_path.write_text(json.dumps(selected, indent=2))
 
@@ -1111,12 +1154,6 @@ def run(
     metrics_path = data_dir(output_dir) / "model_summary.json"
     metrics_payload = {
         "xgboost": _metrics_from_run_summary(xgb_summary),
-        "tabpfn": {
-            **_metrics_from_run_summary(tabpfn.run_summary),
-            "checkpoint": str(tabpfn.checkpoint),
-            "ranking_source": str(tabpfn.interpret_dir / "data" / "tabpfn_feature_ranking.csv"),
-            "pdp_subsample_size": tabpfn.pdp_subsample_size,
-        },
         "chebykan": {
             **_metrics_from_run_summary(cheby.run_summary),
             "qwk_after_pruning": cheby.pruning_summary.get("qwk_after"),
@@ -1130,6 +1167,13 @@ def run(
             "mean_r2": _r2_mean(fourier.r2_report),
         },
     }
+    if tabpfn is not None:
+        metrics_payload["tabpfn"] = {
+            **_metrics_from_run_summary(tabpfn.run_summary),
+            "checkpoint": str(tabpfn.checkpoint),
+            "ranking_source": str(tabpfn.interpret_dir / "data" / "tabpfn_feature_ranking.csv"),
+            "pdp_subsample_size": tabpfn.pdp_subsample_size,
+        }
     metrics_path.write_text(json.dumps(metrics_payload, indent=2))
 
     report_path = _write_report(
@@ -1140,7 +1184,7 @@ def run(
         cheby=cheby,
         fourier=fourier,
         xgb_summary=metrics_payload["xgboost"],
-        tabpfn_summary=metrics_payload["tabpfn"],
+        tabpfn_summary=metrics_payload.get("tabpfn"),
         figure_path=figure_path,
     )
 
@@ -1172,6 +1216,11 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--n-features", type=int, default=4)
     parser.add_argument("--top-n", type=int, default=20)
     parser.add_argument("--tabpfn-pdp-subsample", type=int, default=DEFAULT_TABPFN_PDP_SUBSAMPLE)
+    parser.add_argument(
+        "--exclude-tabpfn",
+        action="store_true",
+        help="Generate the legacy 3-row XGBoost/ChebyKAN/FourierKAN comparison without TabPFN artifacts.",
+    )
     return parser.parse_args()
 
 
@@ -1192,6 +1241,7 @@ def main() -> None:
         n_features=args.n_features,
         top_n=args.top_n,
         tabpfn_pdp_subsample=args.tabpfn_pdp_subsample,
+        include_tabpfn=not args.exclude_tabpfn,
     )
     print("Created paper comparison artifacts:")
     for name, path in artifacts.items():

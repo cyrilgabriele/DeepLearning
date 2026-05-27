@@ -17,6 +17,32 @@ Track what was changed, why it was changed, and any important notes.
 - Optional notes, issues, or future work
 ```
 
+### [2026-05-27] - Cyril Gabriele
+
+#### What
+- Added `--exclude-tabpfn` to `src.interpretability.paper_comparison` so the default comparison still includes the TabPFN row, while opt-out runs restore the 3-row XGBoost/ChebyKAN/FourierKAN figure and reports.
+- Updated the comparison `run()` API with `include_tabpfn=True` by default.
+- Made TabPFN checkpoint, eval, and ranking artifacts optional only when `include_tabpfn=False`.
+- Updated plotting, ranking, model-summary, overlap-summary, and Markdown-report generation for both 4-row and 3-row modes.
+- Updated `TABPFN_COMPARISON_FIGURE_PLAN.md` with default and opt-out regeneration commands.
+- Added regression coverage for default TabPFN output, opt-out artifact loading, CLI help, and both figure row layouts.
+
+#### Why
+- The paper comparison should keep the newly added TabPFN row as the normal artifact, while still allowing colleagues to regenerate the earlier 3-row comparison without preparing TabPFN artifacts.
+
+### [2026-05-27] - Cyril Gabriele
+
+#### What
+- Added the TabPFN seed-42 PDP row to the paper comparison figure alongside XGBoost SHAP, ChebyKAN PDP, and FourierKAN PDP.
+- Integrated TabPFN ablation ranking into the feature-ranking comparison and overlap diagnostics.
+- Extended the model summary and Markdown report with TabPFN metadata, checkpoint provenance, ranking source, and PDP subsample size.
+- Aligned the seed-42 TabPFN ranking workflow with the comparison artifact locations.
+- Added tests for TabPFN ranking loading, four-row plotting, and mocked end-to-end artifact writing.
+- Persisted `TABPFN_COMPARISON_FIGURE_PLAN.md` as the handoff plan for regenerating the comparison bundle.
+
+#### Why
+- The paper-facing interpretability comparison needed to include the seed-42 TabPFN predictive baseline while preserving the existing XGBoost and KAN comparison structure.
+
 ### [2026-04-29] - Cyril Gabriele
 
 #### What

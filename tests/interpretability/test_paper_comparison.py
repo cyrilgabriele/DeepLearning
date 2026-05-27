@@ -1,3 +1,5 @@
+import json
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -13,6 +15,7 @@ from src.interpretability.paper_comparison.feature_effects import (
     run,
     select_features_for_effect_plot,
     _load_tabpfn_ranking,
+    _parse_args,
 )
 
 
@@ -185,6 +188,23 @@ def test_plot_feature_effect_comparison_renders_four_rows(tmp_path, monkeypatch)
     assert figure.exists()
     assert figure.with_suffix(".png").exists()
 
+    captured.clear()
+    figure = plot_feature_effect_comparison(
+        features=["BMI", "Wt"],
+        shap_df=shap_df,
+        xgb_eval=X_eval,
+        xgb_raw=X_eval,
+        feature_types=feature_types,
+        tabpfn=None,
+        cheby=fake_kan("chebykan"),
+        fourier=fake_kan("fourierkan"),
+        output_dir=tmp_path / "comparison-3-row",
+    )
+
+    assert captured["shape"] == (3, 2)
+    assert figure.exists()
+    assert figure.with_suffix(".png").exists()
+
 
 def test_run_writes_comparison_artifacts(tmp_path, monkeypatch):
     xgb_dir = tmp_path / "outputs" / "interpretability" / "xgboost_paper" / "stage-c-xgboost-best"
@@ -283,6 +303,7 @@ def test_run_writes_comparison_artifacts(tmp_path, monkeypatch):
         )
 
     def fake_plot(**kwargs):
+        assert kwargs["tabpfn"] is not None
         out = kwargs["output_dir"] / "figures" / "feature_effect_comparison.pdf"
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text("stub\n")
@@ -322,3 +343,122 @@ def test_run_writes_comparison_artifacts(tmp_path, monkeypatch):
     assert artifacts["model_summary"].exists()
     assert artifacts["feature_effect_figure"].exists()
     assert artifacts["report"].exists()
+
+    metrics = json.loads(artifacts["model_summary"].read_text())
+    assert set(metrics) == {"xgboost", "tabpfn", "chebykan", "fourierkan"}
+    overlap = json.loads(artifacts["overlap_summary"].read_text())
+    assert "tabpfn_vs_xgboost" in overlap
+
+
+def test_run_can_exclude_tabpfn_without_tabpfn_artifacts(tmp_path, monkeypatch):
+    xgb_dir = tmp_path / "outputs" / "interpretability" / "xgboost_paper" / "stage-c-xgboost-best"
+    cheby_dir = tmp_path / "outputs" / "interpretability" / "kan_paper" / "cheby-run"
+    fourier_dir = tmp_path / "outputs" / "interpretability" / "kan_paper" / "fourier-run"
+    xgb_eval_dir = tmp_path / "outputs" / "eval" / "xgboost_paper" / "stage-c-xgboost-best"
+    cheby_eval_dir = tmp_path / "outputs" / "eval" / "kan_paper" / "cheby-run"
+    fourier_eval_dir = tmp_path / "outputs" / "eval" / "kan_paper" / "fourier-run"
+    for path in [xgb_dir / "data", xgb_eval_dir]:
+        path.mkdir(parents=True, exist_ok=True)
+
+    shap = pd.DataFrame(
+        {
+            "BMI": [0.1, -0.3, 0.2],
+            "Wt": [0.2, 0.1, -0.1],
+            "Medical_Keyword_3": [0.0, 0.4, -0.2],
+        }
+    )
+    shap.to_parquet(xgb_dir / "data" / "shap_xgb_values.parquet")
+    X_eval = pd.DataFrame(
+        {
+            "BMI": [20.0, 25.0, 30.0],
+            "Wt": [60.0, 70.0, 80.0],
+            "Medical_Keyword_3": [0.0, 1.0, 0.0],
+        }
+    )
+    X_eval.to_parquet(xgb_eval_dir / "X_eval.parquet")
+    X_eval.to_parquet(xgb_eval_dir / "X_eval_raw.parquet")
+    (xgb_eval_dir / "feature_types.json").write_text(
+        '{"BMI": "continuous", "Wt": "continuous", "Medical_Keyword_3": "binary"}'
+    )
+
+    def fake_load_pruned_kan(*, interpret_dir: Path, eval_dir: Path, flavor: str):
+        return KanArtifacts(
+            flavor=flavor,
+            interpret_dir=interpret_dir,
+            eval_dir=eval_dir,
+            module=None,
+            X_eval=X_eval,
+            X_raw=X_eval,
+            feature_types={
+                "BMI": "continuous",
+                "Wt": "continuous",
+                "Medical_Keyword_3": "binary",
+            },
+            ranking=pd.Series([3.0, 2.0, 1.0], index=["BMI", "Wt", "Medical_Keyword_3"]),
+            pruning_summary={"qwk_after": 0.6, "edges_after": 12},
+            r2_report={"symbolic_fits": [{"r_squared": 1.0}]},
+            run_summary={
+                "metrics": {"qwk": 0.6},
+                "preprocessing": {"feature_count": 3, "recipe": "kan_paper"},
+                "random_seed": 42,
+            },
+        )
+
+    def fail_load_tabpfn(**kwargs):
+        raise AssertionError("TabPFN artifacts should not be loaded when include_tabpfn=False")
+
+    def fake_plot(**kwargs):
+        assert kwargs["tabpfn"] is None
+        out = kwargs["output_dir"] / "figures" / "feature_effect_comparison.pdf"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text("stub\n")
+        return out
+
+    import src.interpretability.paper_comparison.feature_effects as module
+
+    monkeypatch.setattr(module, "_load_pruned_kan", fake_load_pruned_kan)
+    monkeypatch.setattr(module, "_load_tabpfn", fail_load_tabpfn)
+    monkeypatch.setattr(module, "plot_feature_effect_comparison", fake_plot)
+    monkeypatch.setattr(
+        module,
+        "_latest_run_summary",
+        lambda experiment_name: (
+            Path("run-summary.json"),
+            {
+                "metrics": {"qwk": 0.55},
+                "preprocessing": {"feature_count": 3, "recipe": "xgboost_paper"},
+                "random_seed": 42,
+            },
+        ),
+    )
+
+    artifacts = run(
+        xgb_dir=xgb_dir,
+        tabpfn_dir=tmp_path / "missing-tabpfn-interpretability",
+        cheby_dir=cheby_dir,
+        fourier_dir=fourier_dir,
+        xgb_eval_dir=xgb_eval_dir,
+        tabpfn_eval_dir=tmp_path / "missing-tabpfn-eval",
+        cheby_eval_dir=cheby_eval_dir,
+        fourier_eval_dir=fourier_eval_dir,
+        output_dir=tmp_path / "comparison",
+        features=["BMI", "Wt"],
+        top_n=2,
+        include_tabpfn=False,
+    )
+
+    metrics = json.loads(artifacts["model_summary"].read_text())
+    assert set(metrics) == {"xgboost", "chebykan", "fourierkan"}
+    overlap = json.loads(artifacts["overlap_summary"].read_text())
+    assert "tabpfn_vs_xgboost" not in overlap
+    assert overlap["shared_all_models_count"] == overlap["shared_all_three_count"]
+
+
+def test_cli_help_exposes_exclude_tabpfn(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["paper_comparison", "--help"])
+
+    with pytest.raises(SystemExit) as exc:
+        _parse_args()
+
+    assert exc.value.code == 0
+    assert "--exclude-tabpfn" in capsys.readouterr().out
