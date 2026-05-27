@@ -11,6 +11,7 @@ import pandas as pd
 MODEL_COLORS: dict[str, str] = {
     "GLM": "#4C72B0",
     "XGBoost": "#DD8452",
+    "TabPFN": "#8172B3",
     "ChebyKAN": "#55A868",
     "FourierKAN": "#C44E52",
 }

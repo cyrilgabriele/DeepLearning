@@ -1,6 +1,6 @@
 """Feature importance for TabPFN via batched mean-replacement ablation.
 
-Uses the highest-validation-QWK Run-A seed checkpoint. For each of the 126
+Uses the seed-42 Stage C TabPFN checkpoint. For each of the 126
 features, replaces that feature's column with its mean across the chosen
 outer-test subsample, then measures the QWK drop relative to the unperturbed
 baseline. Higher QWK drop = higher feature importance.
@@ -13,7 +13,7 @@ into one large predict call, reducing total predict calls from 631 to 2 and
 total wall-clock to ~30 minutes.
 
 Outputs:
-  - outputs/interpretability/tabpfn_paper/stage-c-tabpfn-full/data/tabpfn_feature_ranking.csv
+  - outputs/interpretability/tabpfn_paper/stage-c-tabpfn-full-seed42/data/tabpfn_feature_ranking.csv
   - configs/experiment_stages/stage_c_explanation_package/feature_lists/tabpfn_top20_features.json
 
 The top-20 list feeds the Run B 20-feature config.
@@ -39,16 +39,12 @@ from src.preprocessing import preprocess_tabpfn_paper as tabpfn_prep
 
 
 REPO = _REPO_ROOT
-VAL_QWK_SUMMARY = REPO / "outputs/interpretability/tabpfn_paper/val_qwk_summary.json"
-RANKING_OUT = REPO / "outputs/interpretability/tabpfn_paper/stage-c-tabpfn-full/data/tabpfn_feature_ranking.csv"
+EXPERIMENT_NAME = "stage-c-tabpfn-full-seed42"
+SEED = 42
+RANKING_OUT = REPO / f"outputs/interpretability/tabpfn_paper/{EXPERIMENT_NAME}/data/tabpfn_feature_ranking.csv"
 TOP20_OUT = REPO / "configs/experiment_stages/stage_c_explanation_package/feature_lists/tabpfn_top20_features.json"
 SUBSAMPLE_SIZE = 100
 RANDOM_STATE = 42
-
-
-def _pick_best_seed_record(summary_path: Path) -> dict:
-    summary = json.loads(summary_path.read_text())
-    return max(summary["per_seed"], key=lambda r: r["val_qwk"])
 
 
 def _resolve_checkpoint(experiment_name: str) -> Path:
@@ -59,10 +55,9 @@ def _resolve_checkpoint(experiment_name: str) -> Path:
 
 
 def main() -> None:
-    record = _pick_best_seed_record(VAL_QWK_SUMMARY)
-    experiment_name = record["experiment_name"]
-    seed = record["seed"]
-    print(f"Using highest-val-QWK seed: {experiment_name} (val_qwk={record['val_qwk']:.4f})", flush=True)
+    experiment_name = EXPERIMENT_NAME
+    seed = SEED
+    print(f"Using fixed figure seed: {experiment_name}", flush=True)
 
     ckpt = _resolve_checkpoint(experiment_name)
     print(f"Loading {ckpt}", flush=True)
